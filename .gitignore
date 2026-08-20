@@ -1,0 +1,25 @@
+# Operating system and editor artifacts
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Logs and generated artifacts
+*.log
+.cache/
+coverage/
+dist/
+build/
+node_modules/
+
+# Temporary files
+.tmp/
+tmp/
