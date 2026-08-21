@@ -2,21 +2,21 @@
 
 | 字段 | 填写 |
 | --- | --- |
-| 状态 | `Proposed` |
+| 状态 | `Accepted` |
 | 日期 | `2026-08-21` |
 | 负责人 | Alune |
 | 评审人/决策人 | Alune（兼任产品、工程、数据/隐私、设计/可理解性正式角色）；AI 仅提供起草与证据整理，不是签字主体 |
 | 相关 PRD / RFC / Issue | [`PRD-0001`](../product/prd/PRD-0001-single-purchase-decision-workbench.md)；[`RESEARCH-0001`](../research/RESEARCH-0001-single-purchase-decision-protocol.md)（当前为 `Draft`）；[Experiment Issue #1](https://github.com/alune1212/zhiguan/issues/1)；RFC：不需要，本提案不改变上位产品边界 |
 | 取代 / 被取代 | 无；这是首项进入评审的具体 ADR |
-| 复审条件/日期 | 在状态转为 `Accepted` 前完成第 9.1 节 readback；前端框架、交付拓扑、Node.js 主版本、运行时依赖、网络/存储边界或研究原型用途任一变化时重新评审 |
+| 复审条件/日期 | 本次批准依据第 9.1 节 readback；首次定期复审为 `2026-09-21`。前端框架、交付拓扑、Node.js 主版本、直接依赖白名单、网络/存储边界、浏览器支持矩阵、安全通告或研究原型用途任一变化时提前复审 |
 
 ## 1. 决策摘要
 
-**待决策：**建议 `PRD-0001` 的首个形成性研究原型采用 `React + TypeScript + Vite` 构建为纯客户端静态资源，由研究者控制的设备使用锁定版本的 `vite preview` 在本机或受控局域网内提供；Node.js 24 LTS 与 npm 只参与构建、测试和本地静态服务，不进入浏览器运行时。
+**已批准：**`PRD-0001` 的首个形成性研究原型采用 `React + TypeScript + Vite` 构建为纯客户端静态资源，由研究者控制的设备使用锁定版本的 `vite preview` 在本机或受控局域网内提供；Node.js 24 LTS 与 npm 只参与构建、测试和本地静态服务，不进入浏览器运行时。
 
 浏览器运行时只包含 React、React DOM 和项目代码。计算、证据状态、会话修订与导出序列化保持框架无关的纯 TypeScript；不引入应用后端、浏览器持久化、Service Worker、PWA、Router、外部状态库、UI 组件库、远程字体、CDN 资源、分析、会话重放或错误上报。当前不批准任何云托管商；以后启用云托管必须修订本 ADR 或创建新 ADR，并重新证明访问元数据、用途、权限、保留和删除边界。
 
-本 ADR 保持 `Proposed`，不构成 `Implementation Authorized`，不授权初始化框架、创建 OpenSpec、编写实现或向参与者分发原型。
+本 ADR 已为 `Accepted`，但它只满足 `PRD-0001` 要求的三项架构前置决策中的第一项，不单独构成 `Implementation Authorized`，仍不授权初始化框架、创建 OpenSpec、编写实现或向参与者分发原型。
 
 ## 2. 背景与问题
 
@@ -35,7 +35,7 @@
 | 状态 | 当前证据 |
 | --- | --- |
 | `actual` | 上位治理文档、已批准的 `PRD-0001`、当前无应用/依赖/构建的仓库事实，以及云托管商公开文档能够直接证明的行为 |
-| `user-confirmed` | Alune 于 `2026-08-21` 确认本 ADR 按推荐的 React、受控本地/LAN、最小依赖和云托管另行决策方向进入 `Proposed` 评审 |
+| `user-confirmed` | Alune 于 `2026-08-21` 确认推荐方向，并明确批准本 ADR 为 `Accepted`；该批准不代表实现或运行时验收已经完成 |
 | `estimated` | React 相比原生 DOM 能降低本原型状态同步维护风险，以及最小依赖边界能降低供应链负担；这些是待验证工程判断 |
 | `forecast` | 技术栈预计能满足性能、可访问性和可复现构建要求；实现前不能写成已通过 |
 | `insufficient-data` | 实际包体、依赖数量、性能、浏览器兼容、VoiceOver 质量、网络/存储行为、本地服务日志行为和操作负担均尚无运行时证据 |
@@ -85,13 +85,13 @@
 - Playwright 官方明确说明自动化无障碍检查只能发现部分问题，不能替代键盘和辅助技术人工验收。
 - GitHub Pages 官方明确说明访问 Pages 站点时会记录访客 IP；Cloudflare 和 Netlify 的公开文档也没有提供满足本 PRD 的逐项目 7 天删除 readback 证明。因此本 ADR 不能把任一云托管商写成已通过。
 
-上述资料只支持技术可行性和当前风险判断，不是本原型已经通过构建、隐私、可访问性或性能验证的证据；在转为 `Accepted` 前必须重新核验是否仍为现行官方资料。
+上述资料已在 `2026-08-21` 批准 readback 中重新核验，只支持技术可行性、版本兼容性和当前风险判断，不是本原型已经通过构建、隐私、可访问性或性能验证的证据；首次实现前及后续复审时必须再次核验。
 
 ## 5. 决定
 
-### 5.1 建议选择（Proposed）
+### 5.1 已批准选择（Accepted）
 
-建议接受以下完整、不可拆分的选择：
+批准以下完整、不可拆分的选择：
 
 1. **交付拓扑**
    - Vite 生成一个纯静态 `dist` 产物；不生成或部署 Functions、Workers、SSR、API、数据库、Service Worker 或 PWA manifest。
@@ -101,13 +101,13 @@
    - 当前不选择云托管商。未来使用任何云托管、访问网关或远程分发服务，必须修订本 ADR 或创建新 ADR，并在启用前批准。
 
 2. **浏览器运行时**
-   - `React`、`react-dom`、编译后的项目代码和本地静态资源；React 与 React DOM 使用相同稳定版本系列，具体版本在转为 `Accepted` 前记录，初始化时精确锁定。
+   - `react@19.2.8`、`react-dom@19.2.8`、编译后的项目代码和本地静态资源；React 与 React DOM 精确匹配，初始化时不得使用浮动版本。
    - 领域计算、证据状态、会话修订语义和导出序列化使用无 React 依赖的纯 TypeScript 模块。计算公式/数值口径和导出 schema 分别由后续具体 ADR 决定，本 ADR 不提前定义。
    - 应用状态只存在当前 JavaScript 内存；不引入 Router、外部状态库、UI 组件库、图标包、远程字体、远程脚本或运行时插件。
    - 样式使用项目本地 CSS 和系统字体；所有图像、图标和其他资源随构建产物自托管。
 
 3. **构建与依赖**
-   - 构建基线为 Node.js 24 LTS 与 npm。Node.js/npm 不进入浏览器运行时；Node.js 24 不再处于受支持 LTS 时触发复审。
+   - 构建基线为 `Node.js 24.19.0` LTS（Krypton）及其官方捆绑的 `npm 11.17.0`。Node.js/npm 不进入浏览器运行时；Node.js 24 不再处于受支持 LTS 时触发复审。
    - 使用 TypeScript 严格类型检查、Vite 静态构建、`package-lock.json` 和 `npm ci`。直接依赖写明用途，传递依赖由 lockfile 固定。
    - 构建产物不包含源码、source map、真实/近似个人数据、研究记录、开发日志或测试截图。
    - 禁止从 CDN、远程 ESM、动态脚本注入或运行时包管理器加载代码。任何新增运行时依赖都必须审查数据流、网络能力、安装脚本、许可证、维护状态和安全通告。
@@ -122,6 +122,37 @@
    - 静态响应必须采用能够阻止运行时外连、表单提交、嵌入和远程资源的 CSP/安全头；精确配置在实现任务中机械化，但不得放宽本 ADR 的零外发边界。
    - 不注册 Service Worker，不访问 Cookie、localStorage、sessionStorage、IndexedDB、Cache Storage、剪贴板或 URL 状态；不接入分析、错误上报、会话重放、第三方字体或外部模型。
    - 本地/LAN 静态服务不得持久保存访问日志。若工具、终端、操作系统或网络环境会产生包含 IP、User-Agent、访问时点或 URL 的持久记录，必须停止该交付方式，完成处置并重新评审。
+
+#### 5.1.1 批准版本与直接依赖白名单
+
+以下版本是 `2026-08-21` 的批准基线。后续初始化可以省略不需要的开发依赖，但不得增加白名单外直接依赖、改用范围版本或改变任一版本；确需改变时先完成本 ADR 的触发式复审。
+
+| 类别 | 批准的准确版本 | 用途 | 许可证 readback | 退出/替换方式 |
+| --- | --- | --- | --- | --- |
+| 构建运行环境 | `node@24.19.0`；捆绑 `npm@11.17.0` | 类型检查、构建、测试和本地静态服务 | Node.js：MIT；npm：Artistic-2.0 | 停止构建/服务并恢复完整的 Node/npm、lockfile、配置和产物基线；更换主版本需复审 |
+| 浏览器运行时 | `react@19.2.8`；`react-dom@19.2.8` | 声明式 UI 与 DOM 挂载 | MIT | 用纯 TypeScript 领域合同重写 UI；不得让领域或导出合同依赖 React |
+| 构建与类型 | `typescript@7.0.2`；`vite@8.2.2`；`@vitejs/plugin-react@6.1.0` | 严格类型检查、静态构建和 React 转换 | TypeScript：Apache-2.0；其余 MIT | 恢复完整已验证工具链；不得加入元框架、远程编译器或未批准插件 |
+| 类型声明 | `@types/node@24.13.3`；`@types/react@19.2.18`；`@types/react-dom@19.2.4` | 构建配置及 React 类型边界 | MIT | 与对应 Node/React 主版本一起替换并重新类型检查 |
+| 单元/组件测试 | `vitest@4.1.11`；`jsdom@30.0.1`；`@testing-library/dom@10.4.1`；`@testing-library/react@16.3.2`；`@testing-library/user-event@14.6.5` | 纯 TS、DOM、组件语义和用户交互测试 | MIT | 可改用满足同一测试合同的工具，但必须复审供应链和证据等价性 |
+| 浏览器与无障碍检查 | `@playwright/test@1.62.1`；`@axe-core/playwright@4.13.0` | 浏览器流程、网络/存储/下载检查和辅助性自动扫描 | Playwright：Apache-2.0；axe：MPL-2.0 | 可替换测试工具，不得减少目标浏览器、人工 VoiceOver 或网络/存储证据 |
+
+批准时的兼容性 readback：Node.js `24.19.0` 处于 LTS；Vite `8.2.2` 的 Node 要求为 `^20.19.0 || >=22.12.0`；`@vitejs/plugin-react@6.1.0` 要求 Vite `^8.0.0`；Vitest `4.1.11` 支持 Node `>=24` 与 Vite `^8`；React DOM `19.2.8` 要求 React `^19.2.8`；React Testing Library `16.3.2` 支持 React/React DOM `^19`；jsdom `30.0.1` 支持 Node `^24.15.0`；Playwright `1.62.1` 要求 Node `>=20`。已知 engine/peer 边界相容。
+
+当前没有 `package.json`、lockfile、安装结果或传递依赖图，因此批准不声称供应链已经安装或审计通过。首次初始化必须先以准确版本生成 lockfile，再执行许可证、安装脚本、签名/来源、安全通告和传递依赖 readback；任一关键风险、peer 冲突或未批准安装脚本都会阻止实现并触发复审。TypeScript 7 主版本和 Vite `8.2.2` 的最小构建 smoke test 属于 `VAL-01`，不得用本次元数据兼容性 readback 代替。
+
+#### 5.1.2 本地/LAN 研究服务操作清单
+
+以下是批准的实施设计。实际命令、端口、响应头和清理结果仍须在 `VAL-02`、`VAL-03` 与 `VAL-08` 中用合成数据验证。
+
+| 项目 | 批准配置 | DRI 与 readback | 失败行为 |
+| --- | --- | --- | --- |
+| 构建输入 | 只允许批准 commit、准确版本 lockfile、配置与合成 fixture；产物生成 SHA-256 清单 | Alune 在会话前比对 commit、Node/npm、lockfile、配置和产物摘要 | 任一不一致即不启动服务 |
+| loopback | 默认绑定 `127.0.0.1:4173`，启用 strict port；固定无身份、无查询参数的本地 URL | Alune 检查监听接口、端口、进程、页面构建标识和 URL | 端口占用、自动换端口、广泛绑定或版本不符即停止 |
+| LAN | 仅跨设备/iOS 验收时显式绑定研究者设备的已核验 LAN 地址和 `4173` strict port；禁止 `0.0.0.0`、公共/访客网络和长期开放 | Alune 记录接口、受控网络、参与设备和开始/结束时点；会后再次检查端口 | 地址、网络、设备或监控边界不能说明时回到 loopback 或停止会话 |
+| 网络 | 构建完成后不依赖互联网；只允许浏览器读取同一静态服务资源，不允许外部请求 | 会话前后检查网络捕获、DNS/代理环境和浏览器请求 | 出现任何意外外连、产品数据请求或代理注入即作为关键事件暂停 |
+| 响应与缓存 | `Cache-Control: no-store`；CSP 至少覆盖 `default-src 'self'`、`connect-src 'none'`、`form-action 'none'`、`object-src 'none'`、`base-uri 'none'`、`frame-ancestors 'none'`，脚本、样式、图像和字体仅限构建内必要来源 | Alune 通过浏览器网络面板和自动化断言读取状态码、响应头与资源来源 | 缺头、缓存陈旧、CSP 放宽或远程资源均阻止会话 |
+| 日志 | 不重定向终端输出，不配置文件日志；终端只允许非敏感启动/错误信息，不得出现输入、派生结果、身份或研究编号 | 会话前后检查终端和工作目录；会后关闭终端会话，不保留请求元数据副本 | 发现持久日志或敏感输出即停止、定位、删除并验证不可恢复 |
+| 会话结束 | 要求刷新/关闭所有页面，停止服务进程，关闭端口；检查 Cookie、Web Storage、IndexedDB、Cache Storage、URL 和临时下载资源 | Alune 完成页面、进程、端口、存储、终端与产物版本 readback | 任一页面、端口、存储或意外副本残留即保持暂停并按第 8.3 节处置 |
 
 ### 5.2 为什么选择它
 
@@ -222,7 +253,7 @@
 | 依赖被投毒、存在未处置安全通告或许可证冲突 | 低/待核 | 高 | 精确锁定、`npm ci`、依赖/安装脚本/许可证清单、安全通告 readback | 新增运行时依赖、包管理器或远程代码来源 |
 | 性能预算或包体不满足目标设备 | 中/待测 | 中 | 固定设备/网络/最大合成会话数据测量；不加入真实用户遥测 | 为达标需要改变框架、拆分方式或远程资源 |
 | 本地交付负担使研究无法执行 | 中 | 中 | 合成参与者操作演练、简短会话清单、记录阻塞而不扩大功能 | 研究必须改为远程独立访问 |
-| Node.js 24、React、Vite 或测试工具退出支持 | 中（随时间增加） | 中 | 转 Accepted 前复核支持状态；Node LTS 或主版本变化触发复审 | 更换主版本、包管理器或构建器 |
+| Node.js 24、React、Vite 或测试工具退出支持 | 中（随时间增加） | 中 | 批准时、首次实现前及定期复审时核验支持状态；Node LTS 或主版本变化触发复审 | 更换主版本、包管理器或构建器 |
 
 ## 8. 迁移、兼容与回滚
 
@@ -251,23 +282,39 @@
 
 ## 9. 验证与验收
 
-### 9.1 从 `Proposed` 转为 `Accepted` 的条件
+### 9.1 `Accepted` 决议条件与记录
 
-`PRD-0001` 明确要求三项 ADR 先 `Accepted`，之后 OpenSpec proposal/tasks 获批，才能初始化框架和实现。因此本 ADR 的 `Accepted` 门禁只使用**实施前可以取得的决策与设计证据**；不得反向要求尚未获准创建的应用、构建、浏览器测试或性能报告。实际运行证据属于第 9.2 节和后续 `Prototype Accepted`。
+`PRD-0001` 明确要求三项 ADR 先 `Accepted`，之后 OpenSpec proposal/tasks 获批，才能初始化框架和实现。因此本 ADR 的 `Accepted` 门禁只使用**实施前可以取得的决策与设计证据**；不得反向要求尚未获准创建的应用、构建、浏览器测试或性能报告。实际运行证据属于第 9.2 节和后续 `Prototype Accepted`。Alune 于 `2026-08-21` 完成决策 readback 并批准本 ADR；以下为批准时的逐项记录。
 
 以下条件必须全部满足：
 
 | 编号 | 场景/前置条件 | 操作/评审 | 预期证据 | 当前结果 |
 | --- | --- | --- | --- | --- |
-| ADR-A-01 | 完整 Proposed 文档 | Alune 分别以产品、工程、数据/隐私、设计/可理解性角色完成 readback | 唯一推荐、适用边界、不适用范围、接受的取舍和无 RFC 冲突均有明确结论 | 待确认 |
-| ADR-A-02 | 准备批准的工具链 | 复核 Node.js 24 LTS、React、React DOM、TypeScript、Vite、npm 和测试工具的现行官方支持与互相兼容性 | 记录拟采用的准确版本、官方来源和复审日期；没有浮动 CDN/远程运行时版本 | 待确认 |
-| ADR-A-03 | 本地/LAN 交付设计 | 评审 loopback/LAN 绑定、允许网络、URL、端口、进程、缓存、安全头、日志和会话前后清理清单 | 每项有 DRI、失败行为和 readback 方法；`vite preview` 明确仅限研究，不冒充生产服务器 | 待确认 |
-| ADR-A-04 | 隐私和威胁边界 | 只读检查数据流、禁止存储/网络清单、CSP 目标、静态资源和研究存储隔离 | 没有未说明的数据接收方、持久化、身份、第三方脚本、遥测或默认备份 | 待确认 |
-| ADR-A-05 | 供应链计划 | 评审直接依赖必要性、lockfile/`npm ci`、安装脚本、许可证、安全通告、构建摘要和离线产物清单 | 每个依赖有用途和退出方式；未接受的关键风险为 0 | 待确认 |
-| ADR-A-06 | 验证计划 | 将 PRD 的 AC-01–AC-17、AC-20–AC-26 映射到类型、单元、组件、浏览器、网络、存储、下载、性能和人工验收 | 清楚区分自动化、人工 VoiceOver、后续计算/导出 ADR 责任和实施后证据 | 待确认 |
-| ADR-A-07 | 停止与回滚设计 | 桌面推演首次停止、上一版本恢复、LAN 暴露、意外副本和已下载文件场景 | 每个场景有停止条件、完整回滚单元、不可恢复边界、责任人与验证方法 | 待确认 |
-| ADR-A-08 | 评审意见已收口 | 检查所有意见和不确定项 | 关键意见全部解决；非关键意见已解决或由 Alune 书面接受风险并给出复审条件 | 待确认 |
-| ADR-A-09 | 决议 readback | Alune 查看完整 diff 后明确批准 | 决议记录新增 `Accepted` 结论、日期和适用版本；在此之前状态保持 `Proposed` | 待确认 |
+| ADR-A-01 | 完整 Proposed 文档 | Alune 分别以产品、工程、数据/隐私、设计/可理解性角色完成 readback | 唯一推荐、适用边界、不适用范围、接受的取舍和无 RFC 冲突均有明确结论 | 通过；`2026-08-21` 四角色 readback |
+| ADR-A-02 | 准备批准的工具链 | 复核 Node.js 24 LTS、React、React DOM、TypeScript、Vite、npm 和测试工具的现行官方支持与互相兼容性 | 记录拟采用的准确版本、官方来源和复审日期；没有浮动 CDN/远程运行时版本 | 通过；见第 5.1.1、12 节；复审 `2026-09-21` |
+| ADR-A-03 | 本地/LAN 交付设计 | 评审 loopback/LAN 绑定、允许网络、URL、端口、进程、缓存、安全头、日志和会话前后清理清单 | 每项有 DRI、失败行为和 readback 方法；`vite preview` 明确仅限研究，不冒充生产服务器 | 通过；见第 5.1.2 节；运行 readback 留给 VAL-02/03/08 |
+| ADR-A-04 | 隐私和威胁边界 | 只读检查数据流、禁止存储/网络清单、CSP 目标、静态资源和研究存储隔离 | 没有未说明的数据接收方、持久化、身份、第三方脚本、遥测或默认备份 | 通过；见第 6.3 节；运行证明留给 VAL-02/03 |
+| ADR-A-05 | 供应链计划 | 评审直接依赖必要性、lockfile/`npm ci`、安装脚本、许可证、安全通告、构建摘要和离线产物清单 | 每个依赖有用途和退出方式；未接受的关键风险为 0 | 通过；第 5.1.1 节固定白名单、许可证与 fail-closed 门禁；实际解析/审计留给 VAL-01 |
+| ADR-A-06 | 验证计划 | 将 PRD 的 AC-01–AC-17、AC-20–AC-26 映射到类型、单元、组件、浏览器、网络、存储、下载、性能和人工验收 | 清楚区分自动化、人工 VoiceOver、后续计算/导出 ADR 责任和实施后证据 | 通过；见第 9.1.1 节；实际证据全部留在第 9.2 节 |
+| ADR-A-07 | 停止与回滚设计 | 桌面推演首次停止、上一版本恢复、LAN 暴露、意外副本和已下载文件场景 | 每个场景有停止条件、完整回滚单元、不可恢复边界、责任人与验证方法 | 通过；见第 8.3 节；真实演练留给 VAL-08 |
+| ADR-A-08 | 评审意见已收口 | 检查所有意见和不确定项 | 关键意见全部解决；非关键意见已解决或由 Alune 书面接受风险并给出复审条件 | 通过；无未解决 P0–P2；第 7 节剩余实施风险由 Alune 接受并受复审触发约束 |
+| ADR-A-09 | 决议 readback | Alune 查看完整 diff 后明确批准 | 决议记录新增 `Accepted` 结论、日期和适用版本；在此之前状态保持 `Proposed` | 通过；Alune 于 `2026-08-21` 明确批准，见第 11 节 |
+
+#### 9.1.1 PRD 原型验收映射
+
+本映射批准的是后续取证方法，不把任何 AC 标记为已通过：
+
+| PRD 验收项 | 主要责任层与方法 | 后续验证记录 |
+| --- | --- | --- |
+| AC-01–AC-04 | React 组件语义、表单状态、可访问性树、合成数据手工验收；状态规则由纯 TypeScript 测试支撑 | VAL-04、VAL-06 |
+| AC-05–AC-11 | 纯 TypeScript 参数化计算/状态机测试、组件依据展示、修改失效和合成修订断言；精度/舍入依赖后续计算 ADR | VAL-04；AC-11 的导出部分同时进入 VAL-05 |
+| AC-12–AC-13 | React 组件与文案审查、网络捕获、会话内存和产品外复盘边界手工验收 | VAL-02、VAL-04、VAL-06 |
+| AC-14–AC-15 | 网络、URL、Cookie、浏览器存储、日志、刷新/关闭及下载目录 readback | VAL-02、VAL-03、VAL-05、VAL-08 |
+| AC-16–AC-17 | Playwright/axe 补充检查；目标桌面键盘、macOS/iOS VoiceOver 和低刺激文案人工验收 | VAL-06 |
+| AC-20–AC-21、AC-24 | 表驱动证据状态、计算与 UI 集成测试；具体数值合同依赖后续计算 ADR | VAL-04 |
+| AC-22–AC-23 | JSON/Markdown schema、跨格式等价、断网、取消/失败、临时资源、键盘/读屏和网络/存储检查；具体格式依赖后续导出 ADR | VAL-02、VAL-05、VAL-06 |
+| AC-25 | 本地合格/故意违规配置的静态检查、网络/权限/日志 readback；任何云托管仍视为未批准并 fail-closed | VAL-02、VAL-03、VAL-08 |
+| AC-26 | 固定设备、网络与最大合成会话数据的实验室性能测量，不接入真实用户遥测 | VAL-07 |
 
 ### 9.2 `Accepted` 后、`Prototype Accepted` 前的实施验证
 
@@ -284,6 +331,8 @@
 | VAL-07 | 固定实验室性能配置 | 用最大允许合成会话数据测量 | 首个可用界面 ≤`3s`、状态更新 ≤`100ms`、导出预览 ≤`500ms`、单格式生成 ≤`1s`；不产生真实用户遥测 | 待实施 |
 | VAL-08 | 停止与恢复演练 | 停止首次构建并模拟恢复上一份已验证构建 | 端口、版本、网络、存储、配置、依赖锁和产物摘要 readback 成功；不会声称召回已下载文件 | 待实施 |
 
+以下复选项同样属于实施后 `Prototype Accepted` 验收，当前保持未勾选是正确状态：
+
 - [ ] 产品对齐与用户结果验证
 - [ ] 数据状态、来源、单位、时间和规则版本验证
 - [ ] 隐私、权限、秘密和日志脱敏验证
@@ -293,8 +342,8 @@
 
 ## 10. 实施与后续
 
-- 实现 PR/提交：未开始；本 ADR 为 `Proposed`，不授权实现。
-- 配置/文档/培训：未开始；转为 `Accepted` 后由获批 OpenSpec tasks 定义，不在本 ADR 中创建。
+- 实现 PR/提交：未开始；本 ADR 已为 `Accepted`，但不单独授权实现。
+- 配置/文档/培训：未开始；必须等待其余两项必需 ADR 均为 `Accepted`，且 OpenSpec proposal/tasks 获批后定义；本 ADR 中不创建。
 - 迁移演练记录：无；当前没有应用或产品数据。停止/回滚演练属于后续实现验证。
 - 监测指标与复审日期：不加入真实用户遥测。每个研究构建只使用合成性能报告、网络/存储检查、版本清单和人工验收；Node.js 24 退出 LTS、任一主版本或数据边界变化时复审。
 - 后续任务：`PRD-0001` 已要求另行批准计算与规则 ADR、导出合同 ADR 和 OpenSpec proposal/tasks；本文件不创建、编号或提前决定它们。
@@ -305,6 +354,7 @@
 | 日期 | 决策人/评审人 | 结论或条件 | 文档变更 |
 | --- | --- | --- | --- |
 | `2026-08-21` | Alune（产品、工程、数据/隐私、设计/可理解性） | 确认按 React + TypeScript + Vite、研究者控制本地/LAN、锁定版 `vite preview`、最小依赖和云托管另行决策方向起草；进入 `Proposed` 评审，不代表 `Accepted` 或实现授权 | 创建 `ADR-0001` |
+| `2026-08-21` | Alune（产品、工程、数据/隐私、设计/可理解性） | 明确批准本 ADR 为 `Accepted`；接受第 7 节列明的实施前剩余风险和复审触发条件。批准只固定交付形态与技术栈，不代表运行时验证通过，也不构成 `Implementation Authorized`、`Prototype Accepted` 或 `Recruitment Authorized` | 完成 ADR-A-01～ADR-A-09 readback，固定版本/依赖白名单、操作清单和 AC 映射，状态改为 `Accepted` |
 
 ## 12. 依据与参考
 
@@ -319,17 +369,19 @@
 - [`docs/product/data-principles.md`](../product/data-principles.md)
 - [`docs/adr/README.md`](README.md) 与 [`docs/adr/template.md`](template.md)
 
-### 外部技术事实（`2026-08-21` 核验；转 Accepted 前复核）
+### 外部技术事实（`2026-08-21` 在批准时核验；首次实现前及后续复审时复核）
 
 - [Vite：Building for Production](https://vite.dev/guide/build)
 - [Vite：Deploying a Static Site](https://vite.dev/guide/static-deploy.html)
 - [Vite：TypeScript 转译边界](https://vite.dev/guide/features)
 - [React：`createRoot`](https://react.dev/reference/react-dom/client/createRoot)
 - [Node.js：发布与 LTS 状态](https://nodejs.org/en/about/previous-releases)
+- [Node.js：官方发布索引与捆绑 npm 版本](https://nodejs.org/dist/index.json)
 - [npm：`npm ci`](https://docs.npmjs.com/cli/v11/commands/npm-ci/)
 - [Vitest Guide](https://vitest.dev/guide/)
 - [React Testing Library](https://testing-library.com/docs/react-testing-library/intro/)
 - [Playwright：Accessibility Testing](https://playwright.dev/docs/accessibility-testing)
+- npm Registry 准确版本元数据：[React](https://registry.npmjs.org/react/19.2.8)、[React DOM](https://registry.npmjs.org/react-dom/19.2.8)、[TypeScript](https://registry.npmjs.org/typescript/7.0.2)、[Vite](https://registry.npmjs.org/vite/8.2.2)、[Vitest](https://registry.npmjs.org/vitest/4.1.11)、[Playwright](https://registry.npmjs.org/%40playwright%2Ftest/1.62.1)、[axe](https://registry.npmjs.org/%40axe-core%2Fplaywright/4.13.0)
 - [GitHub Pages：数据收集](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages)
 - [Cloudflare Pages：Web Analytics](https://developers.cloudflare.com/pages/how-to/web-analytics/) 与 [Cloudflare Logs](https://developers.cloudflare.com/logs/)
 - [Netlify Privacy Statement](https://www.netlify.com/privacy/)
