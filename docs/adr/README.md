@@ -9,6 +9,7 @@ ADR 用来记录已经作出的、会影响系统边界或长期维护的架构�
 | ADR | 状态 | 决策摘要 | 日期 |
 | --- | --- | --- | --- |
 | [`ADR-0001`](ADR-0001-delivery-form-and-technology-stack.md) | `Accepted` | 单案例购买决策研究原型采用 React + TypeScript + Vite，并由研究者控制的本地/LAN 静态服务交付；不批准云托管 | `2026-08-21` |
+| [`ADR-0002`](ADR-0002-calculation-and-rules.md) | `Accepted` | 采用纯 TypeScript 的货币定点 BigInt + 有理数计算内核，固定周期/币种/状态/舍入/版本与当前会话修订合同 | `2026-08-21` |
 
 ## 什么时候必须写 ADR
 

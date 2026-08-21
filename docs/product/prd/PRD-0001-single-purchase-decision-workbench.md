@@ -12,7 +12,7 @@
 | 负责人 | Alune |
 | 产品评审人 | Alune（兼任产品、数据/隐私、设计/可理解性与工程正式评审角色）；招募授权前的独立人类隐私/安全挑战者待指定 |
 | 版本与日期 | `0.5.0` / `2026-08-21` |
-| 相关 Issue / RFC / ADR / Research | [Experiment Issue #1](https://github.com/alune1212/zhiguan/issues/1)；RFC：不需要；ADR：尚未创建，本 PRD 批准后允许开始具体 ADR；Research：[`RESEARCH-0001`](../../research/RESEARCH-0001-single-purchase-decision-protocol.md) 已创建为 `Draft`，尚未批准，仍是招募门禁 |
+| 相关 Issue / RFC / ADR / Research | [Experiment Issue #1](https://github.com/alune1212/zhiguan/issues/1)；RFC：不需要；[`ADR-0001`](../../adr/ADR-0001-delivery-form-and-technology-stack.md) 与 [`ADR-0002`](../../adr/ADR-0002-calculation-and-rules.md) 已为 `Accepted`，导出合同 ADR 尚未创建；Research：[`RESEARCH-0001`](../../research/RESEARCH-0001-single-purchase-decision-protocol.md) 已创建为 `Draft`，尚未批准，仍是招募门禁 |
 
 ## 1. 问题与机会
 
@@ -32,7 +32,7 @@
 
 [`PRODUCT_STRATEGY.md`](../../../PRODUCT_STRATEGY.md) 将“收入与工作时间 → 个人口径与收入速率 → 固定成本与可用余量 → 单一购买情景 → 决定 → 复盘”定义为优先验证的最短个人价值闭环；[`ROADMAP.md`](../../../ROADMAP.md) 的 Now 阶段要求用少量输入验证这条闭环，而不是先做完整记账、目标系统、订阅、同步或 AI。
 
-当前治理基线、数据状态、指标定义和架构约束已经建立；本 `PRD-0001` 已批准，但尚无 Accepted ADR。它把 Experiment Issue #1 中已确认的研究边界转成可验收需求，为后续 ADR 与 OpenSpec change 提供稳定的产品输入；PRD 批准只授权开始具体 ADR，本身不授权初始化框架或实现代码。
+当前治理基线、数据状态、指标定义和架构约束已经建立；本 `PRD-0001`、[`ADR-0001`](../../adr/ADR-0001-delivery-form-and-technology-stack.md) 与 [`ADR-0002`](../../adr/ADR-0002-calculation-and-rules.md) 已批准，导出合同 ADR 和 OpenSpec change 仍未批准。它把 Experiment Issue #1 中已确认的研究边界转成可验收需求，为后续 ADR 与 OpenSpec change 提供稳定的产品输入；这些批准仍不授权初始化框架或实现代码。
 
 ### 1.3 成功的用户结果
 
@@ -147,7 +147,7 @@
 | --- | --- |
 | 缺少收入或工作小时 | Income Rate、Work-time Equivalent 和依赖结果为 `insufficient-data`；指出缺少字段，不使用默认工时 |
 | 收入、工作小时或固定成本不属于同一比较周期 | 不自动跨周期换算或猜测；要求用户调整为同一比较周期后再计算 |
-| 金额、工作小时为零、负数、非有限值或超出实现限额 | 不计算；显示字段级错误，不在日志中写入原始值；具体限额由 ADR 明确 |
+| 金额、工作小时为零、负数、非有限值或超出实现限额 | 不计算；显示字段级错误，不在日志中写入原始值；具体语法、精度和限额见 [ADR-0002](../../adr/ADR-0002-calculation-and-rules.md) 第 5.1.2 节 |
 | 购买价格缺失或无效 | Work-time Equivalent 与购买情景结果为 `insufficient-data`；Income Rate 仍可展示 |
 | 固定成本未填写、覆盖为部分或未知 | Income Rate 和 Work-time Equivalent 仍可展示；同周期覆盖范围内可用余量及其购买影响为 `insufficient-data` |
 | 固定成本标记为完整但未填写覆盖说明 | 不接受“完整”状态；要求用户用非交易明细的一句话说明包含范围 |
@@ -334,15 +334,15 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 
 ### 5.3 计算与解释
 
-以下为产品语义与概念公式；数值表示、精度、舍入、边界限额和规则版本方案必须由 Accepted ADR 明确后才能实现。
+以下为产品语义与概念公式；具体数值合同已由 [ADR-0002](../../adr/ADR-0002-calculation-and-rules.md) 固定。实际实现与运行证据仍须按该 ADR 第 9.2 节验收，本节不把计划写成已通过。
 
 | 结果 | 输入 | 口径/规则版本 | 状态 | 用户可见解释 | 数据不足时 |
 | --- | --- | --- | --- | --- | --- |
-| Income Rate | 同一比较周期收入金额 ÷ 对应工作小时 | 单一 ISO 4217 币种；工作小时必须大于零；不自动跨周期换算；规则版本待 ADR | `user-confirmed`、`estimated` 或 `insufficient-data` | “按你确认的比较周期和工作小时口径计算”；展示分子、分母、税前/税后、单位、周期和近似性质；不直接称为真实时薪 | 说明缺少收入、工时、周期匹配或有效值；不使用默认工时 |
-| Work-time Equivalent | 购买价格 ÷ Income Rate | 与 Income Rate 同币种；沿用并显示收入的税前/税后口径；展示为时间单位；精度和单位转换待 ADR | `user-confirmed`、`estimated` 或 `insufficient-data` | “这只是按所示收入口径得到的工作时间视角，不代表体验或人生价值”；展示价格、速率、税口径、公式、单位和输入状态 | Income Rate 或价格不可用时停止；Income Rate 仍可单独展示（如适用） |
-| 同周期覆盖范围内可用余量 | 同周期税后收入金额 − 同周期固定成本汇总 | 只接受税后收入；固定成本覆盖为“完整”且有覆盖说明；不是总资产、正式净资产或 Net Accumulation；规则版本待 ADR | `user-confirmed`、`estimated` 或 `insufficient-data` | 明确写“按你确认的税后收入和固定成本覆盖范围”；展示覆盖说明及未纳入范围 | 收入为税前、固定成本缺失/部分/未知或缺少覆盖说明时显示 `insufficient-data`，不把未知成本或税费当零 |
-| 购买情景后的覆盖范围内可用余量 | 同周期覆盖范围内可用余量 − 购买价格 | 用户必须确认把本次购买作为所选比较周期的一次性成本；不自动分摊；与真实记录隔离；规则版本待 ADR | `forecast` 或 `insufficient-data` | 明确写“这是可调整情景，不是承诺或购买建议”；展示周期归属、税后基线、变化、输入状态和限制 | 任一关键输入、税后收入、完整覆盖或周期归属不足时停止，不展示确定数值；Work-time Equivalent 可独立展示 |
-| 购买与暂不购买/等待差异 | 购买情景结果与当前可见基线的差异 | 不预测市场价格、收入或实际购买时间变化；规则版本待 ADR | `forecast` 或 `insufficient-data` | 只描述本次输入下的算术差异，允许修改假设；不评价选择 | 缺少安全基线时说明只能查看 Work-time Equivalent，不能判断余量影响 |
+| Income Rate | 同一比较周期收入金额 ÷ 对应工作小时 | `purchase-decision-rules@1.0.0`；单一 ISO 4217 币种；工作小时大于零；不跨周期换算；保留精确有理数，按 `min(4, max(currencyMinorUnit, 2))` 位展示 | `user-confirmed`、`estimated` 或 `insufficient-data` | “按你确认的比较周期和工作小时口径计算”；展示分子、分母、税前/税后、单位、周期和近似性质；不直接称为真实时薪 | 说明缺少收入、工时、周期匹配或有效值；不使用默认工时 |
+| Work-time Equivalent | 购买价格 ÷ Income Rate | `purchase-decision-rules@1.0.0`；与 Income Rate 同币种；直接使用原始精确输入；主单位固定为小时并展示 2 位小数，精确非零但舍入为 `0.00` 时显示 `<0.01 小时`；不换算工作日 | `user-confirmed`、`estimated` 或 `insufficient-data` | “这只是按所示收入口径得到的工作时间视角，不代表体验或人生价值”；展示价格、速率、税口径、公式、单位和输入状态 | Income Rate 或价格不可用时停止；Income Rate 仍可单独展示（如适用） |
+| 同周期覆盖范围内可用余量 | 同周期税后收入金额 − 同周期固定成本汇总 | `purchase-decision-rules@1.0.0`；只接受税后收入；固定成本覆盖为“完整”且有覆盖说明；按货币最小单位精确计算与展示；不是总资产、正式净资产或 Net Accumulation | `user-confirmed`、`estimated` 或 `insufficient-data` | 明确写“按你确认的税后收入和固定成本覆盖范围”；展示覆盖说明及未纳入范围 | 收入为税前、固定成本缺失/部分/未知或缺少覆盖说明时显示 `insufficient-data`，不把未知成本或税费当零 |
+| 购买情景后的覆盖范围内可用余量 | 同周期覆盖范围内可用余量 − 购买价格 | `purchase-decision-rules@1.0.0`；用户确认购买属于所选周期；不自动分摊；按货币最小单位精确计算与展示；与真实记录隔离 | `forecast` 或 `insufficient-data` | 明确写“这是可调整情景，不是承诺或购买建议”；展示周期归属、税后基线、变化、输入状态和限制 | 任一关键输入、税后收入、完整覆盖或周期归属不足时停止，不展示确定数值；Work-time Equivalent 可独立展示 |
+| 购买与暂不购买/等待差异 | 购买情景结果与当前可见基线的差异 | `purchase-decision-rules@1.0.0`；精确值固定为购买价格的相反数并按货币最小单位展示；不预测市场价格、收入或实际购买时间变化 | `forecast` 或 `insufficient-data` | 只描述本次输入下的算术差异，允许修改假设；不评价选择 | 缺少安全基线时说明只能查看 Work-time Equivalent，不能判断余量影响 |
 
 所有结果必须同时提供：
 
@@ -352,7 +352,7 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 - 规则版本、生成时点、假设、限制和不足原因；
 - 返回修改、重新确认和重算入口。
 
-第 7 节中的概念样例用于锁定公式语义，不替代数值 ADR。精度、舍入、显示单位、时区来源与确认、限额和规则版本未形成 Accepted ADR 前，相关验收只能保持“计划”，不能判定通过。
+第 7 节概念样例与 [ADR-0002](../../adr/ADR-0002-calculation-and-rules.md) 共同形成已批准的计算合同；实现必须同时满足精确公式、输入限额、展示舍入、时间上下文和 `purchase-decision-rules@1.0.0`。在第 9.2 节运行证据完成前，相关验收仍只能保持“计划”，不能判定通过。
 
 ### 5.4 隐私与安全影响
 
@@ -430,7 +430,7 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 | AC-03 | 分别使用全部用户确认输入和至少一项近似输入 | 标记并确认收入、工时和购买价格 | 用户确认路径保持 `user-confirmed`；近似路径保持 `estimated`；任何确认行为都不升级为 `actual` | 状态转换单元测试、界面截图仅用合成数据 |
 | AC-04 | 用户选择填写固定成本 | 输入汇总、覆盖状态和覆盖说明 | 可以选择完整、部分或未知，且含义可查看；选择完整但覆盖说明为空时不能继续展示余量 | 组件测试、手工验收 |
 | AC-05 | 比较周期/币种冲突，字段为空，或金额/工时为零、负数、非数值、非有限值、超限值；或未确认购买周期归属 | 尝试继续 | 只停止依赖结果并显示具体修正路径；不自动跨周期换算、换汇、分摊或填默认值；未确认周期归属时 Work-time Equivalent 仍可独立展示 | 参数化边界测试、手工验收 |
-| AC-06 | 使用 `SYN-01` 的全部用户确认输入 | 查看理解结果 | Income Rate 精确数学值为 `62.5 CNY/小时`，Work-time Equivalent 为 `16 小时`，均为 `user-confirmed`；最终显示精度待 ADR | 计算单元测试、规则测试 |
+| AC-06 | 使用 `SYN-01` 的全部用户确认输入 | 查看理解结果 | Income Rate 精确数学值为 `62.5 CNY/小时`、展示为 `62.50 CNY/小时`；Work-time Equivalent 精确数学值为 `16 小时`、展示为 `16.00 小时`；两者均为 `user-confirmed`，舍入规则为 `half-away-from-zero` | 计算单元测试、规则测试 |
 | AC-07 | 固定成本缺失、部分、未知，或完整但缺少覆盖说明 | 查看结果 | Income Rate 和 Work-time Equivalent 仍可用；覆盖范围内可用余量及其购买影响为 `insufficient-data` | 状态传播测试、手工验收 |
 | AC-08 | 缺少收入、工时或价格 | 查看结果 | 只停止依赖该字段的结果，明确缺少什么；不显示旧值、零值或猜测 | 缺失数据测试 |
 | AC-09 | 税后收入、固定成本覆盖完整、有覆盖说明、购买已确认计入同一比较周期且输入有效 | 查看情景 | 购买后余量和差异为 `forecast`；详细依据显示周期归属、税后基线与关键输入状态，不表述为承诺 | 规则测试、文案验收 |
@@ -445,7 +445,7 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 | AC-18 | 研究者记录一次合成研究会话 | 按研究表记录 | 只出现第 5.1 节封闭字段，不含自由文本、精确操作时点、原始金额/工时、价值期待全文、决定依据全文、联系人，且不能从字段组合重建原始会话 | 研究表 schema 审查、合成演练、重识别风险复核 |
 | AC-19 | `RESEARCH-0001` 候选协议、同意材料和两类存储已准备 | 用合成参与者演练准入、当前额外内容禁采、退出和撤回 | 原型访问前有正式研究同意与脱敏观察授权；当前材料不请求或采集原话、录音、录像或截屏；未来若协议修订允许，额外授权可独立拒绝；退出路径可用；撤回后立即停止联系并在 7 天内删除适用记录；原型内确认不替代正式同意 | 产品外流程清单、合成参与者演练、两存储隔离检查、删除 readback |
 | AC-20 | 依次执行缺失+未来、估算+未来、全部确认+未来、估算+非未来、全部确认+非未来，并加入研究层 `actual` 观察 | 查看各结果状态 | 严格得到第 5.2 节矩阵状态；缺失优先为 `insufficient-data`，未来优先为 `forecast` 并揭示估算依赖，研究层 `actual` 不传播 | 表驱动状态测试、界面断言 |
-| AC-21 | 使用 `SYN-02`，然后取消购买周期归属 | 查看基线与购买情景 | 基线精确数学值为 `4000 CNY` 且为 `user-confirmed`；购买情景为 `3000 CNY` 且为 `forecast`；取消周期归属后购买情景变为 `insufficient-data`，Work-time Equivalent 仍为 `16 小时` | 计算与状态集成测试、手工验收 |
+| AC-21 | 使用 `SYN-02`，然后取消购买周期归属 | 查看基线与购买情景 | 基线精确数学值为 `4000 CNY` 且为 `user-confirmed`；购买情景为 `3000 CNY` 且为 `forecast`；取消周期归属后购买情景变为 `insufficient-data`，Work-time Equivalent 精确数学值仍为 `16 小时`、展示为 `16.00 小时` | 计算与状态集成测试、手工验收 |
 | AC-22 | 分别使用 `SYN-02` 与 `SYN-04`，补充合成价值期待、决定、依据和复盘条件，并确认修改一次输入 | 预览字段并分别下载 JSON 与 Markdown，再断网打开 | 两种 UTF-8 文件均自包含 schema/格式版本、状态/字段字典、导出时点及时区、构建/规则版本、当前快照范围，以及相同的输入、来源、状态、单位、比较周期、依赖、公式/规则、假设、限制、决定、复盘和修订语义；所有 schema 字段显式存在，未填写值不被省略或当零；`SYN-02` 保留 `4000 CNY user-confirmed` 与 `3000 CNY forecast`，`SYN-04` 保留 `insufficient-data` 及原因；已确认修改含前后值/状态/时间且旧值不作为当前值；文件名无敏感内容；JSON 可按批准 schema 解析，Markdown 可离线独立阅读；均不含研究编号、联系人、遥测或过去会话 | JSON schema/快照测试、跨格式等价与修订历史断言、断网合成文件人工审查 |
 | AC-23 | 当前会话含合成敏感数据 | 使用键盘/读屏检查预览与提示，依次取消、成功导出并模拟生成/下载失败；检查网络、浏览器存储和临时资源 | 提示列明敏感类别及“下载后由用户管理”；取消不生成文件；成功仅产生用户选择的本地文件，无应用数据请求或浏览器持久化；失败不显示成功、不改变会话且可重试；临时对象按 ADR 撤销；刷新后原型不可恢复但已下载文件不受影响 | 下载与失败路径自动化、网络捕获、存储检查、资源清理断言、键盘/读屏手工验收 |
 | AC-24 | 分别使用税后 `SYN-02`、税前 `SYN-05`，并制造周期/币种冲突 | 查看 Income Rate、Work-time Equivalent 和余量结果 | 税后路径按既定数学值展示；税前路径仍展示带“税前”口径的 Income Rate 与 Work-time Equivalent，但基线余量及购买影响为 `insufficient-data` 并说明需要税后收入；周期/币种冲突不自动转换，只停止依赖结果 | 表驱动计算与可用性测试、文案验收 |
@@ -455,7 +455,7 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 
 ### 7.2 合成计算样例
 
-下列 fixture 只锁定输入依赖、精确数学值和状态传播；展示精度、舍入、时间单位转换和本地化格式由 Accepted ADR 决定。
+下列 fixture 锁定输入依赖、精确数学值和状态传播；[ADR-0002](../../adr/ADR-0002-calculation-and-rules.md) 已固定展示精度、`half-away-from-zero` 舍入、小时主单位和货币最小单位。本地分组与小数符号只属于展示，不得改变规范十进制值；这些仍是计划验收，不是运行证据。
 
 | Fixture | 输入 | 预期数学结果与状态 |
 | --- | --- | --- |
@@ -486,7 +486,7 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 | 门禁 | 必须满足 | 授权范围 | 当前状态 |
 | --- | --- | --- | --- |
 | `PRD Approved` | Alune 分别以产品、数据/隐私、设计/可理解性和工程角色完成最终 readback，确认问题、范围、数据边界、计划 AC 和后续门禁；不要求尚未实现的 AC 证据 | 允许开始具体 ADR；不授权初始化框架、实现、部署或招募 | 已通过；`0.5.0 / 已批准`，`2026-08-21` |
-| `Implementation Authorized` | PRD 已批准；随后交付形态与技术栈、计算与规则、导出合同 ADR 均为 `Accepted`；再随后 OpenSpec proposal/tasks 获批且不扩大 PRD/ADR 范围 | 允许按批准任务初始化框架和实现原型；不授权实现研究存储/同意系统，也不授权向参与者分发 | 未通过 |
+| `Implementation Authorized` | PRD 已批准；随后交付形态与技术栈、计算与规则、导出合同 ADR 均为 `Accepted`；再随后 OpenSpec proposal/tasks 获批且不扩大 PRD/ADR 范围 | 允许按批准任务初始化框架和实现原型；不授权实现研究存储/同意系统，也不授权向参与者分发 | 未通过；`ADR-0001`、`ADR-0002` 已通过，导出合同 ADR 与 OpenSpec proposal/tasks 尚缺 |
 | `Prototype Accepted` | 实现完成；原型验收组 AC-01–AC-17 与 AC-20–AC-26 均有可审计证据；无未解决关键隐私/信任事件；回滚和关闭路径演练通过 | 允许冻结研究构建并准备研究协议操作材料；不等于研究协议批准或招募授权 | 未通过 |
 | `Recruitment Authorized` | 原型已验收；研究治理组 AC-18、AC-19 与 AC-27 通过；`RESEARCH-0001` 已为 `Accepted`；两类加密存储、同意/撤回、日志与删除演练通过；独立人类挑战完成；具体日历已写回协议与 Issue #1；Alune 完成最终 readback | 允许邀请受控参与者并执行两批形成性研究 | 未通过 |
 
@@ -527,12 +527,12 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 | 临时内存中的核心数据是否仍受 `PRODUCT.md` / `ARCHITECTURE.md` 的用户主动导出契约约束 | 产品范围已确定 | Alune | `2026-08-21` | RFC：否；纳入一次性本地 JSON/Markdown 导出 | 已解决 |
 | PRD 批准、实现授权、原型验收和招募授权是否分开 | 消除批准必须等待实现证据的循环 | Alune | `2026-08-21` | RFC/ADR：否 | 已解决；采用第 8.1 节四道门禁 |
 | JSON schema、Markdown 结构、字段映射、缺失值、本次会话修订事件、UTF-8/MIME、文件命名、版本兼容、自包含、生成限额、部分失败、临时对象撤销和浏览器下载行为 | 阻塞导出实现与 AC-22/AC-23 | Alune（正式产品/工程/数据评审） | PRD 批准后、编写导出代码前 | ADR：是；RFC：否 | 未解决 |
-| 受控静态托管/本地降级、前端技术栈、构建/测试、依赖供应链、访问控制、日志配置、静态资源与关闭方式 | 阻塞 `Implementation Authorized` | Alune（正式产品/工程/隐私评审） | PRD 批准后、初始化框架前 | ADR：是；RFC：否 | 未解决；产品边界见 FR-24/FR-25 |
-| 比较周期表示、时区来源与确认、时间单位、ISO 4217 表示、数值精度、舍入、限额、规则版本和状态传播实现 | 阻塞 `Implementation Authorized` | Alune（正式产品/工程/数据评审） | PRD 批准后、编写计算代码前 | ADR：是；RFC：否 | 未解决；不跨期/换汇及税口径产品语义已解决 |
+| 受控静态托管/本地降级、前端技术栈、构建/测试、依赖供应链、访问控制、日志配置、静态资源与关闭方式 | 阻塞 `Implementation Authorized` | Alune（正式产品/工程/隐私评审） | PRD 批准后、初始化框架前 | ADR：是；RFC：否 | 已解决；[`ADR-0001`](../../adr/ADR-0001-delivery-form-and-technology-stack.md) 已为 `Accepted`；运行证据仍属于后续原型验收 |
+| 比较周期表示、时区来源与确认、时间单位、ISO 4217 表示、数值精度、舍入、限额、规则版本和状态传播实现 | 阻塞 `Implementation Authorized` | Alune（正式产品/工程/数据评审） | PRD 批准后、编写计算代码前 | ADR：是；RFC：否 | 已解决；[`ADR-0002`](../../adr/ADR-0002-calculation-and-rules.md) 已为 `Accepted`；运行证据仍属于后续原型验收 |
 | `RESEARCH-0001` 的加密存储工具、同意材料、联系路径、删除 readback 和无默认备份证明 | 阻塞 `Recruitment Authorized` | Alune | 招募授权前 | 当前不需要 RFC；若引入外部系统则判断 ADR/隐私影响 | 未解决；产品规则已确定 |
 | 招募前独立人类隐私/安全挑战者的姓名、范围、意见和处置记录 | 阻塞 `Recruitment Authorized` | Alune / 挑战者待指定 | 招募授权前 | RFC/ADR：否 | 未解决 |
 | 两批招募、会话和人工回访的具体日历 | 阻塞招募与实验到期 | Alune | 招募开始前写回 Issue #1 | RFC/ADR：否 | 未解决 |
-| 目标平台、VoiceOver 和性能预算 | 产品范围已确定；实际版本、设备、网络配置和最大会话数据仍阻塞可复现验收 | Alune | 交付形态 ADR 与 OpenSpec tasks 批准前 | 纳入交付形态 ADR/验收附录 | 部分解决；产品边界见第 3.4 节 |
+| 目标平台、VoiceOver 和性能预算 | 产品范围已确定；实际版本、设备、网络配置和最大会话数据仍阻塞可复现验收 | Alune | 交付形态 ADR 与 OpenSpec tasks 批准前 | 纳入交付形态 ADR/验收附录 | 部分解决；[`ADR-0001`](../../adr/ADR-0001-delivery-form-and-technology-stack.md) 已固定设计，实际运行证据仍待实施 |
 | 脱敏研究结论的记录位置 | 影响证据可追溯性 | Alune | 第一批开始前 | RFC/ADR：否 | 已解决；研究完成后新增 `RESEARCH-0001` 聚合结果文档，仓库不保存逐人记录 |
 | 正式评审角色 | 决定 PRD 签字责任 | Alune | `2026-08-21` | RFC/ADR：否 | 已解决；Alune 兼任四类正式角色，AI 不签字，独立挑战属于招募补偿控制 |
 
@@ -561,4 +561,4 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 - [ ] 独立人类挑战者已完成复核，关键意见全部解决，其他意见已处置并记录。
 - [ ] 两批研究、门间评审、回访和 7 日内结论的具体日期已写入协议和 Issue #1。
 
-当前只有 `PRD Approved` 已通过，允许开始具体 ADR；其余三道门禁均未通过。`Implementation Authorized` 前不得初始化框架或实现；`Prototype Accepted` 与 `Recruitment Authorized` 前不得向参与者分发、部署或招募。
+当前 `PRD Approved`、`ADR-0001` 和 `ADR-0002` 已通过；导出合同 ADR 与 OpenSpec proposal/tasks 尚未批准，因此 `Implementation Authorized` 及其后两道门禁仍未通过。`Implementation Authorized` 前不得初始化框架或实现；`Prototype Accepted` 与 `Recruitment Authorized` 前不得向参与者分发、部署或招募。
