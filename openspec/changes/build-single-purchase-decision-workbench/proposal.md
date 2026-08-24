@@ -1,6 +1,18 @@
 ## Why
 
-`PRD-0001` 已批准用一个单案例购买决策研究原型验证最短个人价值闭环，三项架构前置 ADR 也已全部 `Accepted`，但仓库仍没有把这些合同收束成可审查、可执行且可回滚的实现计划。本变更只为该形成性研究原型建立实现规格与任务门禁；在本 OpenSpec 获得 Alune 明确批准前，不构成 `Implementation Authorized`。
+`PRD-0001` 已批准用一个单案例购买决策研究原型验证最短个人价值闭环，三项架构前置 ADR 也已全部 `Accepted`，但仓库此前没有把这些合同收束成可审查、可执行且可回滚的实现计划。本变更只为该形成性研究原型建立实现规格与任务门禁，并据此限定后续实施范围。
+
+## Approval
+
+| 字段 | 记录 |
+| --- | --- |
+| 状态 | `Approved` |
+| 决策人 | Alune |
+| 批准日期 | `2026-08-24` |
+| 批准范围 | 本 change 的 proposal、四项 capability specs、design 与 38 项 tasks；不得扩大 PRD 或三项 Accepted ADR |
+| 授权结果 | `PRD-0001` 的 `Implementation Authorized` 同日通过；允许在后续独立执行中按批准任务实施 |
+
+本批准不表示任何任务已经执行，也不构成运行时证据、`Prototype Accepted`、`RESEARCH-0001` 的 `Accepted`、`Recruitment Authorized`、参与者分发或正式产品发布。所有任务在批准时仍保持未勾选；对规划范围、隐私边界、公式、导出合同或交付拓扑的实质变更必须先完成适用的 PRD/RFC/ADR/OpenSpec 复审。
 
 ## What Changes
 

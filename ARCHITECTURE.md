@@ -4,7 +4,7 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 状态 | 治理基线；研究原型的交付技术栈、计算与规则、导出合同均已有 `Accepted` ADR；[`build-single-purchase-decision-workbench`](openspec/changes/build-single-purchase-decision-workbench/proposal.md) 的 OpenSpec 规划制品已创建、尚待 Alune 批准，仍不授权实现 |
+| 状态 | 治理基线；研究原型的三项 ADR 均为 `Accepted`；[`build-single-purchase-decision-workbench`](openspec/changes/build-single-purchase-decision-workbench/proposal.md) 已于 `2026-08-24` 获 Alune 批准，`Implementation Authorized` 已通过；只允许按批准任务实施，不代表 `Prototype Accepted`、`Recruitment Authorized` 或参与者分发获准 |
 | 版本 | 0.1.0 |
 | 生效日期 | 2026-08-20 |
 | 负责人 | Alune |
@@ -164,7 +164,7 @@
 - 日志、分析、监控、错误上报和个人数据脱敏；
 - 任何会破坏历史可重现性、迁移能力或用户控制权的变更。
 
-ADR 至少需要说明：背景与决策驱动因素、候选方案、选择及理由、对产品与数据信任的影响、兼容/迁移/回滚、验证证据和后续复审条件。ADR 的工作流与模板见 [`docs/adr/README.md`](docs/adr/README.md) 和 [`docs/adr/template.md`](docs/adr/template.md)。当前已批准 [`ADR-0001`](docs/adr/ADR-0001-delivery-form-and-technology-stack.md) 的研究原型交付形态与技术栈、[`ADR-0002`](docs/adr/ADR-0002-calculation-and-rules.md) 的计算与规则合同，以及 [`ADR-0003`](docs/adr/ADR-0003-export-contract.md) 的导出合同。[`build-single-purchase-decision-workbench`](openspec/changes/build-single-purchase-decision-workbench/proposal.md) 已创建 proposal、specs、design 与 tasks，但尚待 Alune 明确批准；在此之前 `Implementation Authorized` 仍未通过。
+ADR 至少需要说明：背景与决策驱动因素、候选方案、选择及理由、对产品与数据信任的影响、兼容/迁移/回滚、验证证据和后续复审条件。ADR 的工作流与模板见 [`docs/adr/README.md`](docs/adr/README.md) 和 [`docs/adr/template.md`](docs/adr/template.md)。当前已批准 [`ADR-0001`](docs/adr/ADR-0001-delivery-form-and-technology-stack.md) 的研究原型交付形态与技术栈、[`ADR-0002`](docs/adr/ADR-0002-calculation-and-rules.md) 的计算与规则合同，以及 [`ADR-0003`](docs/adr/ADR-0003-export-contract.md) 的导出合同。[`build-single-purchase-decision-workbench`](openspec/changes/build-single-purchase-decision-workbench/proposal.md) 的 proposal、specs、design 与 tasks 已于 `2026-08-24` 获 Alune 明确批准，`PRD-0001` 的 `Implementation Authorized` 同日通过；后续只能按批准任务实施，运行证据仍须由 `Prototype Accepted` 门禁验收。
 
 ## 6. 架构变更检查表
 

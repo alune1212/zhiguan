@@ -1,4 +1,4 @@
-本任务清单只有在本 OpenSpec change 已获 Alune 明确批准、且 `PRD-0001` 的 `Implementation Authorized` 门禁已通过后才能执行。当前清单只规划本地形成性研究原型的实现与验证，不授权初始化、安装依赖、编写实现、部署或参与者分发；明确排除 `FR-20`、`FR-21`、`FR-26`、`AC-18`、`AC-19`、`AC-27`、研究存储 A/B、正式同意/撤回、研究观察、招募、研究日历、云托管、公开远程访问和任何正式产品能力。所有实现前运行证据必须保持“待实施”，不得把任务勾选或 OpenSpec 批准写成 `Prototype Accepted`、`Recruitment Authorized` 或研究授权。
+本 OpenSpec change 已于 `2026-08-24` 获 Alune 明确批准，`PRD-0001` 的 `Implementation Authorized` 门禁已于同日通过；后续独立执行可以严格按本清单初始化和实现。此次批准本身不执行或勾选任务；当前 38 项仍全部未开始。范围只限本地形成性研究原型的实现与验证，并明确排除 `FR-20`、`FR-21`、`FR-26`、`AC-18`、`AC-19`、`AC-27`、研究存储 A/B、正式同意/撤回、研究观察、招募、研究日历、云托管、公开远程访问和任何正式产品能力。所有运行证据在实际验证前必须保持“待实施”，不得把 OpenSpec 批准或 `Implementation Authorized` 写成 `Prototype Accepted`、`Recruitment Authorized` 或研究授权。
 
 ## 1. 授权、范围与合成证据基线
 

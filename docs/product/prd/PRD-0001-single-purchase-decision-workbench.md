@@ -12,7 +12,7 @@
 | 负责人 | Alune |
 | 产品评审人 | Alune（兼任产品、数据/隐私、设计/可理解性与工程正式评审角色）；招募授权前的独立人类隐私/安全挑战者待指定 |
 | 版本与日期 | `0.5.0` / `2026-08-21` |
-| 相关 Issue / RFC / ADR / OpenSpec / Research | [Experiment Issue #1](https://github.com/alune1212/zhiguan/issues/1)；RFC：不需要；[`ADR-0001`](../../adr/ADR-0001-delivery-form-and-technology-stack.md)、[`ADR-0002`](../../adr/ADR-0002-calculation-and-rules.md) 与 [`ADR-0003`](../../adr/ADR-0003-export-contract.md) 均为 `Accepted`；ADR-0003 于 `2026-08-24` 获批；OpenSpec：[`build-single-purchase-decision-workbench`](../../../openspec/changes/build-single-purchase-decision-workbench/proposal.md) 已创建、尚待 Alune 批准；Research：[`RESEARCH-0001`](../../research/RESEARCH-0001-single-purchase-decision-protocol.md) 已创建为 `Draft`，尚未批准，仍是招募门禁 |
+| 相关 Issue / RFC / ADR / OpenSpec / Research | [Experiment Issue #1](https://github.com/alune1212/zhiguan/issues/1)；RFC：不需要；[`ADR-0001`](../../adr/ADR-0001-delivery-form-and-technology-stack.md)、[`ADR-0002`](../../adr/ADR-0002-calculation-and-rules.md) 与 [`ADR-0003`](../../adr/ADR-0003-export-contract.md) 均为 `Accepted`；ADR-0003 于 `2026-08-24` 获批；OpenSpec：[`build-single-purchase-decision-workbench`](../../../openspec/changes/build-single-purchase-decision-workbench/proposal.md) 于 `2026-08-24` 获 Alune 批准；Research：[`RESEARCH-0001`](../../research/RESEARCH-0001-single-purchase-decision-protocol.md) 已创建为 `Draft`，尚未批准，仍是招募门禁 |
 
 ## 1. 问题与机会
 
@@ -32,7 +32,7 @@
 
 [`PRODUCT_STRATEGY.md`](../../../PRODUCT_STRATEGY.md) 将“收入与工作时间 → 个人口径与收入速率 → 固定成本与可用余量 → 单一购买情景 → 决定 → 复盘”定义为优先验证的最短个人价值闭环；[`ROADMAP.md`](../../../ROADMAP.md) 的 Now 阶段要求用少量输入验证这条闭环，而不是先做完整记账、目标系统、订阅、同步或 AI。
 
-当前治理基线、数据状态、指标定义和架构约束已经建立；本 `PRD-0001`、[`ADR-0001`](../../adr/ADR-0001-delivery-form-and-technology-stack.md)、[`ADR-0002`](../../adr/ADR-0002-calculation-and-rules.md) 与 [`ADR-0003`](../../adr/ADR-0003-export-contract.md) 均已批准，[`build-single-purchase-decision-workbench`](../../../openspec/changes/build-single-purchase-decision-workbench/proposal.md) 的 proposal、specs、design 与 tasks 已创建但尚待 Alune 批准。PRD 把 Experiment Issue #1 中已确认的研究边界转成可验收需求，OpenSpec 将其收束为实现计划；当前进度仍不授权初始化框架或实现代码。
+当前治理基线、数据状态、指标定义和架构约束已经建立；本 `PRD-0001`、[`ADR-0001`](../../adr/ADR-0001-delivery-form-and-technology-stack.md)、[`ADR-0002`](../../adr/ADR-0002-calculation-and-rules.md)、[`ADR-0003`](../../adr/ADR-0003-export-contract.md) 与 [`build-single-purchase-decision-workbench`](../../../openspec/changes/build-single-purchase-decision-workbench/proposal.md) 的 proposal、specs、design 和 tasks 均已批准。`Implementation Authorized` 已于 `2026-08-24` 通过，允许在后续独立执行中严格按批准任务初始化框架和实现原型；当前尚未执行任何任务，也未取得运行时或原型验收证据。
 
 ### 1.3 成功的用户结果
 
@@ -486,7 +486,7 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 | 门禁 | 必须满足 | 授权范围 | 当前状态 |
 | --- | --- | --- | --- |
 | `PRD Approved` | Alune 分别以产品、数据/隐私、设计/可理解性和工程角色完成最终 readback，确认问题、范围、数据边界、计划 AC 和后续门禁；不要求尚未实现的 AC 证据 | 允许开始具体 ADR；不授权初始化框架、实现、部署或招募 | 已通过；`0.5.0 / 已批准`，`2026-08-21` |
-| `Implementation Authorized` | PRD 已批准；随后交付形态与技术栈、计算与规则、导出合同 ADR 均为 `Accepted`；再随后 OpenSpec proposal/tasks 获批且不扩大 PRD/ADR 范围 | 允许按批准任务初始化框架和实现原型；不授权实现研究存储/同意系统，也不授权向参与者分发 | 未通过；三项 ADR 均已通过，[`build-single-purchase-decision-workbench`](../../../openspec/changes/build-single-purchase-decision-workbench/proposal.md) 的完整规划制品已创建但尚未获 Alune 批准 |
+| `Implementation Authorized` | PRD 已批准；随后交付形态与技术栈、计算与规则、导出合同 ADR 均为 `Accepted`；再随后 OpenSpec proposal/tasks 获批且不扩大 PRD/ADR 范围 | 允许按批准任务初始化框架和实现原型；不授权实现研究存储/同意系统，也不授权向参与者分发 | 已通过；Alune 于 `2026-08-24` 批准 [`build-single-purchase-decision-workbench`](../../../openspec/changes/build-single-purchase-decision-workbench/proposal.md) 的完整规划制品并明确通过本门禁；尚未执行任何实现任务 |
 | `Prototype Accepted` | 实现完成；原型验收组 AC-01–AC-17 与 AC-20–AC-26 均有可审计证据；无未解决关键隐私/信任事件；回滚和关闭路径演练通过 | 允许冻结研究构建并准备研究协议操作材料；不等于研究协议批准或招募授权 | 未通过 |
 | `Recruitment Authorized` | 原型已验收；研究治理组 AC-18、AC-19 与 AC-27 通过；`RESEARCH-0001` 已为 `Accepted`；两类加密存储、同意/撤回、日志与删除演练通过；独立人类挑战完成；具体日历已写回协议与 Issue #1；Alune 完成最终 readback | 允许邀请受控参与者并执行两批形成性研究 | 未通过 |
 
@@ -551,7 +551,7 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 
 ### 10.2 `Prototype Accepted`
 
-- [ ] 三项具体 ADR 均为 `Accepted`，OpenSpec proposal/tasks 已批准并链接。
+- [x] 三项具体 ADR 均为 `Accepted`，OpenSpec proposal/tasks 已批准并链接；`2026-08-24` 完成。
 - [ ] 原型验收组 AC-01–AC-17 与 AC-20–AC-26 的全部证据已链接。
 - [ ] 关键隐私/信任事件为 0，回滚、关闭和恢复演练通过。
 
@@ -561,4 +561,4 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 - [ ] 独立人类挑战者已完成复核，关键意见全部解决，其他意见已处置并记录。
 - [ ] 两批研究、门间评审、回访和 7 日内结论的具体日期已写入协议和 Issue #1。
 
-当前 `PRD Approved`、`ADR-0001`、`ADR-0002` 和 [`ADR-0003`](../../adr/ADR-0003-export-contract.md) 均已通过；[`build-single-purchase-decision-workbench`](../../../openspec/changes/build-single-purchase-decision-workbench/proposal.md) 的 proposal、specs、design 与 tasks 已创建但尚待 Alune 批准，因此 `Implementation Authorized` 及其后两道门禁仍未通过。`Implementation Authorized` 前不得初始化框架或实现；`Prototype Accepted` 与 `Recruitment Authorized` 前不得向参与者分发、部署或招募。
+当前 `PRD Approved`、`ADR-0001`、`ADR-0002`、[`ADR-0003`](../../adr/ADR-0003-export-contract.md) 和 [`build-single-purchase-decision-workbench`](../../../openspec/changes/build-single-purchase-decision-workbench/proposal.md) 均已获批准，`Implementation Authorized` 已于 `2026-08-24` 通过。38 项实现任务仍全部未开始，`Prototype Accepted` 与 `Recruitment Authorized` 仍未通过；只能按批准任务实现，不得向参与者分发、部署或招募。
