@@ -2,21 +2,21 @@
 
 | 字段 | 填写 |
 | --- | --- |
-| 状态 | `Proposed` |
-| 日期 | `2026-08-21` |
+| 状态 | `Accepted` |
+| 日期 | `2026-08-24` |
 | 负责人 | Alune |
 | 评审人/决策人 | Alune（兼任产品、工程、数据/隐私、设计/可理解性正式角色）；AI 仅提供起草、规范核验与证据整理，不是签字主体 |
-| 相关 PRD / RFC / Issue | [`PRD-0001`](../product/prd/PRD-0001-single-purchase-decision-workbench.md)；[`ADR-0001`](ADR-0001-delivery-form-and-technology-stack.md)（`Accepted`）；[`ADR-0002`](ADR-0002-calculation-and-rules.md)（`Accepted`）；[`RESEARCH-0001`](../research/RESEARCH-0001-single-purchase-decision-protocol.md)（当前为 `Draft`）；[Experiment Issue #1](https://github.com/alune1212/zhiguan/issues/1)；RFC：不需要，本提案不改变上位产品边界 |
+| 相关 PRD / RFC / Issue | [`PRD-0001`](../product/prd/PRD-0001-single-purchase-decision-workbench.md)；[`ADR-0001`](ADR-0001-delivery-form-and-technology-stack.md)（`Accepted`）；[`ADR-0002`](ADR-0002-calculation-and-rules.md)（`Accepted`）；[`RESEARCH-0001`](../research/RESEARCH-0001-single-purchase-decision-protocol.md)（当前为 `Draft`）；[Experiment Issue #1](https://github.com/alune1212/zhiguan/issues/1)；RFC：不需要，本决定不改变上位产品边界 |
 | 取代 / 被取代 | 无 |
-| 复审条件/日期 | 若获批准，首次定期复审为 `2026-09-21`；schema/格式语义、导出范围、浏览器下载机制、持久化/分享边界、资源限额、目标浏览器或上位产品合同任一变化时提前复审 |
+| 复审条件/日期 | 本次批准依据第 9.1 节 readback；首次定期复审为 `2026-09-21`。schema/格式语义、导出范围、浏览器下载机制、持久化/分享边界、资源限额、目标浏览器或上位产品合同任一变化时提前复审 |
 
 ## 1. 决策摘要
 
-**待决策，推荐方案：**`PRD-0001` 的研究原型建立一份框架无关、只存在于当前浏览器内存的不可变 `ExportSnapshotV1`。用户在预览并确认后，原型从同一冻结快照分别生成自描述 JSON 与安全 GFM 子集 Markdown；两种文件共享相同的当前输入、结果、解释、决定和本次会话已确认修订语义，只允许格式名、格式版本、文件生成时点和文件名等表示层元数据不同。
+**已批准：**`PRD-0001` 的研究原型建立一份框架无关、只存在于当前浏览器内存的不可变 `ExportSnapshotV1`。用户在预览并确认后，原型从同一冻结快照分别生成自描述 JSON 与安全 GFM 子集 Markdown；两种文件共享相同的当前输入、结果、解释、决定和本次会话已确认修订语义，只允许格式名、格式版本、文件生成时点和文件名等表示层元数据不同。
 
 JSON 使用版本化、字段全显式的本地 wire contract；领域数字只使用规范十进制字符串或分子/分母字符串，不使用裸 `BigInt` 或会丢失精度的 JSON number。Markdown 是同一语义模型的用户可读投影，不直接执行用户文本中的 Markdown/HTML/链接语法。文件只由明确用户动作通过浏览器 `Blob`、短时 object URL 和临时 `<a download>` 分格式请求下载；界面只能声明页面已发起 `download-requested`，不能把请求发起冒充为浏览器接管或文件已经成功保存。
 
-本提案不增加服务器、云端分享、导入、恢复、ZIP、File System Access、Web Share、剪贴板、浏览器持久化、外部 schema、远程资源或新运行时依赖。它当前保持 `Proposed`；即使以后转为 `Accepted`，也只完成三项架构前置决策中的第三项，仍需另行批准 OpenSpec proposal/tasks 才可能达到 `Implementation Authorized`。
+本决定不增加服务器、云端分享、导入、恢复、ZIP、File System Access、Web Share、剪贴板、浏览器持久化、外部 schema、远程资源或新运行时依赖。本 ADR 已为 `Accepted`，完成三项架构前置决策中的第三项；仍需另行创建并批准 OpenSpec proposal/tasks 才可能达到 `Implementation Authorized`。
 
 ## 2. 背景与问题
 
@@ -39,7 +39,7 @@ JSON 使用版本化、字段全显式的本地 wire contract；领域数字只�
 | 状态 | 当前证据 |
 | --- | --- |
 | `actual` | 上位治理文档、已批准的 `PRD-0001`/`ADR-0001`/`ADR-0002`、仓库当前尚无应用或导出实现的事实，以及 WHATWG、W3C、IETF/IANA 与 GFM 的公开规范 |
-| `user-confirmed` | Alune 已批准 PRD 与前两项 ADR，并要求继续下一步；尚未明确批准本 ADR 的完整导出合同 |
+| `user-confirmed` | Alune 已批准 PRD 与前两项 ADR，并于 `2026-08-24` 明确确认 ADR-E-01～ADR-E-10 的推荐方案，将本 ADR 批准为 `Accepted`；该批准不代表实现或运行时验收已经完成 |
 | `estimated` | 一份冻结语义模型、双投影和有限资源预算预计能降低跨格式漂移、内存放大与注入风险；具体上限仍需实现期合成验证 |
 | `forecast` | 推荐方案预计能满足 AC-11、AC-14–AC-16、AC-22、AC-23 和 AC-26；当前不能写成已通过 |
 | `insufficient-data` | 目标浏览器中的下载请求行为、object URL 生命周期、最大快照性能、跨格式等价、Unicode/Markdown 安全和无网络/存储副作用均尚无运行时证据；页面无法证明浏览器/设备最终落盘 |
@@ -98,7 +98,7 @@ JSON 使用版本化、字段全显式的本地 wire contract；领域数字只�
 ### 4.5 当前外部规范依据
 
 - [RFC 8259](https://www.rfc-editor.org/rfc/rfc8259.html) 规定 JSON 的媒体类型为 `application/json`，开放系统交换应使用 UTF-8，且对象名称应唯一；它也指出孤立 UTF-16 surrogate 会造成不可预测的互操作行为。
-- [RFC 7763](https://www.rfc-editor.org/rfc/rfc7763.html) 为 Markdown 定义 `text/markdown`、`charset` 和可选 `variant` 参数；[IANA Markdown Variants](https://www.iana.org/assignments/markdown-variants) 登记了 `GFM`，其语法由 [GitHub Flavored Markdown Spec](https://github.github.com/gfm/) 描述。GFM 允许原始 HTML 等结构，因此本提案仍需限制为安全子集，不能把“符合 GFM”误作内容净化证明。
+- [RFC 7763](https://www.rfc-editor.org/rfc/rfc7763.html) 为 Markdown 定义 `text/markdown`、`charset` 和可选 `variant` 参数；[IANA Markdown Variants](https://www.iana.org/assignments/markdown-variants) 登记了 `GFM`，其语法由 [GitHub Flavored Markdown Spec](https://github.github.com/gfm/) 描述。GFM 允许原始 HTML 等结构，因此本 ADR 仍需限制为安全子集，不能把“符合 GFM”误作内容净化证明。
 - [W3C File API](https://w3c.github.io/FileAPI/) 定义 `Blob` URL 及撤销行为：object URL 会让 `Blob` 保持可访问，使用后应释放；撤销后新的解引用应失败，已经开始的请求不应因此中止。
 - [WHATWG HTML 下载算法](https://html.spec.whatwg.org/multipage/links.html#downloading-resources) 将 `download` 文件名视为建议，并允许用户代理基于安全和本地约束调整或中止下载。因此页面不能可靠声称文件已经保存到指定名称或路径。
 
@@ -106,9 +106,9 @@ JSON 使用版本化、字段全显式的本地 wire contract；领域数字只�
 
 ## 5. 决定
 
-### 5.1 选择（Proposed）
+### 5.1 选择
 
-本 ADR 提议选择方案 4.1A、4.2A、4.3A 与 4.4A：一个不可变规范快照、两种纯 TypeScript 投影、固定且自描述的 JSON、受限 GFM Markdown，以及由明确用户动作触发的内存 Blob 下载请求。
+本 ADR 选择方案 4.1A、4.2A、4.3A 与 4.4A：一个不可变规范快照、两种纯 TypeScript 投影、固定且自描述的 JSON、受限 GFM Markdown，以及由明确用户动作触发的内存 Blob 下载请求。
 
 规范数据流为：
 
@@ -297,7 +297,7 @@ export-unsupported-browser
 
 #### 5.1.7 资源限额（实施前估算）
 
-为让 PRD 的 `500ms` 预览、`1s` 单格式生成预算和内存最小化可以被机械验证，首个版本提议以下硬上限：
+为让 PRD 的 `500ms` 预览、`1s` 单格式生成预算和内存最小化可以被机械验证，首个版本固定以下硬上限：
 
 本节 `KiB/MiB` 分别按 `1024/1,048,576` bytes；文本在快照级 Unicode/换行规范化后用 UTF-8 `TextEncoder` 计数。规范快照大小使用字段固定顺序、无缩进的 JSON 等价表示计数，最终文件使用实际 Blob UTF-8 bytes；不能用 UTF-16 code unit、字符数或压缩后大小替代。
 
@@ -310,7 +310,7 @@ export-unsupported-browser
 | 单一格式最终 UTF-8 文件 | 1 MiB | 生成 fail-closed，不截断、不压缩、不拆包 |
 | 并发导出资源 | 1 个格式字符串 + 1 个 Blob + 1 个 object URL | 新请求前完成旧资源清理；不并行生成两格式 |
 
-这些值是 `estimated` 工程边界，不是已经通过的性能事实。转为 `Accepted` 前须由 Alune 明确接受其用户影响；实现期必须用最大合成会话在全部目标浏览器验证。若合法会话在上限内仍无法满足性能预算，先暂停并修订 OpenSpec/ADR，不得用截断、采样、压缩、遥测或服务器生成掩盖问题。
+这些值是 `estimated` 工程边界，不是已经通过的性能事实。Alune 已在本次批准中明确接受其用户影响；实现期仍必须用最大合成会话在全部目标浏览器验证。若合法会话在上限内仍无法满足性能预算，先暂停并修订 OpenSpec/ADR，不得用截断、采样、压缩、遥测或服务器生成掩盖问题。
 
 #### 5.1.8 版本与兼容
 
@@ -330,7 +330,7 @@ export-unsupported-browser
 
 ### 5.3 适用边界
 
-本提案只适用于：
+本 ADR 只适用于：
 
 - `PRD-0001` 的单案例、单浏览器、单页面内存会话；
 - 当前确认输入、当前有效/数据不足结果、价值期待、决定/依据、复盘条件和本次会话已确认修订；
@@ -338,7 +338,7 @@ export-unsupported-browser
 - `ADR-0001` 的桌面 Chrome、macOS Safari、iOS Safari 和 Windows Chrome 研究支持矩阵；
 - 当前批准的 `purchase-decision-rules@1.0.0`、ISO 4217 快照及固定研究构建。
 
-本提案不适用于：
+本 ADR 不适用于：
 
 - 导入、恢复、跨会话历史、自动备份、同步、批量导出、账户迁移、公开分享、协作或第三方连接；
 - 服务器/云端生成、邮件、云盘、Web Share、剪贴板、File System Access、PWA/Service Worker 或浏览器持久化；
@@ -408,7 +408,7 @@ export-unsupported-browser
 
 ### 8.1 迁移/回填
 
-无。当前没有应用、导出代码、产品数据、旧文件消费者、schema 或格式版本需要迁移/回填。本提案不授权创建导入器、转换器、服务器接收端、数据库或历史恢复工具。
+无。当前没有应用、导出代码、产品数据、旧文件消费者、schema 或格式版本需要迁移/回填。本 ADR 不授权创建导入器、转换器、服务器接收端、数据库或历史恢复工具。
 
 未来若批准新 major，只对新生成文件生效；已经下载的旧文件保持原版本和原语义。若需要转换旧文件，必须先建立新的导入/迁移产品合同和安全边界。
 
@@ -431,24 +431,24 @@ export-unsupported-browser
 
 ## 9. 验证与验收
 
-### 9.1 转为 `Accepted` 的决议条件
+### 9.1 `Accepted` 决议条件与记录
 
-`PRD-0001` 要求三项 ADR 先 `Accepted`，再批准 OpenSpec proposal/tasks，才能实现。本节只列实施前可取得的设计、规范和正式 readback 证据；第 9.2 节运行验证不能倒置为本次架构批准的循环前提。当前全部保持待确认。
+`PRD-0001` 要求三项 ADR 先 `Accepted`，再批准 OpenSpec proposal/tasks，才能实现。本节只使用实施前可取得的设计、规范和正式 readback 证据；第 9.2 节运行验证不能倒置为本次架构批准的循环前提。Alune 于 `2026-08-24` 明确确认 ADR-E-01～ADR-E-10 的推荐方案，以下记录本次批准结果。
 
 | 编号 | 场景/前置条件 | 操作/评审 | 转为 `Accepted` 所需证据 | 当前结果 |
 | --- | --- | --- | --- | --- |
-| ADR-E-01 | 完整 Proposed 文档 | Alune 以产品、工程、数据/隐私、设计/可理解性角色完成 readback | 唯一推荐、候选取舍、范围、风险与无 RFC 冲突均明确 | 待确认 |
-| ADR-E-02 | 冻结快照与双投影 | 复核入口、预览、失效、待重新确认、合法数据不足和跨格式等价 | 不导出草稿/旧结果；同一快照可机械证明同语义 | 待确认 |
-| ADR-E-03 | JSON wire contract | 复核顶层结构、固定记录、精确值、null/可用性、字典、版本和 Unicode | 完整承接 PRD 与 ADR-0002，不用外部 schema 或失真 number | 待确认 |
-| ADR-E-04 | Markdown 与内容安全 | 复核 MIME/GFM、安全子集、自由文本、控制字符、HTML/链接/图片边界 | 可离线阅读且用户内容不能改变模板结构或触发远程内容 | 待确认 |
-| ADR-E-05 | 下载与状态语义 | 复核逐格式确认、Blob/object URL、建议文件名、撤销和部分失败 | 只报告 `download-requested`；无自动/网络/分享/剪贴板兜底 | 待确认 |
-| ADR-E-06 | 隐私与用户控制 | 复核纳入/排除字段、敏感提示、下载后设备边界和内存声明 | 不含研究层数据；不虚假承诺召回、删除、保存成功或法证擦除 | 待确认 |
-| ADR-E-07 | 资源与失败合同 | 明确接受 50 条修订、64 KiB 自由文本、512 KiB 快照、1 MiB/格式和单资源上限 | 无截断/压缩/自动重试；上限用户影响被正式接受 | 待确认 |
-| ADR-E-08 | 版本、兼容与回滚 | 复核 SemVer、不可原地改写、无导入承诺、整体构建恢复与旧文件边界 | 变更/停止/通知路径清晰；不把快照元数据称为防篡改证明 | 待确认 |
-| ADR-E-09 | 计划验证充分性 | 将 SYN-02/SYN-04、恶意文本、最大会话、目标浏览器/VoiceOver、隐私和恢复映射到第 9.2 节 | 能覆盖 AC-11、AC-14–16、AC-22、AC-23、AC-26；计划不冒充结果 | 待确认 |
-| ADR-E-10 | 最终决议 | Alune 查看完整 diff 后明确批准 | 状态、ADR 索引、`ARCHITECTURE.md` 和 PRD 同步；仍未创建 OpenSpec/实现 | 待确认 |
+| ADR-E-01 | 完整 Proposed 文档 | Alune 以产品、工程、数据/隐私、设计/可理解性角色完成 readback | 唯一推荐、候选取舍、范围、风险与无 RFC 冲突均明确 | 通过；`2026-08-24` 四角色 readback |
+| ADR-E-02 | 冻结快照与双投影 | 复核入口、预览、失效、待重新确认、合法数据不足和跨格式等价 | 不导出草稿/旧结果；同一快照可机械证明同语义 | 通过；接受第 5.1.1 节全部边界 |
+| ADR-E-03 | JSON wire contract | 复核顶层结构、固定记录、精确值、null/可用性、字典、版本和 Unicode | 完整承接 PRD 与 ADR-0002，不用外部 schema 或失真 number | 通过；接受第 5.1.2～5.1.3 节合同 |
+| ADR-E-04 | Markdown 与内容安全 | 复核 MIME/GFM、安全子集、自由文本、控制字符、HTML/链接/图片边界 | 可离线阅读且用户内容不能改变模板结构或触发远程内容 | 通过；接受第 5.1.4 节合同 |
+| ADR-E-05 | 下载与状态语义 | 复核逐格式确认、Blob/object URL、建议文件名、撤销和部分失败 | 只报告 `download-requested`；无自动/网络/分享/剪贴板兜底 | 通过；接受第 5.1.5～5.1.6 节合同 |
+| ADR-E-06 | 隐私与用户控制 | 复核纳入/排除字段、敏感提示、下载后设备边界和内存声明 | 不含研究层数据；不虚假承诺召回、删除、保存成功或法证擦除 | 通过；接受第 6.2～6.3 节边界 |
+| ADR-E-07 | 资源与失败合同 | 明确接受 50 条修订、64 KiB 自由文本、512 KiB 快照、1 MiB/格式和单资源上限 | 无截断/压缩/自动重试；上限用户影响被正式接受 | 通过；Alune 明确接受第 5.1.7 节上限及用户影响 |
+| ADR-E-08 | 版本、兼容与回滚 | 复核 SemVer、不可原地改写、无导入承诺、整体构建恢复与旧文件边界 | 变更/停止/通知路径清晰；不把快照元数据称为防篡改证明 | 通过；接受第 5.1.8、8.2、8.3 节合同 |
+| ADR-E-09 | 计划验证充分性 | 将 SYN-02/SYN-04、恶意文本、最大会话、目标浏览器/VoiceOver、隐私和恢复映射到第 9.2 节 | 能覆盖 AC-11、AC-14–16、AC-22、AC-23、AC-26；计划不冒充结果 | 通过；运行时证据继续保持待实施 |
+| ADR-E-10 | 最终决议 | Alune 查看完整 diff 后明确批准 | 状态、ADR 索引、`ARCHITECTURE.md` 和 PRD 同步；仍未创建 OpenSpec/实现 | 通过；Alune 于 `2026-08-24` 明确确认 ADR-E-01～ADR-E-10 的推荐方案 |
 
-只有 ADR-E-01～ADR-E-10 全部完成且 Alune 明确批准，才可把状态改为 `Accepted`。接受本 ADR 不等于运行时验证通过，也不自动批准 OpenSpec 或实现。
+ADR-E-01～ADR-E-10 已全部完成，Alune 已明确批准，本 ADR 因此转为 `Accepted`。接受本 ADR 不等于运行时验证通过，也不自动批准 OpenSpec、`Implementation Authorized` 或实现。
 
 ### 9.2 批准后、实现阶段的计划验证
 
@@ -478,14 +478,15 @@ export-unsupported-browser
 
 ## 10. 实施与后续
 
-- 实现 PR/提交：未开始；本 ADR 为 `Proposed`，不授权初始化框架或编写实现
-- 配置/文档/培训：本提案及 ADR 索引、`ARCHITECTURE.md`、`PRD-0001` 的评审状态引用；无配置或培训材料
+- 实现 PR/提交：未开始；本 ADR 已为 `Accepted`，但 OpenSpec proposal/tasks 尚未批准，仍不授权初始化框架或编写实现
+- 配置/文档/培训：本决定及 ADR 索引、`ARCHITECTURE.md`、`PRD-0001` 的状态同步；无配置或培训材料
 - 迁移演练记录：无迁移；回滚与临时对象清理演练待实现后执行
-- 监测指标与复审日期：不采集真实用户遥测；只使用合成性能、跨格式 fixture、浏览器网络/存储检查和人工 readback；若获批准，首次复审 `2026-09-21`
-- 后续任务：先由 Alune 完成 ADR-E-01～ADR-E-10 readback 并决定是否转为 `Accepted`；若批准，随后才能另行创建并评审 OpenSpec proposal/tasks。本文件不创建 OpenSpec、框架、实现或其他 ADR
+- 监测指标与复审日期：不采集真实用户遥测；只使用合成性能、跨格式 fixture、浏览器网络/存储检查和人工 readback；首次复审 `2026-09-21`
+- 后续任务：三项 ADR 已全部 `Accepted`；下一步只能另行创建并评审 OpenSpec proposal/tasks。本次状态同步不创建 OpenSpec、框架、实现或其他 ADR
 
 ## 11. 决议记录
 
 | 日期 | 决策人/评审人 | 结论或条件 | 文档变更 |
 | --- | --- | --- | --- |
 | `2026-08-21` | AI 起草；Alune 待正式评审 | `Proposed`；ADR-E-01～ADR-E-10 全部完成且 Alune 明确批准前不得转为 `Accepted` | 创建本提案并登记为评审中；同步架构与 PRD 的 Proposed 状态；未创建 OpenSpec、实现或其他 ADR |
+| `2026-08-24` | Alune（产品、工程、数据/隐私、设计/可理解性） | 明确确认 ADR-E-01～ADR-E-10 的推荐方案，将本 ADR 批准为 `Accepted`；接受资源限额、下载可观测性、隐私边界、兼容与回滚取舍。批准不代表运行时验证通过，也不构成 `Implementation Authorized` | 完成 ADR-E-01～ADR-E-10 readback，状态和治理引用同步为 `Accepted`；未创建 OpenSpec、框架、实现或其他 ADR |
