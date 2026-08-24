@@ -303,7 +303,7 @@ describe("scope guard", () => {
     );
   });
 
-  it("allows exact export denylist literals only inside its fixed declaration", async () => {
+  it("rejects export denylist literals even inside export source", async () => {
     const root = await makeRoot();
     await writeRelative(
       root,
@@ -315,8 +315,12 @@ describe("scope guard", () => {
         "]);",
       ].join("\n"),
     );
-    const allowed = await scanScope({ root, paths: ["src/domain/export/snapshot.ts"] });
-    assert.equal(allowed.passed, true);
+    const exportSource = await scanScope({ root, paths: ["src/domain/export/snapshot.ts"] });
+    assert.equal(exportSource.passed, false);
+    assert.equal(
+      exportSource.violations.some(({ code }) => code === "SCOPE_GUARD_RESEARCH_IDENTIFIER"),
+      true,
+    );
 
     await writeRelative(root, "src/domain/export/other.ts", "const key = 'research_code';\n");
     const wrongPath = await scanScope({ root, paths: ["src/domain/export/other.ts"] });

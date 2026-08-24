@@ -32,42 +32,6 @@ export const EXPORT_LIMITS = {
   format_utf8_bytes: 1024 * 1024,
 } as const;
 
-const EXTERNAL_FIELD_KEYS = new Set([
-  'research_id',
-  'research_code',
-  'study_id',
-  'study_code',
-  'participant_id',
-  'participant',
-  'contact',
-  'contacts',
-  'contact_email',
-  'contact_phone',
-  'consent',
-  'consents',
-  'consent_status',
-  'withdrawal',
-  'withdrawals',
-  'withdrawal_status',
-  'withdrawal_reason',
-  'observation',
-  'observations',
-  'research_notes',
-  'recruitment',
-  'recruitments',
-  'recruitment_status',
-  'telemetry',
-  'telemetry_events',
-  'analytics',
-  'session_replay',
-  'cloud',
-  'cloud_sync',
-  'storage',
-  'research_record',
-  'research_observation',
-  'formal_consent',
-]);
-
 const SOURCE_TOP_LEVEL_KEYS = new Set([
   'session_revision',
   'sessionRevision',
@@ -325,6 +289,64 @@ function sourceTimeContext(value: unknown): boolean {
   ]);
 }
 
+function sourcePeriodRef(value: unknown): boolean {
+  if (value === null) return true;
+  if (!exactSourceKeys(value, [
+    'kind', 'period_kind', 'periodKind', 'custom_label', 'customLabel', 'revision',
+  ], [
+    ['kind', 'period_kind', 'periodKind'], ['custom_label', 'customLabel'], ['revision'],
+  ])) return false;
+  const source = value as Record<string, unknown>;
+  const kind = read(source, 'kind');
+  const explicitPeriodKind = read(source, 'period_kind', 'periodKind');
+  if (kind !== undefined && kind !== 'period-ref' && explicitPeriodKind !== undefined && kind !== explicitPeriodKind) return false;
+  const periodKind = kind === 'period-ref' ? explicitPeriodKind : (kind ?? explicitPeriodKind);
+  const customLabel = read(source, 'custom_label', 'customLabel');
+  return ['week', 'month', 'year', 'custom'].includes(String(periodKind)) &&
+    (customLabel === null || typeof customLabel === 'string') &&
+    typeof source.revision === 'string';
+}
+
+function sourceTextLike(value: unknown): boolean {
+  if (value === null || typeof value === 'string') return true;
+  return exactSourceKeys(value, ['kind', 'text', 'text_encoding', 'textEncoding'], [
+    ['kind'], ['text'], ['text_encoding', 'textEncoding'],
+  ]) && value.kind === 'text' && typeof value.text === 'string' &&
+    read(value, 'text_encoding', 'textEncoding') === 'unicode-scalar-v1';
+}
+
+function sourceLocalDateLike(value: unknown): boolean {
+  if (value === null || typeof value === 'string') return true;
+  return exactSourceKeys(value, ['kind', 'value'], [['kind'], ['value']]) &&
+    value.kind === 'local-date' && typeof value.value === 'string';
+}
+
+function sourceDictionaries(value: unknown): boolean {
+  if (!exactSourceKeys(value, DICTIONARY_KEYS, DICTIONARY_KEYS.map((key) => [key]))) return false;
+  const source = value as Record<string, unknown>;
+  return DICTIONARY_KEYS.every((key) => {
+    const entries = source[key];
+    if (!Array.isArray(entries)) return false;
+    if (key === 'field_definitions') {
+      return entries.every((entry) => exactSourceKeys(entry, [
+        'id', 'label', 'definition', 'value_kind', 'product_requirement', 'unit_semantics', 'sensitive',
+      ], [
+        ['id'], ['label'], ['definition'], ['value_kind'], ['product_requirement'], ['unit_semantics'], ['sensitive'],
+      ]));
+    }
+    if (key === 'formula_definitions') {
+      return entries.every((entry) => exactSourceKeys(entry, [
+        'id', 'label', 'definition', 'expression', 'dependency_field_ids', 'result_unit_semantics',
+      ], [
+        ['id'], ['label'], ['definition'], ['expression'], ['dependency_field_ids'], ['result_unit_semantics'],
+      ]) && sourceStringArray((entry as Record<string, unknown>).dependency_field_ids));
+    }
+    return entries.every((entry) => exactSourceKeys(entry, ['id', 'label', 'definition'], [
+      ['id'], ['label'], ['definition'],
+    ]));
+  });
+}
+
 function sourceValue(value: unknown, fieldId: string, source: Record<string, unknown>): boolean {
   if (value === null) return true;
   if (typeof value === 'string') {
@@ -387,7 +409,7 @@ function sourceInputRecord(value: unknown, fieldIdRequired: boolean): boolean {
   ])) return false;
   const source = value as Record<string, unknown>;
   const fieldId = String(read(source, 'field_id', 'fieldId') ?? '');
-  if (!sourceValue(read(source, 'value'), fieldId, source) || !sourceTextArray(read(source, 'assumptions')) || !sourceTextArray(read(source, 'limitations'))) return false;
+  if (!sourceValue(read(source, 'value'), fieldId, source) || !sourcePeriodRef(read(source, 'period_ref', 'periodRef')) || !sourceTextArray(read(source, 'assumptions')) || !sourceTextArray(read(source, 'limitations'))) return false;
   if (read(source, 'availability') === 'not-provided') {
     return read(source, 'value') === null && read(source, 'source') === null && read(source, 'evidence_status', 'evidenceStatus') === null && read(source, 'unit') === null && read(source, 'currency_code', 'currencyCode') === null && read(source, 'currency_table_snapshot_id', 'currencyTableSnapshotId') === null && read(source, 'period_ref', 'periodRef') === null && read(source, 'tax_basis', 'taxBasis') === null && read(source, 'confirmed_at', 'confirmedAt') === null && (read(source, 'assumptions') as unknown[]).length === 0 && (read(source, 'limitations') as unknown[]).length === 0;
   }
@@ -415,7 +437,7 @@ function sourceResultRecord(value: unknown, old = false): boolean {
   ] as const;
   if (!exactSourceKeys(value, keys, required)) return false;
   const source = value as Record<string, unknown>;
-  if (!sourceExactValue(read(source, 'exact_value', 'exact', 'exactValue')) || !sourceDisplayValue(read(source, 'display_value', 'display', 'displayValue')) || !sourceRounding(read(source, 'rounding')) || !sourceTimeContext(read(source, 'generated_at', 'generatedAt', 'time_context', 'timeContext'))) return false;
+  if (!sourceExactValue(read(source, 'exact_value', 'exact', 'exactValue')) || !sourceDisplayValue(read(source, 'display_value', 'display', 'displayValue')) || !sourceRounding(read(source, 'rounding')) || !sourceTimeContext(read(source, 'generated_at', 'generatedAt', 'time_context', 'timeContext')) || !sourcePeriodRef(read(source, 'period_ref', 'periodRef'))) return false;
   if (old) return sourceStringArray(read(source, 'dependency_ids', 'dependencyIds'));
   return sourceStringArray(read(source, 'dependency_field_ids', 'dependencyFieldIds')) && sourceStringArray(read(source, 'estimated_dependency_field_ids', 'estimatedDependencyFieldIds')) && sourceStringArray(read(source, 'reason_codes', 'reasonCodes')) && sourceTextArray(read(source, 'assumptions')) && sourceTextArray(read(source, 'limitations'));
 }
@@ -425,7 +447,7 @@ function sourceRevisionValue(value: unknown, fieldId: string): boolean {
     ['availability'], ['value'], ['evidence_status', 'evidenceStatus'], ['unit'], ['currency_code', 'currencyCode'], ['period_ref', 'periodRef'],
   ])) return false;
   const source = value as Record<string, unknown>;
-  if (!sourceValue(source.value, fieldId, source)) return false;
+  if (!sourceValue(source.value, fieldId, source) || !sourcePeriodRef(read(source, 'period_ref', 'periodRef'))) return false;
   if (source.availability === 'not-provided') return source.value === null && read(source, 'evidence_status', 'evidenceStatus') === null && source.unit === null && read(source, 'currency_code', 'currencyCode') === null && read(source, 'period_ref', 'periodRef') === null;
   return true;
 }
@@ -458,6 +480,7 @@ function sourceShapeIsClosed(raw: Record<string, unknown>): boolean {
     ['confirmed_revisions', 'confirmedRevisions'], ['notices'],
   ];
   if (!requiredTopLevel.every((group) => hasAnyOwn(raw, ...group))) return false;
+  if (!sourceTimeContext(read(raw, 'snapshot_captured_at', 'snapshotCapturedAt'))) return false;
   const build = read(raw, 'application_build', 'applicationBuild');
   if (!exactSourceKeys(build, ['app_version', 'appVersion', 'git_commit_sha', 'gitCommitSha', 'artifact_manifest_sha256', 'artifactManifestSha256', 'config_version', 'configVersion'], [
     ['app_version', 'appVersion'], ['git_commit_sha', 'gitCommitSha'], ['artifact_manifest_sha256', 'artifactManifestSha256'], ['config_version', 'configVersion'],
@@ -471,7 +494,7 @@ function sourceShapeIsClosed(raw: Record<string, unknown>): boolean {
     ['snapshot_id', 'snapshotId'], ['source'], ['published_on', 'publishedOn'], ['read_on', 'readOn'], ['bytes'], ['sha256'],
   ])) return false;
   const dictionaries = read(raw, 'dictionaries');
-  if (!isRecord(dictionaries) || DICTIONARY_KEYS.some((key) => !Array.isArray(dictionaries[key]))) return false;
+  if (!sourceDictionaries(dictionaries)) return false;
   if (!Array.isArray(read(raw, 'notices')) || (read(raw, 'notices') as unknown[]).some((item) => !exactSourceKeys(item, ['code', 'text'], [['code'], ['text']]))) return false;
   const comparison = read(raw, 'comparison_context', 'comparisonContext');
   if (!exactSourceKeys(comparison, [
@@ -483,6 +506,7 @@ function sourceShapeIsClosed(raw: Record<string, unknown>): boolean {
     ['time_zone_id', 'timeZoneId'], ['utc_offset', 'utcOffset'], ['time_zone_source', 'timeZoneSource'], ['time_zone_confirmation', 'timeZoneConfirmation'],
     ['source_input_ids', 'sourceInputIds'],
   ])) return false;
+  if (!sourcePeriodRef(read(comparison, 'period_ref', 'periodRef'))) return false;
   const inputs = read(raw, 'inputs');
   if (Array.isArray(inputs)) {
     if (inputs.length !== INPUT_FIELD_IDS.length || inputs.some((item) => !sourceInputRecord(item, true))) return false;
@@ -502,11 +526,13 @@ function sourceShapeIsClosed(raw: Record<string, unknown>): boolean {
   if (!exactSourceKeys(decision, ['availability', 'decision_code', 'decisionCode', 'code', 'evidence_status', 'evidenceStatus', 'rationale', 'confirmed_at', 'confirmedAt'], [
     ['availability'], ['decision_code', 'decisionCode', 'code'], ['evidence_status', 'evidenceStatus'], ['rationale'], ['confirmed_at', 'confirmedAt'],
   ])) return false;
+  if (!sourceTextLike(read(decision, 'rationale'))) return false;
   if (isRecord(decision) && decision.availability === 'not-provided' && (read(decision, 'decision_code', 'decisionCode', 'code') !== null || read(decision, 'evidence_status', 'evidenceStatus') !== null || decision.rationale !== null || read(decision, 'confirmed_at', 'confirmedAt') !== null)) return false;
   const review = read(raw, 'review');
   if (!exactSourceKeys(review, ['availability', 'kind', 'local_date', 'localDate', 'condition_text', 'conditionText', 'evidence_status', 'evidenceStatus', 'confirmed_at', 'confirmedAt'], [
     ['availability'], ['kind'], ['local_date', 'localDate'], ['condition_text', 'conditionText'], ['evidence_status', 'evidenceStatus'], ['confirmed_at', 'confirmedAt'],
   ])) return false;
+  if (!sourceLocalDateLike(read(review, 'local_date', 'localDate')) || !sourceTextLike(read(review, 'condition_text', 'conditionText'))) return false;
   if (isRecord(review) && review.availability === 'not-provided' && (review.kind !== null || read(review, 'local_date', 'localDate') !== null || read(review, 'condition_text', 'conditionText') !== null || read(review, 'evidence_status', 'evidenceStatus') !== null || read(review, 'confirmed_at', 'confirmedAt') !== null)) return false;
   return true;
 }
@@ -523,20 +549,6 @@ function numericRevision(value: unknown): number | null {
     }
   }
   return null;
-}
-
-function hasExternalFields(value: unknown): boolean {
-  if (Array.isArray(value)) return value.some((item) => hasExternalFields(item));
-  if (typeof value !== 'object' || value === null) return false;
-  for (const [key, item] of Object.entries(value)) {
-    const normalized = key
-      .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-      .replace(/[- ]/g, '_')
-      .toLowerCase();
-    if (EXTERNAL_FIELD_KEYS.has(normalized)) return true;
-    if (hasExternalFields(item)) return true;
-  }
-  return false;
 }
 
 function clone<T>(value: T): T {
@@ -1112,7 +1124,6 @@ export function freezeExportSnapshot(source: ExportSnapshotSource): ExportResult
   const lifecycle = validateLifecycleIndicators(raw);
   if (!lifecycle.ok) return lifecycle;
   if (Object.keys(raw).some((key) => !SOURCE_TOP_LEVEL_KEYS.has(key))) return fail('export-schema-mismatch');
-  if (hasExternalFields(source)) return fail('export-schema-mismatch');
   const rawRevisionCount = read(raw, 'confirmed_revisions', 'confirmedRevisions');
   if (Array.isArray(rawRevisionCount) && rawRevisionCount.length > EXPORT_LIMITS.confirmed_revisions) return fail('export-resource-limit-exceeded');
   if (Array.isArray(rawRevisionCount) && rawRevisionCount.some((revision) => isRecord(revision) && Array.isArray(read(revision, 'old_results', 'oldResults')) && (read(revision, 'old_results', 'oldResults') as unknown[]).length > EXPORT_LIMITS.old_results_per_revision)) return fail('export-resource-limit-exceeded');

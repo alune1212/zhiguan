@@ -49,7 +49,6 @@ const SUPPLY_CHAIN_EVIDENCE_PATH = "evidence/supply-chain/dependency-readback.md
 const ALLOWED_SUPPLY_CHAIN_REGISTRY_URL = "https://registry.npmjs.org/";
 const BUILD_CONFIG_CARRIER_LITERAL = "research-static-config@1.0.0";
 const EXPORT_CONFIG_CARRIER_PATH = "src/domain/export/constants.ts";
-const EXPORT_DENYLIST_PATH = "src/domain/export/snapshot.ts";
 const W3C_LIBRARY_NAMESPACE_URLS = Object.freeze([
   "http://www.w3.org/2000/svg",
   "http://www.w3.org/1998/Math/MathML",
@@ -543,15 +542,6 @@ function maskAllowedBuildConfigCarrier(relativePath, text) {
   return text;
 }
 
-function maskAllowedExportDenylistLiterals(relativePath, text) {
-  if (relativePath !== EXPORT_DENYLIST_PATH) return text;
-  const declarationPattern = /const\s+EXTERNAL_FIELD_KEYS\s*=\s*new\s+Set\(\s*\[(.*?)\]\s*\);/su;
-  return text.replace(declarationPattern, (declaration) =>
-    declaration.replaceAll("'research_code'", " ".repeat("'research_code'".length))
-      .replaceAll("'study_code'", " ".repeat("'study_code'".length)),
-  );
-}
-
 function maskAllowedSupplyChainEvidenceUrl(relativePath, text) {
   if (relativePath !== SUPPLY_CHAIN_EVIDENCE_PATH) return text;
   return text.replaceAll(ALLOWED_SUPPLY_CHAIN_REGISTRY_URL, (match, offset) => {
@@ -772,12 +762,9 @@ function scanJsonKeys(value, relativePath, sourceText, violations) {
 function scanTextFile(relativePath, text) {
   const violations = [];
   violations.push(...scanStructuredKeys(text, relativePath));
-  const researchScanText = maskAllowedExportDenylistLiterals(
+  const researchScanText = maskAllowedBuildConfigCarrier(
     relativePath,
-    maskAllowedBuildConfigCarrier(
-      relativePath,
-      maskAllowedGovernanceIds(relativePath, text),
-    ),
+    maskAllowedGovernanceIds(relativePath, text),
   );
   const remoteScanText = maskAllowedCurrencySourceUrl(
     relativePath,

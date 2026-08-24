@@ -571,6 +571,64 @@ describe('ExportSnapshotV1 serializers', () => {
     });
   });
 
+  it('rejects unknown nested source fields before normalization', () => {
+    const baseline = makeExportSource();
+    const cases = [
+      makeExportSource({
+        snapshot_captured_at: { ...FIXTURE_TIME, unknown_nested_field: 'unexpected' },
+      }),
+      makeExportSource({
+        comparison_context: {
+          ...baseline.comparison_context,
+          period_ref: { ...(baseline.comparison_context.period_ref ?? {}), unknown_nested_field: 'unexpected' },
+        },
+      }),
+      makeExportSource({
+        inputs: baseline.inputs.map((input) => input.field_id === 'income'
+          ? { ...input, period_ref: { ...(input.period_ref ?? {}), unknown_nested_field: 'unexpected' } }
+          : input),
+      }),
+      makeExportSource({
+        results: baseline.results.map((result, index) => index === 0
+          ? { ...result, period_ref: { ...(result.period_ref ?? {}), unknown_nested_field: 'unexpected' } }
+          : result),
+      }),
+      makeExportSource({
+        decision: {
+          availability: 'available',
+          decision_code: 'wait',
+          evidence_status: 'user-confirmed',
+          rationale: { kind: 'text', text: '合成条件', text_encoding: 'unicode-scalar-v1', unknown_nested_field: 'unexpected' },
+          confirmed_at: FIXTURE_TIME.recorded_at_utc,
+        },
+      }),
+      makeExportSource({
+        review: {
+          availability: 'available',
+          kind: 'local-date',
+          local_date: { kind: 'local-date', value: '2026-02-01', unknown_nested_field: 'unexpected' },
+          condition_text: null,
+          evidence_status: 'user-confirmed',
+          confirmed_at: FIXTURE_TIME.recorded_at_utc,
+        },
+      }),
+      makeExportSource({
+        dictionaries: {
+          ...baseline.dictionaries,
+          notice_codes: baseline.dictionaries?.notice_codes.map((entry, index) => index === 0
+            ? { ...entry, unknown_nested_field: 'unexpected' }
+            : entry),
+        },
+      }),
+    ];
+    for (const source of cases) {
+      expect(freezeExportSnapshot(source)).toEqual({
+        ok: false,
+        error: expect.objectContaining({ code: 'export-schema-mismatch' }),
+      });
+    }
+  });
+
   it('rejects duplicate or unknown input records before mapping', () => {
     const baseline = makeExportSource();
     const duplicateInputs = [...baseline.inputs, baseline.inputs[0]];
