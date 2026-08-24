@@ -4,12 +4,18 @@ ADR 用来记录已经作出的、会影响系统边界或长期维护的架构�
 
 ## 当前状态
 
-本仓库已有以下架构决策：
+本仓库已批准以下架构决策：
 
 | ADR | 状态 | 决策摘要 | 日期 |
 | --- | --- | --- | --- |
 | [`ADR-0001`](ADR-0001-delivery-form-and-technology-stack.md) | `Accepted` | 单案例购买决策研究原型采用 React + TypeScript + Vite，并由研究者控制的本地/LAN 静态服务交付；不批准云托管 | `2026-08-21` |
 | [`ADR-0002`](ADR-0002-calculation-and-rules.md) | `Accepted` | 采用纯 TypeScript 的货币定点 BigInt + 有理数计算内核，固定周期/币种/状态/舍入/版本与当前会话修订合同 | `2026-08-21` |
+
+以下提案正在评审；`Proposed` 会占用编号，但不构成已批准的架构决策或实现授权：
+
+| ADR | 状态 | 推荐摘要 | 日期 |
+| --- | --- | --- | --- |
+| [`ADR-0003`](ADR-0003-export-contract.md) | `Proposed` | 以同一冻结内存快照分别生成版本化 JSON 与安全 GFM 子集 Markdown，并通过短时 Blob/object URL 逐格式请求本地下载 | `2026-08-21` |
 
 ## 什么时候必须写 ADR
 
