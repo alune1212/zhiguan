@@ -42,6 +42,7 @@ const GENERATED_MANIFEST_RELATIVE_PATH = DEFAULT_MANIFEST_PATH;
 const TEMP_FILE_PREFIX = ".zhiguan-artifact-manifest-";
 
 export const REQUIRED_MANIFEST_PATHS = Object.freeze([
+  ".gitattributes",
   "package.json",
   "package-lock.json",
   "index.html",

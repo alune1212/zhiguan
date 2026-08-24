@@ -69,12 +69,16 @@ function expectFixtureError(callback: () => unknown, code: string) {
 describe("fixed ISO 4217 currency snapshot", () => {
   it("validates the immutable fixture bytes and publication metadata", async () => {
     const buffer = await readFile(FIXTURE_PATH);
+    const attributes = await readFile(resolve(process.cwd(), ".gitattributes"), "utf8");
     const xml = validateCurrencyFixtureBytes(buffer);
     const fixture = await readCurrencyFixture({ fixturePath: FIXTURE_PATH });
 
     expect(buffer.byteLength).toBe(CURRENCY_FIXTURE_BYTES);
     expect(CURRENCY_FIXTURE_SHA256).toBe(
       "838dfb991648cf36df939edd5fe3811737962b75a32252847d239cedd1e291c9",
+    );
+    expect(attributes.split("\n")).toContain(
+      "fixtures/currency/iso4217-list-one-2026-01-01.xml binary",
     );
     expect(xml.endsWith("\n")).toBe(false);
     expect(xml.match(/\r\n/gu)).toHaveLength(1955);
