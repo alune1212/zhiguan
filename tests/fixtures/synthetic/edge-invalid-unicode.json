@@ -1,0 +1,30 @@
+{
+  "fixture_schema": "zhiguan.synthetic-fixture.v1",
+  "fixture_id": "EDGE-UNICODE-REJECT",
+  "evidence_label": "synthetic:EDGE-UNICODE-REJECT:snapshot-level-rejection",
+  "synthetic_only": true,
+  "description": "孤立 surrogate 和 NUL 只以转义描述保存在 fixture；它们代表快照级 Unicode 预检失败，不把无效标量直接写入源文件。",
+  "baseline_ref": {
+    "fixture_id": "SYN-01",
+    "file": "syn-01-confirmed-no-fixed-cost.json",
+    "manifest": "manifest.json",
+    "replay_contract": "load the manifest fixture and replay all 11 inputs in input_order; decode each safe scalar description, inject its UTF-16 code unit plus the declared runtime guard suffix into value-expectation.text, then run the shared snapshot Unicode preflight",
+    "expected_result_ids": ["income-rate", "work-time-equivalent", "coverage-available-margin", "purchase-after-margin", "purchase-impact"]
+  },
+  "unicode_policy": {"scalar_validity_checked_before_policy": true, "nul_is_unicode_scalar_but_policy_rejects_it": true, "isolated_surrogates_are_not_unicode_scalars": true, "all_cases_block_json_and_markdown_together": true},
+  "decode_contract": {"encoding": "ascii-unicode-escape-description-v1", "runtime_injection_required": true, "decoded_values_are_not_stored_in_source": true, "common_preflight": "preflightUnicode", "projections": ["json", "markdown"], "runtime_guard_suffix": "x", "runtime_guard_purpose": "keep an injected high surrogate at a non-terminal index while remaining unpaired"},
+  "invalid_text_cases": [
+    {"case_id": "NUL", "field_id": "value-expectation", "encoded_scalar_sequence": "\\u0000", "representation": "literal-escape-description", "runtime_code_unit": "U+0000", "runtime_injection_required": true, "runtime_guard_suffix": "x", "valid_unicode_scalar_sequence": true, "nul_policy": "rejected", "rejection_layer": "snapshot-unicode-policy", "expected_error_code": "export-invalid-unicode"},
+    {"case_id": "ISOLATED-HIGH-SURROGATE", "field_id": "value-expectation", "encoded_scalar_sequence": "\\uD800", "representation": "literal-escape-description", "runtime_code_unit": "U+D800", "runtime_injection_required": true, "runtime_guard_suffix": "x", "valid_unicode_scalar_sequence": false, "nul_policy": "not-applicable", "rejection_layer": "unicode-scalar-validation", "expected_error_code": "export-invalid-unicode"},
+    {"case_id": "ISOLATED-LOW-SURROGATE", "field_id": "value-expectation", "encoded_scalar_sequence": "\\uDC00", "representation": "literal-escape-description", "runtime_code_unit": "U+DC00", "runtime_injection_required": true, "runtime_guard_suffix": "x", "valid_unicode_scalar_sequence": false, "nul_policy": "not-applicable", "rejection_layer": "unicode-scalar-validation", "expected_error_code": "export-invalid-unicode"}
+  ],
+  "expected_results": [
+    {"formula_id": "income-rate", "availability": "available", "exact": {"decimal": "62.5", "rational": {"numerator": "125", "denominator": "2"}, "unit": "CNY/hour"}, "display": {"text": "62.50 CNY/小时", "decimal": "62.50", "display_digits": 2, "relation": "exact", "rounding_mode": "half-away-from-zero", "rounded": false}, "unit": "CNY/hour", "currency_code": "CNY", "evidence_status": "user-confirmed", "primary_reason_code": null, "reason_codes": [], "export_semantics": "computed-but-not-exported"},
+    {"formula_id": "work-time-equivalent", "availability": "available", "exact": {"decimal": "16", "rational": {"numerator": "16", "denominator": "1"}, "unit": "hour"}, "display": {"text": "16.00 小时", "decimal": "16.00", "display_digits": 2, "relation": "exact", "rounding_mode": "half-away-from-zero", "rounded": false}, "unit": "hour", "currency_code": null, "evidence_status": "user-confirmed", "primary_reason_code": null, "reason_codes": [], "export_semantics": "computed-but-not-exported"},
+    {"formula_id": "coverage-available-margin", "availability": "unavailable", "exact": null, "display": null, "unit": "CNY", "currency_code": "CNY", "evidence_status": "insufficient-data", "primary_reason_code": "missing-fixed-cost", "reason_codes": ["missing-fixed-cost"], "export_semantics": "computed-but-not-exported"},
+    {"formula_id": "purchase-after-margin", "availability": "unavailable", "exact": null, "display": null, "unit": "CNY", "currency_code": "CNY", "evidence_status": "insufficient-data", "primary_reason_code": "missing-fixed-cost", "reason_codes": ["missing-fixed-cost"], "export_semantics": "computed-but-not-exported"},
+    {"formula_id": "purchase-impact", "availability": "unavailable", "exact": null, "display": null, "unit": "CNY", "currency_code": "CNY", "evidence_status": "insufficient-data", "primary_reason_code": "missing-fixed-cost", "reason_codes": ["missing-fixed-cost"], "export_semantics": "computed-but-not-exported"}
+  ],
+  "expected_export": {"eligible": true, "snapshot": "rejected-at-unicode-precheck", "json": "none", "markdown": "none", "error_code": "export-invalid-unicode", "required": "no-partial-format-no-blob-no-object-url-no-download", "error_message_policy": "stable-and-must-not-include-original-text"},
+  "evidence": {"label": "synthetic:EDGE-UNICODE-REJECT:snapshot-level-rejection", "status": "待实施", "safe_to_publish": true, "contains_personal_data": false, "assertions": ["source stores safe escape descriptions; tests decode and inject actual NUL or lone-surrogate code units", "shared Unicode preflight rejects JSON and Markdown projections together", "error does not echo invalid text", "no selective safe-format success"]}
+}

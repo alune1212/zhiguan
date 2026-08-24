@@ -1,0 +1,191 @@
+{
+  "fixture_schema": "zhiguan.synthetic-fixture.v1",
+  "synthetic_only": true,
+  "data_policy": {
+    "contains_real_personal_data": false,
+    "contains_approximated_personal_data": false,
+    "contains_research_records": false,
+    "contains_contacts_or_identifiers": false,
+    "financial_values_are_contract_vectors": true
+  },
+  "shared_contract": {
+    "ruleset_ref": "purchase-decision-rules@1.0.0",
+    "ruleset_id": "purchase-decision-rules",
+    "ruleset_version": "1.0.0",
+    "currency_table_snapshot_id": "iso4217-list-one@2026-01-01#sha256:838dfb991648cf36df939edd5fe3811737962b75a32252847d239cedd1e291c9",
+    "default_period_ref": {
+      "kind": "month",
+      "custom_label": null,
+      "revision": "synthetic-period-r1"
+    },
+    "default_time_context": {
+      "occurred_at_utc": "2026-01-15T00:00:00.000Z",
+      "recorded_at_utc": "2026-01-15T00:00:00.000Z",
+      "clock_source": "device-clock",
+      "time_zone_id": "Etc/UTC",
+      "utc_offset": "+00:00",
+      "time_zone_source": "user-selected",
+      "time_zone_confirmation": "user-confirmed"
+    },
+    "edge_default_time_context_injection": {
+      "fixture_ids": ["EDGE-EMPTY", "EDGE-ZERO", "EDGE-NEGATIVE", "EDGE-LIMITS", "EDGE-MINOR-UNIT", "EDGE-PERIOD-CONFLICT", "EDGE-CURRENCY-CONFLICT", "EDGE-TAX-BASIS-CONFLICT", "EDGE-ROUNDING-TIES", "EDGE-NEGATIVE-MARGIN", "EDGE-MARKDOWN-UNICODE", "EDGE-UNICODE-REJECT", "EDGE-REVISION-LIMIT", "EDGE-FAILURES"],
+      "injection_mode": "merge-before-calculation",
+      "field_path": "calculation_context.time_context",
+      "context": {
+        "occurred_at_utc": "2026-01-15T00:00:00.000Z",
+        "recorded_at_utc": "2026-01-15T00:00:00.000Z",
+        "clock_source": "device-clock",
+        "time_zone_id": "Etc/UTC",
+        "utc_offset": "+00:00",
+        "time_zone_source": "utc-fallback",
+        "time_zone_confirmation": "unconfirmed"
+      },
+      "strict_iso_millisecond_pattern": "YYYY-MM-DDTHH:mm:ss.sssZ",
+      "inheritance": "results.generated_at inherits the injected context unless a fixture declares a deterministic sequence overlay",
+      "replay_rule": "edge fixtures do not carry a competing default time context; adapter injects this manifest value before calculation"
+    },
+    "allowed_evidence_statuses": [
+      "user-confirmed",
+      "estimated",
+      "forecast",
+      "insufficient-data"
+    ],
+    "result_order": [
+      "income-rate",
+      "work-time-equivalent",
+      "coverage-available-margin",
+      "purchase-after-margin",
+      "purchase-impact"
+    ],
+    "input_order": [
+      "comparison-period",
+      "currency",
+      "income",
+      "income-tax-basis",
+      "work-hours",
+      "purchase-price",
+      "purchase-period-inclusion",
+      "fixed-cost-total",
+      "fixed-cost-coverage",
+      "fixed-cost-coverage-description",
+      "value-expectation"
+    ]
+  },
+  "fixture_count": 19,
+  "fixtures": [
+    {
+      "fixture_id": "SYN-01",
+      "file": "syn-01-confirmed-no-fixed-cost.json",
+      "evidence_label": "synthetic:SYN-01:confirmed-month-no-fixed-cost",
+      "coverage": ["core", "local-results", "export-eligible"]
+    },
+    {
+      "fixture_id": "SYN-02",
+      "file": "syn-02-complete-purchase-forecast.json",
+      "evidence_label": "synthetic:SYN-02:complete-coverage-purchase-forecast",
+      "coverage": ["core", "forecast", "cross-format-export"]
+    },
+    {
+      "fixture_id": "SYN-03",
+      "file": "syn-03-estimated-dependency-propagation.json",
+      "evidence_label": "synthetic:SYN-03:estimated-dependency-propagation",
+      "coverage": ["core", "estimated", "forecast"]
+    },
+    {
+      "fixture_id": "SYN-04",
+      "file": "syn-04-missing-hours-local-insufficiency.json",
+      "evidence_label": "synthetic:SYN-04:missing-hours-local-insufficiency",
+      "coverage": ["core", "insufficient-data", "partial-export"]
+    },
+    {
+      "fixture_id": "SYN-05",
+      "file": "syn-05-before-tax-local-results.json",
+      "evidence_label": "synthetic:SYN-05:before-tax-local-results",
+      "coverage": ["core", "tax-basis", "insufficient-data"]
+    },
+    {
+      "fixture_id": "EDGE-EMPTY",
+      "file": "edge-empty-input.json",
+      "evidence_label": "synthetic:EDGE-EMPTY:no-submitted-input",
+      "coverage": ["empty", "missing-input", "export-ineligible"]
+    },
+    {
+      "fixture_id": "EDGE-ZERO",
+      "file": "edge-zero-input.json",
+      "evidence_label": "synthetic:EDGE-ZERO:zero-rejected",
+      "coverage": ["zero", "invalid-input", "fail-closed"]
+    },
+    {
+      "fixture_id": "EDGE-NEGATIVE",
+      "file": "edge-negative-input.json",
+      "evidence_label": "synthetic:EDGE-NEGATIVE:negative-rejected",
+      "coverage": ["negative", "invalid-input", "fail-closed"]
+    },
+    {
+      "fixture_id": "EDGE-LIMITS",
+      "file": "edge-numeric-limits.json",
+      "evidence_label": "synthetic:EDGE-LIMITS:numeric-boundaries",
+      "coverage": ["upper-bound", "over-limit", "fail-closed"]
+    },
+    {
+      "fixture_id": "EDGE-MINOR-UNIT",
+      "file": "edge-currency-minor-units.json",
+      "evidence_label": "synthetic:EDGE-MINOR-UNIT:currency-precision",
+      "coverage": ["currency", "minor-unit", "four-decimal-CLF", "XAU-N.A.", "unsupported-currency"]
+    },
+    {
+      "fixture_id": "EDGE-PERIOD-CONFLICT",
+      "file": "edge-period-conflict.json",
+      "evidence_label": "synthetic:EDGE-PERIOD-CONFLICT:revision-mismatch",
+      "coverage": ["period", "context-conflict", "fail-closed"]
+    },
+    {
+      "fixture_id": "EDGE-CURRENCY-CONFLICT",
+      "file": "edge-currency-conflict.json",
+      "evidence_label": "synthetic:EDGE-CURRENCY-CONFLICT:currency-mismatch",
+      "coverage": ["currency", "context-conflict", "fail-closed"]
+    },
+    {
+      "fixture_id": "EDGE-TAX-BASIS-CONFLICT",
+      "file": "edge-tax-basis-conflict.json",
+      "evidence_label": "synthetic:EDGE-TAX-BASIS-CONFLICT:before-tax-margin-block",
+      "coverage": ["tax-basis", "context-conflict", "local-results"]
+    },
+    {
+      "fixture_id": "EDGE-ROUNDING-TIES",
+      "file": "edge-rounding-ties.json",
+      "evidence_label": "synthetic:EDGE-ROUNDING-TIES:half-away-from-zero",
+      "coverage": ["positive-tie", "negative-tie", "rounding", "utility-only-not-exported"]
+    },
+    {
+      "fixture_id": "EDGE-NEGATIVE-MARGIN",
+      "file": "edge-negative-margin.json",
+      "evidence_label": "synthetic:EDGE-NEGATIVE-MARGIN:below-zero-margin",
+      "coverage": ["negative-margin", "forecast", "no-clamp"]
+    },
+    {
+      "fixture_id": "EDGE-MARKDOWN-UNICODE",
+      "file": "edge-markdown-unicode.json",
+      "evidence_label": "synthetic:EDGE-MARKDOWN-UNICODE:inert-reversible-text",
+      "coverage": ["markdown", "unicode", "reversible-escape"]
+    },
+    {
+      "fixture_id": "EDGE-UNICODE-REJECT",
+      "file": "edge-invalid-unicode.json",
+      "evidence_label": "synthetic:EDGE-UNICODE-REJECT:snapshot-level-rejection",
+      "coverage": ["nul", "isolated-surrogate", "export-fail-closed"]
+    },
+    {
+      "fixture_id": "EDGE-REVISION-LIMIT",
+      "file": "edge-revision-limit.json",
+      "evidence_label": "synthetic:EDGE-REVISION-LIMIT:fifty-kept-fifty-first-blocked",
+      "coverage": ["revision", "resource-limit", "pre-confirmation-block"]
+    },
+    {
+      "fixture_id": "EDGE-FAILURES",
+      "file": "edge-representative-failures.json",
+      "evidence_label": "synthetic:EDGE-FAILURES:stable-fail-closed-errors",
+      "coverage": ["calculator-failure", "export-failure", "cleanup-failure"]
+    }
+  ]
+}

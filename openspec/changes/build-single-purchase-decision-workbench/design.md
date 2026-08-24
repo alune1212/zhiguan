@@ -149,6 +149,8 @@ stable session state
 
 构建元数据使用一个非循环、可机械复核的合同：`app_version` 读取根 `package.json` 的精确 SemVer（首版 `0.1.0`），`config_version` 固定为 `research-static-config@1.0.0`，`git_commit_sha` 为构建 checkout 的 40 位小写提交 SHA。构建脚本按 UTF-8 字节顺序排列规范 POSIX 相对路径，为 `dist` 文件、`package-lock.json`、构建配置、ruleset、货币快照和导出 schema/format 常量记录字节数与 SHA-256，生成 UTF-8/LF、固定键顺序的外部 `artifact-manifest.json`；只有 manifest 本身不进入条目。为解除自引用，`dist/index.html` 中固定的 `artifact-manifest-sha256` meta 值在生成和复核文件条目时规范为 64 个 ASCII `0`，计算 manifest 摘要后再替换为真实 SHA-256；浏览器适配层只从这组固定 meta 读取四个 `application_build` 字段，不新增 fetch，也不把 DOM 元数据交给规则内核。`artifact_manifest_sha256` 是 manifest 精确字节的 SHA-256；manifest、meta carrier、规范化条目或版本任一不一致都阻止启动或导出。该摘要用于可复现性，不宣称签名或防篡改。
 
+Artifact manifest 的内部顶层 schema 固定为 `manifest_version`、`app_version`、`config_version`、`build_mode`、`worktree_state`、`git_commit_sha`、`entries`（固定顺序）；`build_mode` 仅允许 `release` 或明确标记的 `implementation-preview`，`worktree_state` 仅允许 `clean` 或 `dirty`，而 `entries` 逐项包含规范 POSIX 相对 `path`、UTF-8 字节数和小写 SHA-256。`build_mode` 与 `worktree_state` 是 manifest 内部的构建来源/门禁信息，不能复制到 `application_build`；导出 wire contract 的 `application_build` 仍严格只有 `app_version`、`git_commit_sha`、`artifact_manifest_sha256`、`config_version` 四个字段。默认 production build/preview 只接受 `release` + `clean`，实现预览不构成研究构建或可分发证据。
+
 **替代方案与拒绝理由：**
 
 - 云静态托管或公开 URL：拒绝，因为当前不能证明项目级日志、访问、用途和删除边界，且会扩大研究访问面。
