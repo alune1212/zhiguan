@@ -22,6 +22,7 @@
     "test:all": "npm run test:delivery && npm test",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:rules:browsers": "playwright test --config=playwright.rules.config.ts",
     "scope:check": "node scripts/scope-guard.mjs",
     "check:artifact": "node scripts/build-manifest.mjs --check",
     "dev": "vite --host 127.0.0.1 --port 4173 --strictPort",

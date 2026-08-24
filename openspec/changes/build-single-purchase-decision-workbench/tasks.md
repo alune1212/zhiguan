@@ -1,4 +1,4 @@
-本 OpenSpec change 已于 `2026-08-24` 获 Alune 明确批准，`PRD-0001` 的 `Implementation Authorized` 门禁已于同日通过；后续独立执行可以严格按本清单初始化和实现。当前进度为 33/38；未完成的 5 项仍受跨浏览器规范向量、人工支持矩阵、固定设备性能与完整版本恢复证据约束。范围只限本地形成性研究原型的实现与验证，并明确排除 `FR-20`、`FR-21`、`FR-26`、`AC-18`、`AC-19`、`AC-27`、研究存储 A/B、正式同意/撤回、研究观察、招募、研究日历、云托管、公开远程访问和任何正式产品能力。不得把 OpenSpec 批准、`Implementation Authorized` 或当前自动证据写成 `Prototype Accepted`、`Recruitment Authorized` 或研究授权。
+本 OpenSpec change 已于 `2026-08-24` 获 Alune 明确批准，`PRD-0001` 的 `Implementation Authorized` 门禁已于同日通过；后续独立执行可以严格按本清单初始化和实现。当前进度为 34/38；未完成的 4 项仍受人工支持矩阵、固定设备性能与完整版本恢复证据约束。范围只限本地形成性研究原型的实现与验证，并明确排除 `FR-20`、`FR-21`、`FR-26`、`AC-18`、`AC-19`、`AC-27`、研究存储 A/B、正式同意/撤回、研究观察、招募、研究日历、云托管、公开远程访问和任何正式产品能力。不得把 OpenSpec 批准、`Implementation Authorized` 或当前自动证据写成 `Prototype Accepted`、`Recruitment Authorized` 或研究授权。
 
 ## 1. 授权、范围与合成证据基线
 
@@ -24,7 +24,7 @@
 - [x] 3.6 实现证据状态、原因优先级、结果 envelope 和版本追踪：只使用产品财务允许的四类状态，隔离系统/研究 `actual`，返回完整公式/单位/币种/周期/时间/依赖/原因/舍入/ruleset/currency 快照元数据，意外异常统一为 `rule-execution-failed`。[追踪：capability=`purchase-decision-calculation/证据状态优先级与状态隔离`、`稳定原因码与非敏感失败合同`、`规则与货币快照版本不可变`；PRD=`AC-06–AC-11`、`AC-20–AC-24`；ADR=`ADR-0002 ADR-C-05`、`ADR-C-08`、`§5.1.5`、`§5.1.7`；VAL=`VAL-01/VAL-05/VAL-08/VAL-12`]
 - [x] 3.7 实现浏览器时间适配器而非内核时钟读取：将设备时钟规范为严格可往返的 `Date.prototype.toISOString()` UTC instant，分别保存 `occurredAtUtc`/`recordedAtUtc`，处理 IANA 时区、offset 和 `Etc/UTC` fallback；时区只作为元数据，不改变公式结果。[追踪：capability=`purchase-decision-calculation/比较周期、币种、税口径与时间上下文`；PRD=`AC-06`、`AC-11`、`AC-21`、`AC-22`；ADR=`ADR-0002 §5.1.3`、`§5.1.7`、`ADR-0003 §5.1.2`；VAL=`VAL-01/VAL-08/VAL-09`]
 - [x] 3.8 实现确认修改、取消、失效和修订事件：编辑立即进入 `pending-reconfirmation`，旧结果不参与当前计算；取消不产生事件、不恢复旧结果；真实变更只生成一条最小 `confirmed-input-revision`，最多 50 条、每条最多 5 个旧结果，第 51 条在确认前阻止，刷新/关闭清除全部内存历史。[追踪：capability=`purchase-decision-calculation/已确认输入的修改、取消与重新确认`；PRD=`AC-11`、`AC-14`、`AC-22`；ADR=`ADR-0002 ADR-C-05`、`§5.1.7`、`ADR-0003 ADR-E-02`；VAL=`VAL-04/VAL-08/VAL-11`]
-- [ ] 3.9 用 `SYN-01`–`SYN-05` 和边界 fixture 完成规则内核表驱动测试及跨浏览器规范向量：核对精确数学值、状态、primary reason、时间/版本元数据和确定性，确保不使用 Number、隐式时钟、网络、存储或旧结果。[追踪：capability=`purchase-decision-calculation/合成 fixture 与边界结果合同`；PRD=`AC-05–AC-11`、`AC-20`、`AC-21`、`AC-24`；ADR=`ADR-0002 ADR-C-07`；VAL=`VAL-01–VAL-10`]
+- [x] 3.9 用 `SYN-01`–`SYN-05` 和边界 fixture 完成规则内核表驱动测试及跨浏览器规范向量：核对精确数学值、状态、primary reason、时间/版本元数据和确定性，确保不使用 Number、隐式时钟、网络、存储或旧结果。[追踪：capability=`purchase-decision-calculation/合成 fixture 与边界结果合同`；PRD=`AC-05–AC-11`、`AC-20`、`AC-21`、`AC-24`；ADR=`ADR-0002 ADR-C-07`；VAL=`VAL-01–VAL-10`；证据=`evidence/browser/rule-vector-readback-2026-08-24.md`]
 
 ## 4. 会话工作台与可访问交互
 
