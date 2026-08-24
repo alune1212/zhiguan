@@ -1,8 +1,8 @@
 # 静态预览交付 readback
 
-状态：`2026-08-24` 历史实施中 readback；记录生成后工作树继续发生代码与测试变更，因此不再作为当前 release artifact、manifest 或 live preview 的最终证据。不是 `Prototype Accepted`、跨设备验收或参与者分发授权。
+状态：`2026-08-24` 历史实施中 readback；当前 clean commit、artifact、live headers 与 production Chromium 的最终实现证据见 [`clean-release-readback-2026-08-24.md`](./clean-release-readback-2026-08-24.md)。本文件不是 `Prototype Accepted`、跨设备验收或参与者分发授权。
 
-当前工作树仍未提交，构建 preflight 按设计拒绝 dirty build；在形成经批准 commit 并从受信 clean checkout 重新执行完整 readback 前，以下结果只证明交付机制曾按相同配置工作，不能证明当前实现已经形成可分发静态单元。
+以下内容保留第一次静态预览机制 readback 的历史上下文，不再描述当前工作树或最终候选产物；当前结论只以上述 clean release readback 为准。
 
 ## 锁定环境
 

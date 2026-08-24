@@ -21,17 +21,17 @@
 npm run test:e2e
 ```
 
-结果：`10/10 passed`。桌面和窄屏各覆盖以下五类路径：
+dev 与 clean production preview 分别得到 `10/10 passed`。production 命令显式设置 loopback base URL 和 `PLAYWRIGHT_REQUIRE_RELEASE_HEADERS=1`；桌面和窄屏各覆盖以下五类路径：
 
 1. 隐私入口、标题、loopback 请求和 axe 自动检查。
 2. 合成主流程、键盘、五项结果、决定、`pagehide` 清理和刷新后空白会话。
 3. 空输入与非法输入的局部失败降级。
 4. `390×844` 下无水平溢出。
-5. 测试专用已验证构建 carrier 下的 JSON 下载请求、Markdown 取消和临时资源清理。
+5. 已验证构建 gate 下的 JSON 下载请求、Markdown 取消和临时资源清理。
 
 每条路径同时断言 Cookie、localStorage、sessionStorage、IndexedDB、Cache Storage、URL 查询/片段和剪贴板写入为空，console 无非预期 warning/error，页面无未捕获异常，所有 HTTP/WebSocket 请求只到 `127.0.0.1:4173` 或 `localhost:4173`。
 
-测试使用 `npm run dev`，因此明确读取到“无 release CSP/响应头”的开发边界；它没有把开发服务器伪装成 production preview。release CSP、`no-store`、`nosniff` 和 `no-referrer` 仍由交付单元测试覆盖，最终 clean artifact 的 live header readback 仍受当前未提交工作树门禁阻塞。
+dev 运行明确读取到“无 release CSP/响应头”和“未验证实现预览，不能导出”的开发边界。production 运行直接访问 commit `aff13047346cd4ceeba02299e13c3db5557fc165` 的 clean artifact，强制校验 `no-store`、CSP、`nosniff`、`no-referrer`，并确认真实 build carrier 使导出入口可用；显式下载路径仍只使用合成数据。完整产物与响应头见 [`clean release readback`](../delivery/clean-release-readback-2026-08-24.md)。
 
 ## 应用内浏览器最终流程
 
@@ -56,7 +56,6 @@ npm run test:e2e
 
 ## 尚缺门禁
 
-- clean commit 对应的 production artifact、manifest 与 live preview headers。
 - WebKit/Safari 的规则规范向量。
 - Windows Chrome、macOS Safari、iOS Safari、macOS/iOS VoiceOver 和减少动态的人工支持矩阵。
 - 固定目标设备上的 `3s / 100ms / 500ms / 1s` 性能预算。
