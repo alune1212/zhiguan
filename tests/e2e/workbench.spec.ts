@@ -276,8 +276,14 @@ test.describe("local research workbench browser boundary", () => {
       await expect(page.getByRole("article", { name: resultName })).toBeVisible();
     }
     await proceedToDecision(page);
-    await expect(page.getByText("未验证实现预览，不能导出。")).toBeVisible();
-    await expect(page.getByRole("button", { name: "打开导出预览" })).toBeDisabled();
+    const openExport = page.getByRole("button", { name: "打开导出预览" });
+    if (REQUIRE_RELEASE_HEADERS) {
+      await expect(page.getByText("未验证实现预览，不能导出。")).toHaveCount(0);
+      await expect(openExport).toBeEnabled();
+    } else {
+      await expect(page.getByText("未验证实现预览，不能导出。")).toBeVisible();
+      await expect(openExport).toBeDisabled();
+    }
 
     const undecided = page.getByRole("radio", { name: "暂不决定" });
     await undecided.press("Space");
