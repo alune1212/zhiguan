@@ -223,6 +223,9 @@ describe("purchase decision workbench", () => {
     await user.click(screen.getByRole("button", { name: "预览 JSON" }));
     await user.click(screen.getByRole("button", { name: "确认并发起 JSON 下载请求" }));
     expect(screen.getAllByText("导出临时资源未能安全清理，请刷新或关闭当前会话。").length).toBeGreaterThan(0);
+    const cleanupAlerts = screen.getAllByRole("alert");
+    expect(cleanupAlerts).toHaveLength(1);
+    expect(cleanupAlerts[0]?.textContent).toContain("导出临时资源未能安全清理");
     second.unmount();
   });
 
@@ -251,6 +254,7 @@ describe("purchase decision workbench", () => {
     serialized.mockRestore();
 
     await waitFor(() => expect(screen.getByText("导出合同验证失败，当前构建已暂停，请联系研究者处理。")).toBeTruthy());
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "确认并发起 JSON 下载请求" })).toBeNull();
     expect(screen.queryByRole("button", { name: "确认并发起 Markdown 下载请求" })).toBeNull();
     expect(screen.queryByText("等待确认")).toBeNull();
@@ -487,5 +491,111 @@ describe("purchase decision workbench", () => {
     expect(screen.getByRole("heading", { name: "把一次购买放回你的时间与口径" })).toBeTruthy();
     expect(document.activeElement).toBe(screen.getByRole("heading", { name: "先放回你的口径" }));
     expect(screen.queryByDisplayValue("10000")).toBeNull();
+  });
+
+  it("keeps field names exact and exposes hint plus error as descriptions", async () => {
+    const user = await startSession();
+    const income = screen.getByRole("textbox", { name: "同周期收入" });
+    const currency = screen.getByRole("textbox", { name: "币种" });
+
+    expect(screen.queryByRole("textbox", { name: /同周期收入.*正数/u })).toBeNull();
+    expect(currency.getAttribute("aria-describedby")).toBe("currency-hint");
+    expect(income.getAttribute("aria-describedby")).toBe("income-hint");
+
+    await user.click(screen.getByRole("button", { name: "检查输入与口径" }));
+    const erroredIncome = screen.getByRole("textbox", { name: "同周期收入" });
+    const descriptionIds = (erroredIncome.getAttribute("aria-describedby") ?? "").split(/\s+/u).filter(Boolean);
+
+    expect(erroredIncome.getAttribute("aria-invalid")).toBe("true");
+    expect(descriptionIds).toEqual(expect.arrayContaining(["income-hint", "income-error"]));
+    expect(descriptionIds.map((id) => document.getElementById(id)?.textContent ?? "").join(" ")).toContain("正数");
+    expect(descriptionIds.map((id) => document.getElementById(id)?.textContent ?? "").join(" ")).toContain("请补充");
+  });
+
+  it("focuses the evidence status select when that status is the missing control", async () => {
+    const user = await startSession();
+    await fillCompleteInput(user);
+    await user.selectOptions(screen.getByRole("combobox", { name: "购买价格的状态" }), "");
+    await user.click(screen.getByRole("button", { name: "检查输入与口径" }));
+    await user.click(screen.getByRole("button", { name: "确认口径并查看结果" }));
+    expect(screen.getByRole("heading", { name: "理解与推演" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "返回修改" }));
+
+    const evidence = screen.getByRole("combobox", { name: "购买价格的状态" });
+    await waitFor(() => expect(document.activeElement).toBe(evidence));
+    expect(evidence.getAttribute("aria-invalid")).toBe("true");
+    const descriptionIds = (evidence.getAttribute("aria-describedby") ?? "").split(/\s+/u).filter(Boolean);
+    expect(descriptionIds.some((id) => (document.getElementById(id)?.textContent ?? "").includes("请标记"))).toBe(true);
+  });
+
+  it("focuses the custom period name when the custom period is incomplete", async () => {
+    const user = await startSession();
+    await user.selectOptions(screen.getByRole("combobox", { name: "比较周期" }), "custom");
+    await user.type(screen.getByRole("textbox", { name: "币种" }), "CNY");
+    await user.selectOptions(screen.getByRole("combobox", { name: "收入口径" }), "after-tax");
+    await user.type(screen.getByRole("textbox", { name: "同周期收入" }), "10000");
+    await user.selectOptions(screen.getByRole("combobox", { name: "同周期收入的状态" }), "user-confirmed");
+    await user.type(screen.getByRole("textbox", { name: "同周期工作小时" }), "160");
+    await user.selectOptions(screen.getByRole("combobox", { name: "同周期工作小时的状态" }), "user-confirmed");
+    await user.type(screen.getByRole("textbox", { name: "购买价格" }), "800");
+    await user.selectOptions(screen.getByRole("combobox", { name: "购买价格的状态" }), "user-confirmed");
+    await user.click(screen.getByRole("radio", { name: "计入" }));
+    await user.type(screen.getByRole("textbox", { name: "个人价值期待" }), "合成体验期待");
+    await user.click(screen.getByRole("button", { name: "检查输入与口径" }));
+    await user.click(screen.getByRole("button", { name: "确认口径并查看结果" }));
+    expect(screen.getByRole("heading", { name: "理解与推演" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "返回修改" }));
+
+    const customPeriod = screen.getByRole("textbox", { name: "自定义周期名称" });
+    await waitFor(() => expect(document.activeElement).toBe(customPeriod));
+    expect(customPeriod.getAttribute("aria-invalid")).toBe("true");
+    const descriptionIds = (customPeriod.getAttribute("aria-describedby") ?? "").split(/\s+/u).filter(Boolean);
+    expect(descriptionIds.some((id) => (document.getElementById(id)?.textContent ?? "").includes("简短名称"))).toBe(true);
+  });
+
+  it("announces the current, completed, and not-started stage states", async () => {
+    const user = await startSession();
+    const navigation = screen.getByRole("navigation", { name: "会话阶段" });
+    const statuses = (label: string) => within(navigation).getAllByRole("listitem", { name: new RegExp(label, "u") });
+
+    expect(statuses("当前阶段")).toHaveLength(1);
+    expect(statuses("未开始")).toHaveLength(3);
+
+    await fillCompleteInput(user);
+    await confirmInput(user);
+    expect(statuses("已完成")).toHaveLength(2);
+    expect(statuses("当前阶段")).toHaveLength(1);
+    expect(statuses("未开始")).toHaveLength(1);
+
+    await user.click(screen.getByRole("button", { name: "继续到决定" }));
+    expect(statuses("已完成")).toHaveLength(3);
+    expect(statuses("当前阶段")).toHaveLength(1);
+  });
+
+  it("keeps focus on a surviving export control through preview, cancel, and confirmation", async () => {
+    const user = userEvent.setup();
+    render(<App buildIdentityGate={verifiedBuild} />);
+    await user.click(screen.getByRole("button", { name: "我了解，开始输入" }));
+    await fillCompleteInput(user);
+    await confirmInput(user);
+    await user.click(screen.getByRole("button", { name: "继续到决定" }));
+    await user.click(screen.getByRole("button", { name: "打开导出预览" }));
+
+    const previewJson = screen.getByRole("button", { name: "预览 JSON" });
+    await waitFor(() => expect(document.activeElement).toBe(previewJson));
+    await user.click(previewJson);
+    const confirmJson = screen.getByRole("button", { name: "确认并发起 JSON 下载请求" });
+    await waitFor(() => expect(document.activeElement).toBe(confirmJson));
+
+    const previewMarkdown = screen.getByRole("button", { name: "预览 Markdown" });
+    await user.click(previewMarkdown);
+    const confirmMarkdown = screen.getByRole("button", { name: "确认并发起 Markdown 下载请求" });
+    await waitFor(() => expect(document.activeElement).toBe(confirmMarkdown));
+    await user.click(screen.getByRole("button", { name: "取消 Markdown 导出" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByText("已取消")));
+
+    await user.click(screen.getByRole("button", { name: "确认并发起 JSON 下载请求" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByText("已发起下载请求")));
+    expect(screen.getByText("已发起下载请求")).toBeTruthy();
   });
 });

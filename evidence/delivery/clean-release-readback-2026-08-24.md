@@ -4,7 +4,7 @@
 
 ## 受信输入与工具链
 
-- Git commit：`aff13047346cd4ceeba02299e13c3db5557fc165`
+- Git commit：`aff13047346cd4ceeba02299e13c3db5557fc165`（本 clean artifact readback 的候选构建；3.9 规则规范向量另见当前证据 commit `463cd72ba35a5119d0019fff011d1722ccf5647b`）
 - 分支：`codex/prd-single-purchase-decision`
 - 构建起点：一次性 clean clone；安装前无 `node_modules`、`dist` 或 artifact manifest
 - Node.js：`24.19.0`
@@ -72,7 +72,6 @@ manifest readback：
 
 ## 尚未关闭的门禁
 
-- WebKit/Safari 规则规范向量。
 - Windows Chrome、macOS Safari、iOS Safari、macOS/iOS VoiceOver 与减少动态人工验收。
 - 固定目标设备、网络和最大合成会话的四项性能预算。
 - 在存在上一份已接受完整交付单元后执行恢复与重新 readback；当前只能证明首次停止与撤下。

@@ -4,7 +4,8 @@
 
 ## 环境与安装边界
 
-- 候选基线 Git commit：`a64ce6424f5cadba31404568083cb8154a79375d`
+- 规则实现基线 Git commit：`a64ce6424f5cadba31404568083cb8154a79375d`
+- 本 3.9 证据 commit：`463cd72ba35a5119d0019fff011d1722ccf5647b`
 - macOS：`27.0`（build `26A5416b`，`arm64`）
 - Node.js：`24.19.0`
 - npm：`11.17.0`

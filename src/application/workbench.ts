@@ -49,6 +49,16 @@ export type NumericEvidenceField =
   | "purchase-price"
   | "fixed-cost-total";
 
+/**
+ * Errors are keyed by the control which needs attention.  Evidence status is
+ * a separate control from the amount itself, so it deliberately uses an
+ * `${fieldId}-evidence` key rather than marking the numeric field invalid.
+ */
+export type WorkbenchErrorKey =
+  | WorkbenchFieldId
+  | "period-custom-label"
+  | `${NumericEvidenceField}-evidence`;
+
 export interface WorkbenchDraft {
   readonly [key: string]: string;
   readonly "comparison-period": string;
@@ -90,7 +100,7 @@ export interface WorkbenchApplicationState {
   readonly session: WorkbenchSession;
   readonly draft: WorkbenchDraft;
   readonly evidence: EvidenceDraft;
-  readonly inputErrors: Readonly<Partial<Record<WorkbenchFieldId, string>>>;
+  readonly inputErrors: Readonly<Partial<Record<WorkbenchErrorKey, string>>>;
   readonly notice: string | null;
   readonly reviewDraft: WorkbenchReviewDraft;
   readonly handoffComplete: boolean;
@@ -334,21 +344,21 @@ function buildInput(
   return { input: Object.freeze(input), calculationInputs, periodRef };
 }
 
-function draftErrors(draft: WorkbenchDraft, evidence: EvidenceDraft): Partial<Record<WorkbenchFieldId, string>> {
-  const errors: Partial<Record<WorkbenchFieldId, string>> = {};
+function draftErrors(draft: WorkbenchDraft, evidence: EvidenceDraft): Partial<Record<WorkbenchErrorKey, string>> {
+  const errors: Partial<Record<WorkbenchErrorKey, string>> = {};
   for (const fieldId of REQUIRED_FIELD_IDS) {
     const value = fieldId === "comparison-period" ? draft[fieldId] : draft[fieldId];
     if (value.trim().length === 0) errors[fieldId] = "请补充这一项，或返回退出当前会话。";
   }
   if (draft["comparison-period"] === "custom" && draft["period-custom-label"].trim().length === 0) {
-    errors["comparison-period"] = "自定义周期需要一个简短名称。";
+    errors["period-custom-label"] = "自定义周期需要一个简短名称。";
   }
   if (draft.currency.trim().length > 0 && !/^[A-Z]{3}$/u.test(draft.currency.trim())) {
     errors.currency = "请输入 3 位 ISO 4217 大写代码，例如 CNY。";
   }
   for (const fieldId of EVIDENCE_FIELDS) {
     if (draft[fieldId].trim().length > 0 && evidence[fieldId] === "") {
-      errors[fieldId] = "请标记这是用户确认的输入还是近似输入。";
+      errors[`${fieldId}-evidence`] = "请标记这是用户确认的输入还是近似输入。";
     }
   }
   if (draft["fixed-cost-total"].trim().length > 0 && draft["fixed-cost-coverage"] === "") {
@@ -490,8 +500,9 @@ function reduceApplication(
       const draft = cloneDraft({ ...state.draft, [action.fieldId]: action.value });
       const session = editSessionInCurrentStage(state, action.fieldId, action.value);
       const inputErrors = { ...state.inputErrors };
-      delete inputErrors[action.fieldId as WorkbenchFieldId];
-      if (action.fieldId === "period-custom-label") delete inputErrors["comparison-period"];
+      delete inputErrors[action.fieldId as WorkbenchErrorKey];
+      if (action.fieldId === "comparison-period") delete inputErrors["period-custom-label"];
+      if (action.fieldId === "period-custom-label") delete inputErrors["period-custom-label"];
       return Object.freeze({
         ...state,
         draft,
@@ -505,7 +516,7 @@ function reduceApplication(
       const evidence = cloneEvidence({ ...state.evidence, [action.fieldId]: action.value });
       const session = editSessionInCurrentStage(state, action.fieldId, action.value);
       const inputErrors = { ...state.inputErrors };
-      delete inputErrors[action.fieldId];
+      delete inputErrors[`${action.fieldId}-evidence`];
       return Object.freeze({ ...state, evidence, session, inputErrors: Object.freeze(inputErrors), notice: null });
     }
 

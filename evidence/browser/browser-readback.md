@@ -54,9 +54,13 @@ dev 运行明确读取到“无 release CSP/响应头”和“未验证实现预
 
 最终桌面和 `390×844` 截图与批准概念同轮检查。实现保留了暖白背景、深绿重点、纸张式分区、清晰阶段层级和低刺激文案；窄屏内容单列排列、正文可读且无水平溢出。隐私入口比概念中的工作阶段更克制，先完整展示数据边界，符合首次进入门禁。概念图不是像素级规格，本 readback 不把视觉接近写成人工无障碍或产品验收。
 
+## 已关闭的自动门禁
+
+- OpenSpec 3.9 的 Chromium/WebKit 规则规范向量已完成，详见 [`rule-vector readback`](rule-vector-readback-2026-08-24.md)。该证据只覆盖规则内核跨引擎一致性，不等于 Safari 发布版或人工支持矩阵验收。
+- OpenSpec 4.6 的响应式、键盘、焦点、ARIA、VoiceOver 可解释语义和减少动态实现已完成，详见 [`accessibility implementation readback`](accessibility-implementation-readback-2026-08-24.md)。该证据不替代 6.3 的目标浏览器/设备和 VoiceOver 人工支持矩阵。
+
 ## 尚缺门禁
 
-- WebKit/Safari 的规则规范向量。
 - Windows Chrome、macOS Safari、iOS Safari、macOS/iOS VoiceOver 和减少动态的人工支持矩阵。
 - 固定目标设备上的 `3s / 100ms / 500ms / 1s` 性能预算。
 

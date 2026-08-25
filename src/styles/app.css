@@ -28,12 +28,12 @@
 
 * { box-sizing: border-box; }
 
-html { min-width: 320px; background: var(--color-canvas); }
+html { overflow-x: clip; background: var(--color-canvas); }
 
 body {
-  min-width: 320px;
   min-height: 100vh;
   margin: 0;
+  overflow-x: clip;
   background: var(--color-canvas);
 }
 
@@ -131,7 +131,9 @@ p { line-height: 1.65; }
 
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5) var(--space-6); }
 .field { display: grid; align-content: start; gap: 0.4rem; min-width: 0; }
-.field > span, .fieldset-field legend, .review-panel .field > span { color: var(--color-ink); font-size: 0.9rem; font-weight: 680; }
+.field-label-row, .fieldset-field legend { color: var(--color-ink); font-size: 0.9rem; font-weight: 680; }
+.field-label-row { display: flex; align-items: baseline; }
+.field-label-row label { cursor: pointer; }
 .field em, .fieldset-field legend em { margin-left: 0.45rem; color: var(--color-accent); font-size: 0.72rem; font-style: normal; font-weight: 650; }
 .field small { margin-left: 0.45rem; color: var(--color-muted); font-size: 0.72rem; font-weight: 500; }
 .field input, .field textarea, .field select { width: 100%; border: 1px solid #bfcfc4; border-radius: var(--radius-sm); background: #fff; color: var(--color-ink); }
@@ -141,8 +143,21 @@ p { line-height: 1.65; }
 .field input[aria-invalid="true"], .field textarea[aria-invalid="true"], .field select[aria-invalid="true"] { border-color: var(--color-danger); background: var(--color-danger-soft); }
 .field-hint { color: var(--color-muted) !important; font-size: 0.78rem !important; font-weight: 450 !important; line-height: 1.45; }
 .field-error { color: var(--color-danger) !important; font-size: 0.82rem !important; font-weight: 600 !important; line-height: 1.45; }
+.field-error-summary { max-width: 52rem; margin: 0 0 var(--space-5); padding: 0.75rem 1rem; border-left: 3px solid var(--color-danger); background: var(--color-danger-soft); color: #753029; line-height: 1.5; }
 .field-wide { max-width: 48rem; margin-top: var(--space-6); }
 .evidence-field { align-self: end; }
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
 
 .fieldset-field { min-width: 0; margin: 0; padding: 0; border: 0; }
 .choice-line { display: flex; align-items: center; gap: 0.55rem; min-height: 2.75rem; color: var(--color-muted); }

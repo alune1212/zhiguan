@@ -1,4 +1,4 @@
-本 OpenSpec change 已于 `2026-08-24` 获 Alune 明确批准，`PRD-0001` 的 `Implementation Authorized` 门禁已于同日通过；后续独立执行可以严格按本清单初始化和实现。当前进度为 34/38；未完成的 4 项仍受人工支持矩阵、固定设备性能与完整版本恢复证据约束。范围只限本地形成性研究原型的实现与验证，并明确排除 `FR-20`、`FR-21`、`FR-26`、`AC-18`、`AC-19`、`AC-27`、研究存储 A/B、正式同意/撤回、研究观察、招募、研究日历、云托管、公开远程访问和任何正式产品能力。不得把 OpenSpec 批准、`Implementation Authorized` 或当前自动证据写成 `Prototype Accepted`、`Recruitment Authorized` 或研究授权。
+本 OpenSpec change 已于 `2026-08-24` 获 Alune 明确批准，`PRD-0001` 的 `Implementation Authorized` 门禁已于同日通过；后续独立执行可以严格按本清单初始化和实现。当前进度为 35/38；未完成的 3 项仍受人工支持矩阵、固定设备性能与完整版本恢复证据约束。范围只限本地形成性研究原型的实现与验证，并明确排除 `FR-20`、`FR-21`、`FR-26`、`AC-18`、`AC-19`、`AC-27`、研究存储 A/B、正式同意/撤回、研究观察、招募、研究日历、云托管、公开远程访问和任何正式产品能力。不得把 OpenSpec 批准、`Implementation Authorized` 或当前自动证据写成 `Prototype Accepted`、`Recruitment Authorized` 或研究授权。
 
 ## 1. 授权、范围与合成证据基线
 
@@ -33,7 +33,7 @@
 - [x] 4.3 实现最小输入表单与确认交互：比较周期、收入、税口径、工作小时、币种、购买价格、购买周期归属、价值期待，以及可选固定成本/覆盖状态/说明；区分 user-confirmed 与 estimated，不要求账单、链接、精确日期、跨期或跨币种转换。[追踪：capability=`purchase-decision-workbench/最小输入、证据标记与用户确认`；PRD=`AC-02–AC-06`、`AC-20`、`AC-24`；ADR=`ADR-0002 ADR-C-02`、`§5.1.1–§5.1.3`；VAL=`VAL-04/VAL-05/VAL-06`]
 - [x] 4.4 实现结果卡片、证据状态、查看依据和局部数据不足文案：只呈现规则内核返回的输入、来源、单位、币种、周期、税口径、公式、时间、假设、限制、原因和恢复动作；不复算、不显示旧值、不把估算/预测变成事实或建议。[追踪：capability=`purchase-decision-workbench/结果的局部安全降级`、`依据、状态与不确定性展示`；PRD=`AC-06–AC-10`、`AC-20`、`AC-21`、`AC-24`；ADR=`ADR-0002 ADR-C-05`、`ADR-C-06`；VAL=`VAL-01/VAL-04/VAL-05/VAL-07`]
 - [x] 4.5 实现五种用户决定、依据/待确认条件和可选复盘条件或日期：允许“购买/等待/调整条件/不购买/暂不决定”且不评价、不排序、不推荐；复盘明确为产品外人工交接，不创建提醒、联系、上传或研究记录。[追踪：capability=`purchase-decision-workbench/五种用户决定与产品外复盘条件`、`低刺激、非评判的用户可见文案`；PRD=`AC-12`、`AC-13`、`AC-17`；ADR=`ADR-0001 §3`、`ADR-0002 §2/§6.2`；VAL=`VAL-04/VAL-06/VAL-08`]
-- [ ] 4.6 完成响应式、键盘、焦点、ARIA、桌面/移动 VoiceOver 和 `prefers-reduced-motion` 实现：四阶段、依据、修改、决定、复盘、导出入口和退出均可操作，状态/错误/不确定性不只靠颜色、动画、声音或位置表达。[追踪：capability=`purchase-decision-workbench/响应式、键盘与 VoiceOver 可完成性`、`local-research-delivery/非必要动态必须减少并尊重用户的减少动态偏好`；PRD=`AC-16`、`AC-17`、`AC-23`；ADR=`ADR-0001 §3`、`§5.1.1`、`§9.1`；VAL=`VAL-06/VAL-10`]
+- [x] 4.6 完成响应式、键盘、焦点、ARIA、桌面/移动 VoiceOver 和 `prefers-reduced-motion` 实现：四阶段、依据、修改、决定、复盘、导出入口和退出均可操作，状态/错误/不确定性不只靠颜色、动画、声音或位置表达。[追踪：capability=`purchase-decision-workbench/响应式、键盘与 VoiceOver 可完成性`、`local-research-delivery/非必要动态必须减少并尊重用户的减少动态偏好`；PRD=`AC-16`、`AC-17`、`AC-23`；ADR=`ADR-0001 §3`、`§5.1.1`、`§9.1`；VAL=`VAL-06/VAL-10`；证据=`evidence/browser/accessibility-implementation-readback-2026-08-24.md`]
 
 ## 5. ExportSnapshotV1 与双格式导出
 

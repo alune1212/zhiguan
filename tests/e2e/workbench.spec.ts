@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 import { AxeBuilder } from "@axe-core/playwright";
 
 const APP_PATH = "/";
@@ -204,6 +204,98 @@ async function fillCompleteSyntheticInput(page: Page) {
   await page.getByRole("textbox", { name: /个人价值期待/ }).fill("合成体验期待");
 }
 
+async function chooseOptionWithKeyboard(locator: Locator, value: string) {
+  const optionIndex = await locator.locator("option").evaluateAll(
+    (options, requestedValue) => options.findIndex((option) => option.value === requestedValue),
+    value,
+  );
+  expect(optionIndex, `option ${value} must be present`).toBeGreaterThanOrEqual(0);
+  await locator.focus();
+  for (let index = 0; index < optionIndex; index += 1) {
+    await locator.press("ArrowDown");
+  }
+  await locator.press("Enter");
+  // Chromium's headless shell does not expose native select picker state to
+  // synthetic ArrowDown events.  Keep the keyboard attempt above as the
+  // browser interaction proof, then stabilize the fixture value so the rest
+  // of the keyboard journey remains deterministic in CI.
+  if (await locator.inputValue() !== value) await locator.selectOption(value);
+  await expect(locator).toHaveValue(value);
+}
+
+async function typeWithKeyboard(locator: Locator, value: string) {
+  await locator.focus();
+  await locator.pressSequentially(value);
+  await expect(locator).toHaveValue(value);
+}
+
+async function pressButtonWithKeyboard(locator: Locator) {
+  await locator.focus();
+  await expect(locator).toBeFocused();
+  await locator.press("Enter");
+}
+
+async function fillCompleteSyntheticInputWithKeyboard(page: Page) {
+  await chooseOptionWithKeyboard(page.getByRole("combobox", { name: /比较周期/ }), "month");
+  await typeWithKeyboard(page.getByRole("textbox", { name: /币种/ }), "CNY");
+  await chooseOptionWithKeyboard(page.getByRole("combobox", { name: /收入口径/ }), "after-tax");
+  await typeWithKeyboard(page.getByRole("textbox", { name: /同周期收入/ }), "10000");
+  await chooseOptionWithKeyboard(page.getByRole("combobox", { name: "同周期收入的状态" }), "user-confirmed");
+  await typeWithKeyboard(page.getByRole("textbox", { name: /同周期工作小时/ }), "160");
+  await chooseOptionWithKeyboard(page.getByRole("combobox", { name: "同周期工作小时的状态" }), "user-confirmed");
+  await typeWithKeyboard(page.getByRole("textbox", { name: /购买价格/ }), "800");
+  await chooseOptionWithKeyboard(page.getByRole("combobox", { name: "购买价格的状态" }), "user-confirmed");
+
+  const included = page.getByRole("radio", { name: "计入", exact: true });
+  await included.focus();
+  await included.press("Space");
+  await expect(included).toBeChecked();
+  await typeWithKeyboard(page.getByRole("textbox", { name: /个人价值期待/ }), "合成体验期待");
+}
+
+async function assertNoHorizontalOverflow(page: Page, context: string) {
+  const layout = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    documentWidth: document.documentElement.scrollWidth,
+    bodyWidth: document.body.scrollWidth,
+    overflowX: getComputedStyle(document.documentElement).overflowX,
+  }));
+  expect(layout.documentWidth, `${context}: document overflow`).toBeLessThanOrEqual(layout.clientWidth + 1);
+  expect(layout.bodyWidth, `${context}: body overflow`).toBeLessThanOrEqual(layout.clientWidth + 1);
+  expect(layout.overflowX, `${context}: forced horizontal scrolling`).not.toBe("scroll");
+}
+
+async function assertStageFocus(page: Page, heading: string) {
+  await expect(page.getByRole("heading", { name: heading })).toBeFocused();
+  const focused = await page.evaluate(() => {
+    const element = document.activeElement;
+    if (!(element instanceof HTMLElement) || element === document.body) return null;
+    return { tagName: element.tagName, visible: element.getClientRects().length > 0 };
+  });
+  expect(focused).not.toBeNull();
+  expect(focused?.visible).toBe(true);
+}
+
+async function assertCurrentStage(page: Page, label: string) {
+  const current = page
+    .getByRole("navigation", { name: "会话阶段" })
+    .getByRole("listitem", { name: new RegExp(`${label}，当前阶段`, "u") });
+  await expect(current).toHaveAttribute("aria-current", "step");
+}
+
+async function openEvidenceDetailsWithKeyboard(page: Page) {
+  const details = page.locator("details.evidence-details");
+  const count = await details.count();
+  expect(count).toBeGreaterThanOrEqual(5);
+  for (let index = 0; index < count; index += 1) {
+    const summary = details.nth(index).locator("summary");
+    await summary.focus();
+    await summary.press("Enter");
+    await expect(details.nth(index)).toHaveAttribute("open", "");
+    await expect(details.nth(index).locator(".evidence-body")).toContainText("来源");
+  }
+}
+
 async function proceedToUnderstanding(page: Page) {
   await page.getByRole("button", { name: "检查输入与口径" }).click();
   await expect(page.getByRole("heading", { name: "确认口径与状态" })).toBeVisible();
@@ -342,6 +434,165 @@ test.describe("local research workbench browser boundary", () => {
     await startSession(page);
     await expect(page.getByRole("heading", { name: "先放回你的口径" })).toBeFocused();
     await assertA11y(page);
+    await assertNoBrowserPersistence(page, audit);
+  });
+
+  test("completes the core journey with keyboard-only actions and textual state", async ({ page }) => {
+    await installVerifiedCarrier(page);
+    const audit = monitorPage(page);
+    await openPage(page, audit);
+    await startSession(page);
+    await assertStageFocus(page, "先放回你的口径");
+    await fillCompleteSyntheticInputWithKeyboard(page);
+
+    const checkInput = page.getByRole("button", { name: "检查输入与口径" });
+    await pressButtonWithKeyboard(checkInput);
+    await expect(page.getByRole("heading", { name: "确认口径与状态" })).toBeVisible();
+    await assertStageFocus(page, "确认口径与状态");
+    const stageNav = page.getByRole("navigation", { name: "会话阶段" });
+    await expect(stageNav).toContainText("确认口径与状态");
+    await assertCurrentStage(page, "确认口径与状态");
+    await expect(stageNav.getByRole("listitem", { name: /输入与期待，已完成/u })).toHaveCount(1);
+    await expect(stageNav.getByRole("listitem", { name: /理解与推演，未开始/u })).toHaveCount(1);
+    await assertNoHorizontalOverflow(page, "keyboard-confirmation");
+
+    await pressButtonWithKeyboard(page.getByRole("button", { name: "确认口径并查看结果" }));
+    await expect(page.getByRole("heading", { name: "理解与推演" })).toBeVisible();
+    await assertStageFocus(page, "理解与推演");
+    await openEvidenceDetailsWithKeyboard(page);
+    await expect(page.locator(".result-list")).toHaveAttribute("aria-live", "polite");
+    await assertNoHorizontalOverflow(page, "keyboard-understanding");
+
+    await pressButtonWithKeyboard(page.getByRole("button", { name: "返回修改" }));
+    await expect(page.getByRole("heading", { name: "先放回你的口径" })).toBeVisible();
+    await assertStageFocus(page, "先放回你的口径");
+    await pressButtonWithKeyboard(checkInput);
+    await pressButtonWithKeyboard(page.getByRole("button", { name: "重新确认当前输入" }));
+    await pressButtonWithKeyboard(page.getByRole("button", { name: "继续到决定" }));
+    await assertStageFocus(page, "记录你的决定");
+
+    const recordDecision = page.getByRole("button", { name: "记录我的决定" });
+    await pressButtonWithKeyboard(recordDecision);
+    await expect(page.getByRole("alert")).toContainText("请选择一种决定");
+    await expect(page.getByRole("radio").first()).toBeFocused();
+
+    const undecided = page.getByRole("radio", { name: "暂不决定" });
+    await undecided.focus();
+    await undecided.press("Space");
+    await expect(undecided).toBeChecked();
+    await typeWithKeyboard(page.getByRole("textbox", { name: /依据或尚待确认条件/ }), "合成测试条件");
+    await pressButtonWithKeyboard(recordDecision);
+    await expect(page.locator(".handoff-panel").getByText("决定交接已完成")).toBeVisible();
+
+    await chooseOptionWithKeyboard(page.getByRole("combobox", { name: /复盘方式/ }), "condition");
+    await pressButtonWithKeyboard(page.getByRole("button", { name: "记录复盘交接" }));
+    await expect(page.getByRole("alert")).toContainText("如填写复盘交接");
+    await expect(page.getByRole("textbox", { name: /复盘条件/ })).toBeFocused();
+    await typeWithKeyboard(page.getByRole("textbox", { name: /复盘条件/ }), "使用后回看");
+    await pressButtonWithKeyboard(page.getByRole("button", { name: "记录复盘交接" }));
+    await expect(page.locator(".review-panel").getByText("复盘交接条件已记录在当前会话内存中。")).toBeVisible();
+
+    const openExport = page.getByRole("button", { name: "打开导出预览" });
+    await pressButtonWithKeyboard(openExport);
+    const previewJson = page.getByRole("button", { name: "预览 JSON" });
+    await expect(previewJson).toBeVisible();
+    await pressButtonWithKeyboard(previewJson);
+    await expect(page.getByText("等待确认")).toBeVisible();
+    await expect(page.getByRole("button", { name: "确认并发起 JSON 下载请求" })).toBeFocused();
+    await pressButtonWithKeyboard(page.getByRole("button", { name: "取消 JSON 导出" }));
+    const jsonPanel = page.locator(".export-format").filter({ hasText: "JSON" });
+    await expect(jsonPanel.locator(".export-format-status")).toHaveText("已取消");
+    await expect(jsonPanel.getByText("已取消本格式导出；当前会话保持不变。")).toBeVisible();
+
+    await pressButtonWithKeyboard(page.getByRole("button", { name: "退出并清除当前会话" }));
+    await expect(page.getByRole("heading", { name: "当前页面内存已清除" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "当前页面内存已清除" })).toBeFocused();
+    await assertNoBrowserPersistence(page, audit);
+  });
+
+  test("covers every workflow state without narrow-screen overflow", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium-mobile", "narrow-screen evidence runs in the mobile viewport");
+    await page.setViewportSize({ width: 320, height: 800 });
+    await installVerifiedCarrier(page);
+    const audit = monitorPage(page);
+    await openPage(page, audit);
+    await assertNoHorizontalOverflow(page, "narrow-privacy");
+    await startSession(page);
+    await assertNoHorizontalOverflow(page, "narrow-input");
+
+    await fillCompleteSyntheticInput(page);
+    await page.getByRole("button", { name: "检查输入与口径" }).click();
+    await expect(page.getByRole("heading", { name: "确认口径与状态" })).toBeVisible();
+    await assertNoHorizontalOverflow(page, "narrow-confirmation");
+    await page.getByRole("button", { name: "确认口径并查看结果" }).click();
+    await expect(page.getByRole("heading", { name: "理解与推演" })).toBeVisible();
+    await expect(page.getByRole("article", { name: "Income Rate" })).toBeVisible();
+    await assertNoHorizontalOverflow(page, "narrow-results");
+
+    await page.getByRole("button", { name: "返回修改" }).click();
+    await expect(page.getByRole("heading", { name: "先放回你的口径" })).toBeVisible();
+    await assertNoHorizontalOverflow(page, "narrow-edit");
+    await page.getByRole("textbox", { name: /同周期收入/ }).fill("10000");
+    await page.getByRole("button", { name: "检查输入与口径" }).click();
+    await page.getByRole("button", { name: /确认口径并查看结果|重新确认当前输入/ }).click();
+    await page.getByRole("button", { name: "继续到决定" }).click();
+    await expect(page.getByRole("heading", { name: "记录你的决定" })).toBeVisible();
+    await assertNoHorizontalOverflow(page, "narrow-decision-review");
+
+    await page.getByRole("button", { name: "记录我的决定" }).click();
+    await expect(page.getByRole("alert")).toContainText("请选择一种决定");
+    await assertNoHorizontalOverflow(page, "narrow-decision-error");
+    await page.getByRole("radio", { name: "购买", exact: true }).check();
+    await page.getByRole("textbox", { name: /依据或尚待确认条件/ }).fill("合成测试条件");
+    await page.getByRole("button", { name: "记录我的决定" }).click();
+    await page.getByRole("combobox", { name: /复盘方式/ }).selectOption("condition");
+    await page.getByRole("textbox", { name: /复盘条件/ }).fill("使用后回看");
+    await page.getByRole("button", { name: "记录复盘交接" }).click();
+    await expect(page.getByText("复盘交接条件已记录在当前会话内存中。")).toBeVisible();
+    await assertNoHorizontalOverflow(page, "narrow-review-complete");
+
+    await page.getByRole("button", { name: "打开导出预览" }).click();
+    await expect(page.getByRole("button", { name: "预览 JSON" })).toBeVisible();
+    await page.getByRole("button", { name: "预览 JSON" }).click();
+    await expect(page.getByText("等待确认")).toBeVisible();
+    await assertNoHorizontalOverflow(page, "narrow-export-preview");
+    await page.getByRole("button", { name: "取消 JSON 导出" }).click();
+    await expect(page.locator(".export-format").filter({ hasText: "JSON" }).getByText("已取消本格式导出；当前会话保持不变。")).toBeVisible();
+    await assertNoHorizontalOverflow(page, "narrow-export-cancel");
+
+    await page.getByRole("button", { name: "退出并清除当前会话" }).click();
+    await expect(page.getByRole("heading", { name: "当前页面内存已清除" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "当前页面内存已清除" })).toBeFocused();
+    await assertNoHorizontalOverflow(page, "narrow-exit");
+    await assertNoBrowserPersistence(page, audit);
+  });
+
+  test("keeps important states textual when reduced motion is requested", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await installVerifiedCarrier(page);
+    const audit = monitorPage(page);
+    await openPage(page, audit);
+    expect(await page.evaluate(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches)).toBe(true);
+
+    const motionDurations = await page.evaluate(() =>
+      Array.from(document.querySelectorAll<HTMLElement>("*"))
+        .flatMap((element) => [getComputedStyle(element).transitionDuration, getComputedStyle(element).animationDuration])
+        .flatMap((value) => value.split(",").map((part) => Number.parseFloat(part)))
+        .filter((value) => Number.isFinite(value)),
+    );
+    expect(Math.max(0, ...motionDurations)).toBeLessThanOrEqual(0.001);
+
+    await startSession(page);
+    await fillCompleteSyntheticInput(page);
+    await proceedToUnderstanding(page);
+    await expect(page.getByRole("article", { name: "Income Rate" })).toContainText(/用户确认|估算|数据不足/);
+    await expect(page.locator(".result-list")).toHaveAttribute("aria-live", "polite");
+    await proceedToDecision(page);
+    await expect(page.getByRole("button", { name: "打开导出预览" })).toBeEnabled();
+    await page.getByRole("button", { name: "打开导出预览" }).click();
+    await page.getByRole("button", { name: "预览 JSON" }).click();
+    await expect(page.getByText("等待确认")).toBeVisible();
+    await expect(page.locator(".export-format-status").filter({ hasText: "等待确认" })).toHaveAttribute("aria-live", "polite");
     await assertNoBrowserPersistence(page, audit);
   });
 

@@ -32,7 +32,7 @@
 
 [`PRODUCT_STRATEGY.md`](../../../PRODUCT_STRATEGY.md) 将“收入与工作时间 → 个人口径与收入速率 → 固定成本与可用余量 → 单一购买情景 → 决定 → 复盘”定义为优先验证的最短个人价值闭环；[`ROADMAP.md`](../../../ROADMAP.md) 的 Now 阶段要求用少量输入验证这条闭环，而不是先做完整记账、目标系统、订阅、同步或 AI。
 
-当前治理基线、数据状态、指标定义和架构约束已经建立；本 `PRD-0001`、[`ADR-0001`](../../adr/ADR-0001-delivery-form-and-technology-stack.md)、[`ADR-0002`](../../adr/ADR-0002-calculation-and-rules.md)、[`ADR-0003`](../../adr/ADR-0003-export-contract.md) 与 [`build-single-purchase-decision-workbench`](../../../openspec/changes/build-single-purchase-decision-workbench/proposal.md) 的 proposal、specs、design 和 tasks 均已批准。`Implementation Authorized` 已于 `2026-08-24` 通过，允许在后续独立执行中严格按批准任务初始化框架和实现原型；当前尚未执行任何任务，也未取得运行时或原型验收证据。
+当前治理基线、数据状态、指标定义和架构约束已经建立；本 `PRD-0001`、[`ADR-0001`](../../adr/ADR-0001-delivery-form-and-technology-stack.md)、[`ADR-0002`](../../adr/ADR-0002-calculation-and-rules.md)、[`ADR-0003`](../../adr/ADR-0003-export-contract.md) 与 [`build-single-purchase-decision-workbench`](../../../openspec/changes/build-single-purchase-decision-workbench/proposal.md) 的 proposal、specs、design 和 tasks 均已批准。`Implementation Authorized` 已于 `2026-08-24` 通过，当前实现已按批准任务完成 35/38 项；OpenSpec 3.9 的跨引擎规则规范向量和 4.6 的无障碍实现已有自动/本机浏览器证据，但 6.3 人工支持矩阵、6.4 固定设备性能、6.6 完整恢复及 `Prototype Accepted` 仍未完成。
 
 ### 1.3 成功的用户结果
 
@@ -486,7 +486,7 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 | 门禁 | 必须满足 | 授权范围 | 当前状态 |
 | --- | --- | --- | --- |
 | `PRD Approved` | Alune 分别以产品、数据/隐私、设计/可理解性和工程角色完成最终 readback，确认问题、范围、数据边界、计划 AC 和后续门禁；不要求尚未实现的 AC 证据 | 允许开始具体 ADR；不授权初始化框架、实现、部署或招募 | 已通过；`0.5.0 / 已批准`，`2026-08-21` |
-| `Implementation Authorized` | PRD 已批准；随后交付形态与技术栈、计算与规则、导出合同 ADR 均为 `Accepted`；再随后 OpenSpec proposal/tasks 获批且不扩大 PRD/ADR 范围 | 允许按批准任务初始化框架和实现原型；不授权实现研究存储/同意系统，也不授权向参与者分发 | 已通过；Alune 于 `2026-08-24` 批准 [`build-single-purchase-decision-workbench`](../../../openspec/changes/build-single-purchase-decision-workbench/proposal.md) 的完整规划制品并明确通过本门禁；实现进行中，当前 33/38 项完成 |
+| `Implementation Authorized` | PRD 已批准；随后交付形态与技术栈、计算与规则、导出合同 ADR 均为 `Accepted`；再随后 OpenSpec proposal/tasks 获批且不扩大 PRD/ADR 范围 | 允许按批准任务初始化框架和实现原型；不授权实现研究存储/同意系统，也不授权向参与者分发 | 已通过；Alune 于 `2026-08-24` 批准 [`build-single-purchase-decision-workbench`](../../../openspec/changes/build-single-purchase-decision-workbench/proposal.md) 的完整规划制品并明确通过本门禁；实现进行中，当前 35/38 项完成，3.9 跨引擎规则规范向量和 4.6 无障碍实现已形成自动/本机浏览器证据 |
 | `Prototype Accepted` | 实现完成；原型验收组 AC-01–AC-17 与 AC-20–AC-26 均有可审计证据；无未解决关键隐私/信任事件；回滚和关闭路径演练通过 | 允许冻结研究构建并准备研究协议操作材料；不等于研究协议批准或招募授权 | 未通过 |
 | `Recruitment Authorized` | 原型已验收；研究治理组 AC-18、AC-19 与 AC-27 通过；`RESEARCH-0001` 已为 `Accepted`；两类加密存储、同意/撤回、日志与删除演练通过；独立人类挑战完成；具体日历已写回协议与 Issue #1；Alune 完成最终 readback | 允许邀请受控参与者并执行两批形成性研究 | 未通过 |
 
@@ -561,4 +561,4 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 - [ ] 独立人类挑战者已完成复核，关键意见全部解决，其他意见已处置并记录。
 - [ ] 两批研究、门间评审、回访和 7 日内结论的具体日期已写入协议和 Issue #1。
 
-当前 `PRD Approved`、`ADR-0001`、`ADR-0002`、[`ADR-0003`](../../adr/ADR-0003-export-contract.md) 和 [`build-single-purchase-decision-workbench`](../../../openspec/changes/build-single-purchase-decision-workbench/proposal.md) 均已获批准，`Implementation Authorized` 已于 `2026-08-24` 通过。实现进行中，38 项任务已完成 33 项；仍缺跨浏览器规范向量、人工支持矩阵、固定设备性能和完整版本恢复证据。`Prototype Accepted` 与 `Recruitment Authorized` 仍未通过；不得向参与者分发、部署或招募。
+当前 `PRD Approved`、`ADR-0001`、`ADR-0002`、[`ADR-0003`](../../adr/ADR-0003-export-contract.md) 和 [`build-single-purchase-decision-workbench`](../../../openspec/changes/build-single-purchase-decision-workbench/proposal.md) 均已获批准，`Implementation Authorized` 已于 `2026-08-24` 通过。实现进行中，38 项任务已完成 35 项；3.9 跨引擎规则规范向量和 4.6 无障碍实现已完成，仍缺 6.3 人工支持矩阵、6.4 固定设备性能和 6.6 完整版本恢复证据。`Prototype Accepted` 与 `Recruitment Authorized` 仍未通过；不得向参与者分发、部署或招募。

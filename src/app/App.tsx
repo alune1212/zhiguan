@@ -5,6 +5,7 @@ import {
   type NumericEvidenceField,
   type WorkbenchApplicationState,
   type WorkbenchController,
+  type WorkbenchErrorKey,
   type WorkbenchFieldId,
   resultsForState,
   useWorkbenchController,
@@ -169,38 +170,76 @@ function valueOf(state: WorkbenchApplicationState, fieldId: string): string {
   return state.draft[fieldId] ?? "";
 }
 
+function inputError(state: WorkbenchApplicationState, fieldId: WorkbenchErrorKey): string | undefined {
+  return state.inputErrors[fieldId];
+}
+
+function describedBy(...ids: readonly (string | null | undefined)[]): string | undefined {
+  const value = ids.filter((id): id is string => Boolean(id)).join(" ");
+  return value.length > 0 ? value : undefined;
+}
+
+function FieldLabel({
+  htmlFor,
+  label,
+  required,
+}: {
+  readonly htmlFor: string;
+  readonly label: string;
+  readonly required: boolean;
+}) {
+  return (
+    <span className="field-label-row">
+      <label htmlFor={htmlFor}>{label}</label>
+      {required ? <em aria-hidden="true">必填</em> : <small aria-hidden="true">可选</small>}
+    </span>
+  );
+}
+
 function EvidenceSelect({
   fieldId,
   value,
   onChange,
   label,
+  error,
+  required,
 }: {
   readonly fieldId: NumericEvidenceField;
   readonly value: EvidenceChoice | "";
   readonly onChange: (value: EvidenceChoice | "") => void;
   readonly label: string;
+  readonly error?: string;
+  readonly required: boolean;
 }) {
+  const id = `${fieldId}-evidence`;
+  const errorId = `${id}-error`;
   return (
-    <label className="field evidence-field">
-      <span>{label}的状态</span>
+    <div className="field evidence-field">
+      <FieldLabel htmlFor={id} label={`${label}的状态`} required={required} />
       <select
-        aria-label={`${label}的状态`}
+        id={id}
+        name={id}
         data-field-id={fieldId}
+        data-error-key={id}
         value={value}
+        aria-required={required ? "true" : undefined}
+        aria-invalid={error ? "true" : undefined}
+        aria-describedby={error ? errorId : undefined}
         onChange={(event) => onChange(event.currentTarget.value as EvidenceChoice | "")}
       >
         <option value="">选择输入状态</option>
         <option value="user-confirmed">用户确认</option>
         <option value="estimated">近似输入</option>
       </select>
-    </label>
+      <FieldError id={errorId} error={error} />
+    </div>
   );
 }
 
 function FieldError({ error, id }: { readonly error?: string; readonly id: string }) {
   if (!error) return null;
   return (
-    <span className="field-error" id={id} role="alert">
+    <span className="field-error" id={id}>
       {error}
     </span>
   );
@@ -226,30 +265,33 @@ function TextField({
   readonly inputMode?: "decimal" | "text";
 }) {
   const errorId = `${id}-error`;
+  const hintId = hint ? `${id}-hint` : null;
   return (
-    <label className="field" htmlFor={id}>
-      <span>
-        {label}
-        {required ? <em>必填</em> : <small>可选</small>}
-      </span>
+    <div className="field">
+      <FieldLabel htmlFor={id} label={label} required={required} />
       <input
         id={id}
         name={id}
         type="text"
         value={value}
         inputMode={inputMode}
+        required={required}
+        data-error-key={id}
         aria-invalid={error ? "true" : undefined}
-        aria-describedby={error ? errorId : hint ? `${id}-hint` : undefined}
+        aria-describedby={describedBy(hintId, error ? errorId : null)}
         onChange={(event) => onChange(event.currentTarget.value)}
       />
-      {hint ? <span className="field-hint" id={`${id}-hint`}>{hint}</span> : null}
+      {hint ? <span className="field-hint" id={hintId ?? undefined}>{hint}</span> : null}
       <FieldError id={errorId} error={error} />
-    </label>
+    </div>
   );
 }
 
 function InputForm({ controller }: { readonly controller: WorkbenchController }) {
   const state = controller;
+  const errorKeys = Object.keys(state.inputErrors) as WorkbenchErrorKey[];
+  const hasFixedCost = valueOf(state, "fixed-cost-total").trim().length > 0;
+  const requiresCoverageDescription = valueOf(state, "fixed-cost-coverage") === "complete";
   return (
     <section className="section-block" aria-labelledby="input-title">
       <div className="section-heading">
@@ -260,15 +302,23 @@ function InputForm({ controller }: { readonly controller: WorkbenchController })
         <p className="section-summary">只填写完成这次判断需要的最少信息。所有输入都可以留在当前页面内存中。</p>
       </div>
 
+      {errorKeys.length > 0 ? (
+        <p className="field-error-summary" role="alert">
+          有 {errorKeys.length} 项需要检查。焦点已移到第一项；你也可以退出当前会话。
+        </p>
+      ) : null}
+
       <div className="form-grid">
-        <label className="field" htmlFor="comparison-period">
-          <span>比较周期<em>必填</em></span>
+        <div className="field">
+          <FieldLabel htmlFor="comparison-period" label="比较周期" required />
           <select
             id="comparison-period"
             name="comparison-period"
+            required
+            data-error-key="comparison-period"
             value={valueOf(state, "comparison-period")}
-            aria-invalid={state.inputErrors["comparison-period"] ? "true" : undefined}
-            aria-describedby={state.inputErrors["comparison-period"] ? "comparison-period-error" : undefined}
+            aria-invalid={inputError(state, "comparison-period") ? "true" : undefined}
+            aria-describedby={inputError(state, "comparison-period") ? "comparison-period-error" : undefined}
             onChange={(event) => state.setField("comparison-period", event.currentTarget.value)}
           >
             <option value="">选择周期</option>
@@ -277,8 +327,8 @@ function InputForm({ controller }: { readonly controller: WorkbenchController })
             <option value="year">年</option>
             <option value="custom">自定义周期</option>
           </select>
-          <FieldError id="comparison-period-error" error={state.inputErrors["comparison-period"]} />
-        </label>
+          <FieldError id="comparison-period-error" error={inputError(state, "comparison-period")} />
+        </div>
 
         {valueOf(state, "comparison-period") === "custom" ? (
           <TextField
@@ -287,6 +337,7 @@ function InputForm({ controller }: { readonly controller: WorkbenchController })
             value={valueOf(state, "period-custom-label")}
             required
             onChange={(value) => state.setField("period-custom-label", value)}
+            error={inputError(state, "period-custom-label")}
             hint="不需要填写精确起止日期。"
           />
         ) : null}
@@ -300,11 +351,13 @@ function InputForm({ controller }: { readonly controller: WorkbenchController })
           error={state.inputErrors.currency}
           hint="使用固定 ISO 4217 大写代码，例如 CNY。"
         />
-        <label className="field" htmlFor="income-tax-basis">
-          <span>收入口径<em>必填</em></span>
+        <div className="field">
+          <FieldLabel htmlFor="income-tax-basis" label="收入口径" required />
           <select
             id="income-tax-basis"
             name="income-tax-basis"
+            required
+            data-error-key="income-tax-basis"
             value={valueOf(state, "income-tax-basis")}
             aria-invalid={state.inputErrors["income-tax-basis"] ? "true" : undefined}
             aria-describedby={state.inputErrors["income-tax-basis"] ? "income-tax-basis-error" : undefined}
@@ -315,7 +368,7 @@ function InputForm({ controller }: { readonly controller: WorkbenchController })
             <option value="before-tax">税前</option>
           </select>
           <FieldError id="income-tax-basis-error" error={state.inputErrors["income-tax-basis"]} />
-        </label>
+        </div>
 
         <TextField
           id="income"
@@ -331,6 +384,8 @@ function InputForm({ controller }: { readonly controller: WorkbenchController })
           fieldId="income"
           label="同周期收入"
           value={state.evidence.income}
+          required
+          error={inputError(state, "income-evidence")}
           onChange={(value) => state.setEvidence("income", value)}
         />
 
@@ -348,6 +403,8 @@ function InputForm({ controller }: { readonly controller: WorkbenchController })
           fieldId="work-hours"
           label="同周期工作小时"
           value={state.evidence["work-hours"]}
+          required
+          error={inputError(state, "work-hours-evidence")}
           onChange={(value) => state.setEvidence("work-hours", value)}
         />
 
@@ -365,16 +422,19 @@ function InputForm({ controller }: { readonly controller: WorkbenchController })
           fieldId="purchase-price"
           label="购买价格"
           value={state.evidence["purchase-price"]}
+          required
+          error={inputError(state, "purchase-price-evidence")}
           onChange={(value) => state.setEvidence("purchase-price", value)}
         />
 
         <fieldset
           className="field fieldset-field"
+          id="purchase-period-inclusion-group"
           aria-invalid={state.inputErrors["purchase-period-inclusion"] ? "true" : undefined}
           aria-describedby={state.inputErrors["purchase-period-inclusion"] ? "purchase-period-inclusion-error" : undefined}
         >
-          <legend>是否计入所选周期<em>必填</em></legend>
-          <label className="choice-line"><input type="radio" name="purchase-period-inclusion" value="included" checked={valueOf(state, "purchase-period-inclusion") === "included"} onChange={(event) => state.setField("purchase-period-inclusion", event.currentTarget.value)} />计入</label>
+          <legend>是否计入所选周期<em aria-hidden="true">必填</em></legend>
+          <label className="choice-line"><input type="radio" name="purchase-period-inclusion" value="included" required data-error-key="purchase-period-inclusion" checked={valueOf(state, "purchase-period-inclusion") === "included"} onChange={(event) => state.setField("purchase-period-inclusion", event.currentTarget.value)} />计入</label>
           <label className="choice-line"><input type="radio" name="purchase-period-inclusion" value="excluded" checked={valueOf(state, "purchase-period-inclusion") === "excluded"} onChange={(event) => state.setField("purchase-period-inclusion", event.currentTarget.value)} />不计入</label>
           <FieldError id="purchase-period-inclusion-error" error={state.inputErrors["purchase-period-inclusion"]} />
         </fieldset>
@@ -392,13 +452,17 @@ function InputForm({ controller }: { readonly controller: WorkbenchController })
           fieldId="fixed-cost-total"
           label="固定成本汇总"
           value={state.evidence["fixed-cost-total"]}
+          required={hasFixedCost}
+          error={inputError(state, "fixed-cost-total-evidence")}
           onChange={(value) => state.setEvidence("fixed-cost-total", value)}
         />
 
-        <label className="field" htmlFor="fixed-cost-coverage">
-          <span>固定成本覆盖范围<small>可选</small></span>
+        <div className="field">
+          <FieldLabel htmlFor="fixed-cost-coverage" label="固定成本覆盖范围" required={hasFixedCost} />
           <select
             id="fixed-cost-coverage"
+            data-error-key="fixed-cost-coverage"
+            required={hasFixedCost}
             value={valueOf(state, "fixed-cost-coverage")}
             aria-invalid={state.inputErrors["fixed-cost-coverage"] ? "true" : undefined}
             aria-describedby={state.inputErrors["fixed-cost-coverage"] ? "fixed-cost-coverage-error" : undefined}
@@ -410,31 +474,34 @@ function InputForm({ controller }: { readonly controller: WorkbenchController })
             <option value="unknown">未知</option>
           </select>
           <FieldError id="fixed-cost-coverage-error" error={state.inputErrors["fixed-cost-coverage"]} />
-        </label>
+        </div>
         <TextField
           id="fixed-cost-coverage-description"
           label="覆盖范围说明"
           value={valueOf(state, "fixed-cost-coverage-description")}
+          required={requiresCoverageDescription}
           onChange={(value) => state.setField("fixed-cost-coverage-description", value)}
           error={state.inputErrors["fixed-cost-coverage-description"]}
           hint="例如：只包含已确认的固定支出总额。"
         />
       </div>
 
-      <label className="field field-wide" htmlFor="value-expectation">
-        <span>个人价值期待<em>必填</em></span>
+      <div className="field field-wide">
+        <FieldLabel htmlFor="value-expectation" label="个人价值期待" required />
         <textarea
           id="value-expectation"
           name="value-expectation"
           rows={3}
+          required
+          data-error-key="value-expectation"
           value={valueOf(state, "value-expectation")}
           aria-invalid={state.inputErrors["value-expectation"] ? "true" : undefined}
-          aria-describedby={state.inputErrors["value-expectation"] ? "value-expectation-error" : undefined}
+          aria-describedby={describedBy("value-expectation-hint", state.inputErrors["value-expectation"] ? "value-expectation-error" : null)}
           onChange={(event) => state.setField("value-expectation", event.currentTarget.value)}
         />
-        <span className="field-hint">写下你希望这项购买带来的结果；它不会被转换成分数或购买结论。</span>
+        <span className="field-hint" id="value-expectation-hint">写下你希望这项购买带来的结果；它不会被转换成分数或购买结论。</span>
         <FieldError id="value-expectation-error" error={state.inputErrors["value-expectation"]} />
-      </label>
+      </div>
 
       <div className="action-row">
         <button className="button button-primary" type="button" onClick={state.openConfirmation}>检查输入与口径</button>
@@ -583,16 +650,39 @@ function ExportFormatPanel({
   const state = controller[format];
   const label = EXPORT_FORMAT_LABELS[format];
   const errorId = `export-${format}-error`;
+  const statusRef = useRef<HTMLParagraphElement>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
+  const previousStateRef = useRef(state.state);
+  useEffect(() => {
+    const previousState = previousStateRef.current;
+    previousStateRef.current = state.state;
+    if (previousState === state.state) return;
+    if (state.state === "ready") {
+      confirmRef.current?.focus();
+      return;
+    }
+    if (state.state === "cancelled") {
+      statusRef.current?.focus();
+      return;
+    }
+    if (state.state === "download-requested") {
+      statusRef.current?.focus();
+    }
+  }, [state.state]);
   return (
-    <article className="export-format" aria-labelledby={`export-${format}-title`}>
+    <article
+      className="export-format"
+      aria-labelledby={`export-${format}-title`}
+      aria-describedby={state.error ? errorId : undefined}
+      aria-busy={state.state === "previewing" || state.state === "generating" ? "true" : undefined}
+    >
       <div className="export-format-heading">
         <div>
           <h4 id={`export-${format}-title`}>{label}</h4>
-          <p className="export-format-status" aria-live="polite">
+          <p className="export-format-status" role="status" aria-live="polite" ref={statusRef} tabIndex={-1}>
             {EXPORT_STATE_LABELS[state.state] ?? state.state}
           </p>
         </div>
-        <span className="status-chip">{state.state}</span>
       </div>
       {state.preview ? (
         <div className="export-preview" aria-live="polite">
@@ -605,7 +695,7 @@ function ExportFormatPanel({
           </dl>
           {state.state === "ready" ? (
             <div className="action-row">
-              <button className="button button-primary" type="button" onClick={() => controller.confirm(format)}>
+              <button className="button button-primary" type="button" ref={confirmRef} onClick={() => controller.confirm(format)}>
                 确认并发起 {label} 下载请求
               </button>
               <button className="button button-secondary" type="button" onClick={() => controller.cancel(format)}>
@@ -619,9 +709,9 @@ function ExportFormatPanel({
         <p className="inline-notice" role="status">页面已发起下载请求；浏览器或设备是否保存、最终名称和位置未知。</p>
       ) : null}
       {!state.preview && state.state === "cancelled" ? <p className="inline-notice" role="status">已取消本格式导出；当前会话保持不变。</p> : null}
-      {state.error ? <p className="field-error" id={errorId} role="alert">{state.error.message}</p> : null}
+      {state.error ? <p className="field-error" id={errorId}>{state.error.message}</p> : null}
       {controller.snapshot && !state.preview && !controller.paused ? (
-        <button className="button button-secondary" type="button" onClick={() => controller.preview(format)}>
+        <button id={`export-${format}-preview`} className="button button-secondary" type="button" onClick={() => controller.preview(format)}>
           预览 {label}
         </button>
       ) : null}
@@ -633,8 +723,22 @@ function ExportSection({ controller }: { readonly controller: ExportWorkbenchCon
   const canOpen = controller.canExport && !controller.snapshot && !controller.paused && !controller.cleanupBlocked;
   const hasSnapshot = controller.snapshot !== null && !controller.snapshotStale;
   const hasDownloadRequest = controller.json.state === "download-requested" || controller.markdown.state === "download-requested";
+  const sectionRef = useRef<HTMLElement>(null);
+  const failureRef = useRef<HTMLParagraphElement>(null);
+  const previousHasSnapshotRef = useRef(hasSnapshot);
+  const failureMessage = controller.pauseError?.message ?? controller.error?.message ?? null;
+  useEffect(() => {
+    const previouslyHadSnapshot = previousHasSnapshotRef.current;
+    previousHasSnapshotRef.current = hasSnapshot;
+    if (!previouslyHadSnapshot && hasSnapshot) {
+      sectionRef.current?.querySelector<HTMLButtonElement>("#export-json-preview")?.focus();
+    }
+  }, [hasSnapshot]);
+  useEffect(() => {
+    if (failureMessage) failureRef.current?.focus();
+  }, [failureMessage]);
   return (
-    <section className="export-workbench" aria-labelledby="export-title">
+    <section className="export-workbench" aria-labelledby="export-title" ref={sectionRef}>
       <div className="export-heading">
         <div>
           <p className="section-kicker">本地出口</p>
@@ -647,8 +751,8 @@ function ExportSection({ controller }: { readonly controller: ExportWorkbenchCon
       </p>
       {!controller.buildVerified ? <p className="inline-notice" role="status">未验证实现预览，不能导出。</p> : null}
       {controller.buildVerified && !controller.canExport ? <p className="inline-notice" role="status">暂无可导出内容；请先确认至少一项当前输入。</p> : null}
-      {controller.paused ? <p className="field-error" role="alert">{controller.pauseError?.message ?? "导出合同验证失败，当前构建已暂停。"}</p> : null}
-      {controller.error && !controller.pauseError ? <p className="field-error" role="alert">{controller.error.message}</p> : null}
+      {controller.paused ? <p className="field-error" role="alert" ref={failureRef} tabIndex={-1}>{controller.pauseError?.message ?? "导出合同验证失败，当前构建已暂停。"}</p> : null}
+      {controller.error && !controller.pauseError ? <p className="field-error" role="alert" ref={failureRef} tabIndex={-1}>{controller.error.message}</p> : null}
       <div className="action-row">
         <button className="button button-secondary" type="button" onClick={controller.open} disabled={!canOpen}>
           打开导出预览
@@ -709,16 +813,16 @@ function DecisionSection({ controller, exportController }: { readonly controller
       </div>
 
       <fieldset className="decision-options" aria-invalid={error ? "true" : undefined} aria-describedby={error ? "decision-error" : undefined}>
-        <legend>决定状态</legend>
+        <legend>决定状态<em aria-hidden="true">必填</em></legend>
         {DECISION_OPTIONS.map(({ code, label }) => (
-          <label className="decision-option" key={code}><input type="radio" name="decision" value={code} checked={selected === code} onChange={() => setSelected(code)} /><span>{label}</span></label>
+          <label className="decision-option" key={code}><input type="radio" name="decision" value={code} required checked={selected === code} onChange={() => setSelected(code)} /><span>{label}</span></label>
         ))}
       </fieldset>
-      <label className="field field-wide" htmlFor="decision-rationale">
-        <span>依据或尚待确认条件<em>必填</em></span>
-        <textarea id="decision-rationale" rows={3} value={rationale} onChange={(event) => { setRationale(event.currentTarget.value); setError(null); }} aria-invalid={error ? "true" : undefined} aria-describedby={error ? "decision-error" : undefined} />
-        <span className="field-hint">只记录你当时愿意保留的一句话，不会发送给研究者或其他服务。</span>
-      </label>
+      <div className="field field-wide">
+        <FieldLabel htmlFor="decision-rationale" label="依据或尚待确认条件" required />
+        <textarea id="decision-rationale" rows={3} required value={rationale} onChange={(event) => { setRationale(event.currentTarget.value); setError(null); }} aria-invalid={error ? "true" : undefined} aria-describedby={describedBy("decision-rationale-hint", error ? "decision-error" : null)} />
+        <span className="field-hint" id="decision-rationale-hint">只记录你当时愿意保留的一句话，不会发送给研究者或其他服务。</span>
+      </div>
       {error ? <p className="field-error" id="decision-error" role="alert">{error}</p> : null}
       <div className="action-row">
         <button className="button button-secondary" type="button" onClick={() => controller.dispatch({ type: "set-phase", phase: "understanding" })}>返回理解</button>
@@ -730,8 +834,8 @@ function DecisionSection({ controller, exportController }: { readonly controller
       <div className="review-panel" aria-labelledby="review-title">
         <div><h3 id="review-title">可选复盘条件</h3><p>如果你愿意，可以留下产品外人工复盘的条件或日期。这里不会保存、上传或自动提醒。</p></div>
         <div className="review-grid">
-          <label className="field" htmlFor="review-kind"><span>复盘方式<small>可选</small></span><select id="review-kind" value={state.reviewDraft.kind} aria-invalid={reviewError ? "true" : undefined} aria-describedby={reviewError ? "review-error" : undefined} onChange={(event) => { setReviewError(null); controller.dispatch({ type: "set-review-draft", kind: event.currentTarget.value as "" | "local-date" | "condition", value: state.reviewDraft.value }); }}><option value="">暂不设置</option><option value="local-date">日期</option><option value="condition">条件</option></select></label>
-          <label className="field" htmlFor="review-value"><span>{state.reviewDraft.kind === "local-date" ? "复盘日期" : "复盘条件"}<small>可选</small></span><input id="review-value" type={state.reviewDraft.kind === "local-date" ? "date" : "text"} value={state.reviewDraft.value} aria-invalid={reviewError ? "true" : undefined} aria-describedby={reviewError ? "review-error" : undefined} onChange={(event) => { setReviewError(null); controller.dispatch({ type: "set-review-draft", kind: state.reviewDraft.kind, value: event.currentTarget.value }); }} /></label>
+          <div className="field"><FieldLabel htmlFor="review-kind" label="复盘方式" required={false} /><select id="review-kind" value={state.reviewDraft.kind} aria-invalid={reviewError ? "true" : undefined} aria-describedby={reviewError ? "review-error" : undefined} onChange={(event) => { setReviewError(null); controller.dispatch({ type: "set-review-draft", kind: event.currentTarget.value as "" | "local-date" | "condition", value: state.reviewDraft.value }); }}><option value="">暂不设置</option><option value="local-date">日期</option><option value="condition">条件</option></select></div>
+          <div className="field"><FieldLabel htmlFor="review-value" label={state.reviewDraft.kind === "local-date" ? "复盘日期" : "复盘条件"} required={false} /><input id="review-value" type={state.reviewDraft.kind === "local-date" ? "date" : "text"} value={state.reviewDraft.value} aria-invalid={reviewError ? "true" : undefined} aria-describedby={reviewError ? "review-error" : undefined} onChange={(event) => { setReviewError(null); controller.dispatch({ type: "set-review-draft", kind: state.reviewDraft.kind, value: event.currentTarget.value }); }} /></div>
         </div>
         {reviewError ? <p className="field-error" id="review-error" role="alert">{reviewError}</p> : null}
         <button className="button button-secondary" type="button" onClick={saveReview}>记录复盘交接</button>
@@ -783,15 +887,39 @@ function Workbench({ controller, exportController }: { readonly controller: Work
   const state = controller;
   const stage = currentStage(state);
   const stageRegionRef = useRef<HTMLElement>(null);
+  const previousPhaseRef = useRef<string | null>(null);
+  const previousErrorCountRef = useRef(0);
+  const inputErrorKeys = Object.keys(state.inputErrors) as WorkbenchErrorKey[];
+  const firstInputErrorKey = inputErrorKeys[0] ?? null;
   useEffect(() => {
+    const previousPhase = previousPhaseRef.current;
+    const previousErrorCount = previousErrorCountRef.current;
+    const phaseChanged = previousPhase !== state.session.phase;
+    previousPhaseRef.current = state.session.phase;
+    previousErrorCountRef.current = inputErrorKeys.length;
+    if (
+      state.session.phase === "input" &&
+      firstInputErrorKey &&
+      (previousPhase !== "input" || previousErrorCount === 0)
+    ) {
+      const target = [...(stageRegionRef.current?.querySelectorAll<HTMLElement>("[data-error-key]") ?? [])]
+        .find((element) => element.dataset.errorKey === firstInputErrorKey);
+      target?.focus();
+      return;
+    }
+    if (!phaseChanged) return;
     const heading = stageRegionRef.current?.querySelector<HTMLElement>("[data-stage-heading]");
     heading?.focus();
-  }, [state.session.phase]);
+  }, [firstInputErrorKey, inputErrorKeys.length, state.session.phase]);
   return (
     <main className="app-shell" ref={stageRegionRef}>
       <header className="topbar">
         <div className="brand-lockup"><span className="brand-mark">值观</span><span className="brand-subtitle">购买决策工作台</span></div>
-        <nav aria-label="会话阶段"><ol className="stage-progress">{STAGE_LABELS.map((label, index) => <li className={index + 1 === stage ? "is-current" : index + 1 < stage ? "is-complete" : ""} key={label}><span aria-current={index + 1 === stage ? "step" : undefined}>{index + 1}</span><b>{label}</b></li>)}</ol></nav>
+        <nav aria-label="会话阶段"><ol className="stage-progress">{STAGE_LABELS.map((label, index) => {
+          const step = index + 1;
+          const status = step === stage ? "当前阶段" : step < stage ? "已完成" : "未开始";
+          return <li className={step === stage ? "is-current" : step < stage ? "is-complete" : ""} aria-current={step === stage ? "step" : undefined} aria-label={`${label}，${status}`} key={label}><span aria-hidden="true">{step}</span><b aria-hidden="true">{label}</b><span className="visually-hidden">，{status}</span></li>;
+        })}</ol></nav>
         <button className="exit-button" type="button" onClick={controller.exit}>退出当前会话</button>
       </header>
 
