@@ -8,7 +8,7 @@
 
 ## 当前状态
 
-项目目前处于产品定义与治理初始化阶段。仓库正在建立产品宪法、策略、路线图和数据原则，**目前没有可运行应用、运行时 API、数据库 Schema 或可安装的软件包**。因此现在没有安装或启动命令；后续实现必须先通过产品与架构决策文档。
+项目目前已有通过 `Prototype Accepted` 的本地研究原型；固定研究构建、验收证据与门禁边界见 [`PRD-0001`](docs/product/prd/PRD-0001-single-purchase-decision-workbench.md) 和 [`Prototype Accepted` 验收 readback](evidence/acceptance/prototype-acceptance-readback-2026-08-28.md)。仓库仍没有运行时 API、数据库 Schema、可安装软件包或正式产品发布；研究协议仍为 `Draft`，`Recruitment Authorized=false`。本地开发命令见 [`package.json`](package.json)，交付边界见 [`ADR-0001`](docs/adr/ADR-0001-delivery-form-and-technology-stack.md)。
 
 当前目标用户、功能顺序和实现方式都是可验证假设，不代表已经完成用户验证。
 
@@ -51,7 +51,7 @@ Capture → Normalize → Understand → Simulate → Decide → Review → Lear
 
 ## 仓库边界
 
-当前仓库只承载产品决策和治理材料，不承载真实收入、资产、订阅或其他个人敏感样例数据。新增能力必须说明它服务的用户任务、处于价值循环的哪一环、使用哪类数据、如何解释结果，以及会增加多少长期输入负担。
+当前仓库承载产品决策、治理材料、研究原型源码、自动测试和纯合成证据；不承载真实收入、资产、订阅、参与者记录或其他个人敏感样例数据。新增能力必须说明它服务的用户任务、处于价值循环的哪一环、使用哪类数据、如何解释结果，以及会增加多少长期输入负担。
 
 文档优先级固定为：
 

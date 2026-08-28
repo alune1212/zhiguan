@@ -4,7 +4,7 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 状态 | 治理基线；研究原型的三项 ADR 均为 `Accepted`；[`build-single-purchase-decision-workbench`](openspec/changes/archive/2026-08-28-build-single-purchase-decision-workbench/proposal.md) 已完成 38/38 项并于 `2026-08-28` 归档，`Implementation Authorized` 已通过；不代表 `Prototype Accepted`、`Recruitment Authorized` 或参与者分发获准 |
+| 状态 | 治理基线；研究原型的三项 ADR 均为 `Accepted`；[`build-single-purchase-decision-workbench`](openspec/changes/archive/2026-08-28-build-single-purchase-decision-workbench/proposal.md) 已完成 38/38 项并于 `2026-08-28` 归档，`Implementation Authorized` 与 `Prototype Accepted` 均已通过；研究协议仍为 `Draft`，不代表 `Recruitment Authorized` 或参与者分发获准 |
 | 版本 | 0.1.0 |
 | 生效日期 | 2026-08-20 |
 | 负责人 | Alune |
@@ -164,7 +164,7 @@
 - 日志、分析、监控、错误上报和个人数据脱敏；
 - 任何会破坏历史可重现性、迁移能力或用户控制权的变更。
 
-ADR 至少需要说明：背景与决策驱动因素、候选方案、选择及理由、对产品与数据信任的影响、兼容/迁移/回滚、验证证据和后续复审条件。ADR 的工作流与模板见 [`docs/adr/README.md`](docs/adr/README.md) 和 [`docs/adr/template.md`](docs/adr/template.md)。当前已批准 [`ADR-0001`](docs/adr/ADR-0001-delivery-form-and-technology-stack.md) 的研究原型交付形态与技术栈、[`ADR-0002`](docs/adr/ADR-0002-calculation-and-rules.md) 的计算与规则合同，以及 [`ADR-0003`](docs/adr/ADR-0003-export-contract.md) 的导出合同。[`build-single-purchase-decision-workbench`](openspec/changes/archive/2026-08-28-build-single-purchase-decision-workbench/proposal.md) 的 proposal、specs、design 与 38 项 tasks 已完成并于 `2026-08-28` 归档；运行证据仍须由独立的 `Prototype Accepted` 门禁验收。
+ADR 至少需要说明：背景与决策驱动因素、候选方案、选择及理由、对产品与数据信任的影响、兼容/迁移/回滚、验证证据和后续复审条件。ADR 的工作流与模板见 [`docs/adr/README.md`](docs/adr/README.md) 和 [`docs/adr/template.md`](docs/adr/template.md)。当前已批准 [`ADR-0001`](docs/adr/ADR-0001-delivery-form-and-technology-stack.md) 的研究原型交付形态与技术栈、[`ADR-0002`](docs/adr/ADR-0002-calculation-and-rules.md) 的计算与规则合同，以及 [`ADR-0003`](docs/adr/ADR-0003-export-contract.md) 的导出合同。[`build-single-purchase-decision-workbench`](openspec/changes/archive/2026-08-28-build-single-purchase-decision-workbench/proposal.md) 的 proposal、specs、design 与 38 项 tasks 已完成并于 `2026-08-28` 归档；运行证据已由 [`Prototype Accepted` 验收](evidence/acceptance/prototype-acceptance-readback-2026-08-28.md)闭环并获 Alune 批准，后续研究治理与招募仍受独立门禁约束。
 
 ## 6. 架构变更检查表
 

@@ -1,10 +1,10 @@
-# Prototype Accepted 候选验收 readback
+# Prototype Accepted 验收 readback
 
-状态：`验收证据闭环，待 Alune 明确批准 Prototype Accepted`。本记录不批准研究协议、不授权招募或参与者分发。
+状态：`Alune 于 2026-08-28 明确批准 Prototype Accepted`。本记录不批准研究协议、不授权招募或参与者分发。
 
 日期：`2026-08-28`（Asia/Shanghai）
 
-## 固定候选
+## 固定研究构建
 
 | 项目 | 固定值 |
 | --- | --- |
@@ -81,4 +81,6 @@
 
 AC-01–AC-17、AC-20–AC-26 及 VAL-04、VAL-05、VAL-11 的缺口已由本记录与既有目标设备人工矩阵、性能、规则、无障碍和供应链证据闭合；未发现 P1/P2 阻塞或未解决关键隐私/信任事件。
 
-`Prototype Accepted` 仍保持 `false`，只等待 Alune 在查看本 readback 和 diff 后明确批准。研究协议仍为 `Draft`，`Recruitment Authorized=false`；不得招募、向参与者分发或公开发布。
+Alune 已在查看本 readback 和 diff 后于 `2026-08-28` 明确批准 `Prototype Accepted`。固定研究构建为 `0e1e38c2906b5aab0fa7c64add9d6c8e6dd7fc79`，artifact manifest SHA-256 为 `33ad07978340129e5bf5f7326452d5e48db552db138fd602d5a32e559dcc4700`。
+
+研究协议仍为 `Draft`，`Recruitment Authorized=false`；不得招募、向参与者分发或公开发布。

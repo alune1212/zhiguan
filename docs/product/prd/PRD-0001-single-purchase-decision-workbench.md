@@ -26,13 +26,13 @@
 - 除金额外，自己希望这项购买带来什么；
 - 当时为什么购买、等待、调整、不购买或暂不决定，之后如何复盘。
 
-上述问题来自 [`PRODUCT_STRATEGY.md`](../../../PRODUCT_STRATEGY.md) 和 [`ROADMAP.md`](../../../ROADMAP.md) 的阶段假设，不是已经证实的用户需求。仓库当前没有真实用户研究、运行时产品数据或可运行应用，证据状态为 `insufficient-data`。
+上述问题来自 [`PRODUCT_STRATEGY.md`](../../../PRODUCT_STRATEGY.md) 和 [`ROADMAP.md`](../../../ROADMAP.md) 的阶段假设，不是已经证实的用户需求。仓库已有通过 `Prototype Accepted` 的可运行研究原型，但仍没有真实用户研究或运行时产品数据；用户需求证据状态继续为 `insufficient-data`。
 
 ### 1.2 为什么现在做
 
 [`PRODUCT_STRATEGY.md`](../../../PRODUCT_STRATEGY.md) 将“收入与工作时间 → 个人口径与收入速率 → 固定成本与可用余量 → 单一购买情景 → 决定 → 复盘”定义为优先验证的最短个人价值闭环；[`ROADMAP.md`](../../../ROADMAP.md) 的 Now 阶段要求用少量输入验证这条闭环，而不是先做完整记账、目标系统、订阅、同步或 AI。
 
-当前治理基线、数据状态、指标定义和架构约束已经建立；本 `PRD-0001`、[`ADR-0001`](../../adr/ADR-0001-delivery-form-and-technology-stack.md)、[`ADR-0002`](../../adr/ADR-0002-calculation-and-rules.md)、[`ADR-0003`](../../adr/ADR-0003-export-contract.md) 与 [`build-single-purchase-decision-workbench`](../../../openspec/changes/archive/2026-08-28-build-single-purchase-decision-workbench/proposal.md) 的 proposal、specs、design 和 tasks 均已批准。`Implementation Authorized` 已于 `2026-08-24` 通过，当前实现已按批准任务完成 38/38 项并归档；OpenSpec 3.9 跨引擎规则规范向量、4.6 无障碍实现、[6.3 人工支持矩阵](../../../evidence/browser/manual-support-matrix-2026-08-28.md)、[6.4 固定实验室性能](../../../evidence/browser/max-session-performance-readback-2026-08-28.md) 和 [6.6 完整交付单元回滚](../../../evidence/rollback/whole-unit-rollback-readback-2026-08-27.md) 均已形成证据。OpenSpec 完成不等于 `Prototype Accepted`；该门禁仍未通过。
+当前治理基线、数据状态、指标定义和架构约束已经建立；本 `PRD-0001`、[`ADR-0001`](../../adr/ADR-0001-delivery-form-and-technology-stack.md)、[`ADR-0002`](../../adr/ADR-0002-calculation-and-rules.md)、[`ADR-0003`](../../adr/ADR-0003-export-contract.md) 与 [`build-single-purchase-decision-workbench`](../../../openspec/changes/archive/2026-08-28-build-single-purchase-decision-workbench/proposal.md) 的 proposal、specs、design 和 tasks 均已批准。`Implementation Authorized` 已于 `2026-08-24` 通过，当前实现已按批准任务完成 38/38 项并归档；OpenSpec 3.9 跨引擎规则规范向量、4.6 无障碍实现、[6.3 人工支持矩阵](../../../evidence/browser/manual-support-matrix-2026-08-28.md)、[6.4 固定实验室性能](../../../evidence/browser/max-session-performance-readback-2026-08-28.md) 和 [6.6 完整交付单元回滚](../../../evidence/rollback/whole-unit-rollback-readback-2026-08-27.md) 均已形成证据。Alune 已于 `2026-08-28` 明确批准 `Prototype Accepted`；研究协议仍为 `Draft`，`Recruitment Authorized=false`。
 
 ### 1.3 成功的用户结果
 
@@ -294,12 +294,12 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 #### 5.1.1 本地导出合同
 
 - **触发与范围**：至少存在一项已提交到当前稳定会话状态的用户输入时开放导出入口；该输入可保持 `user-confirmed` 或 `estimated`，只有未确认草稿、默认值或旧结果不计入。只在用户明确选择格式并再次确认后生成；允许分别下载 JSON 与 Markdown，也允许取消。导出包含当前会话的当前快照，不虚构未保留的修订历史，不导出产品外研究同意、研究编号、联系人或脱敏观察。
-- **机器可读 JSON**：至少自描述 `schema_name`、`schema_version`、导出生成时点及时区、原型构建版本、规则版本、快照范围、状态字典和字段字典；每个 schema 字段显式出现，未填写值使用 `null` 与独立的“未提供”可用性说明，不能省略后被误读为零；每项当前输入与结果保留值、来源、数据状态、单位、币种、比较周期、税前/税后口径、确认/生成时点、依赖输入、公式或规则、假设、限制和 `insufficient-data` 原因；包含价值期待、决定、决定依据、复盘条件及本次会话已确认的修订事件。字段结构、UTF-8 编码、MIME、文件名和版本兼容已由 `Accepted` 的 [`ADR-0003`](../../adr/ADR-0003-export-contract.md) 固定；运行时证据仍属于后续原型验收。
+- **机器可读 JSON**：至少自描述 `schema_name`、`schema_version`、导出生成时点及时区、原型构建版本、规则版本、快照范围、状态字典和字段字典；每个 schema 字段显式出现，未填写值使用 `null` 与独立的“未提供”可用性说明，不能省略后被误读为零；每项当前输入与结果保留值、来源、数据状态、单位、币种、比较周期、税前/税后口径、确认/生成时点、依赖输入、公式或规则、假设、限制和 `insufficient-data` 原因；包含价值期待、决定、决定依据、复盘条件及本次会话已确认的修订事件。字段结构、UTF-8 编码、MIME、文件名和版本兼容已由 `Accepted` 的 [`ADR-0003`](../../adr/ADR-0003-export-contract.md) 固定；运行时证据已由 [`Prototype Accepted` 验收 readback](../../../evidence/acceptance/prototype-acceptance-readback-2026-08-28.md)闭环。
 - **用户可读 Markdown**：与 JSON 覆盖同一语义范围，以可读标题、状态/字段说明和表格展示当前输入、结果、来源、状态、单位、比较周期、公式/规则、版本、假设、限制、不足原因、本次会话修订摘要、价值期待、决定及复盘条件；不得为了简洁省略 `estimated`、`forecast` 或 `insufficient-data`。
 - **历史声明**：两种文件都明确这是“当前会话当前快照”，`history_scope` 仅覆盖本次会话已确认的修订，不包含过去会话、未确认按键过程或实际执行结果。修订事件至少记录字段、前后值与状态、确认时点、触发者和依赖结果失效；JSON 与 Markdown 中同一字段、状态和修订语义必须一致。
 - **离线自包含**：两种文件使用 UTF-8，必须在断网时独立可读，不依赖运行中的原型、外部 schema/URL、远程字体、脚本、图片或只有内部系统才能解释的 ID。文件名不得包含收入、购买内容、价值期待、决定依据或其他自由文本。
 - **敏感性与用户控制**：确认界面列出将导出的敏感类别，并说明下载后文件进入用户设备，原型无法撤回、删除或控制其后续分享。导出不是公开分享、研究提交、备份保证或跨会话恢复。
-- **本地与失败边界**：内容在当前浏览器内存中生成，不发送网络请求，不写 Cookie、Web Storage、IndexedDB、Cache Storage、URL、剪贴板、服务端、普通日志或分析事件。导出请求/取消/失败/成功是交互状态，不得复用五类财务证据状态。取消不生成文件；两种格式分别报告结果，任一生成或下载失败都不得笼统显示“导出完成”，也不得清除会话或通过网络兜底；重试只能由用户再次触发。临时对象、下载 URL、非敏感错误码和资源限额已由 `Accepted` 的 [`ADR-0003`](../../adr/ADR-0003-export-contract.md) 固定；运行时证据仍属于后续原型验收。
+- **本地与失败边界**：内容在当前浏览器内存中生成，不发送网络请求，不写 Cookie、Web Storage、IndexedDB、Cache Storage、URL、剪贴板、服务端、普通日志或分析事件。导出请求/取消/失败/成功是交互状态，不得复用五类财务证据状态。取消不生成文件；两种格式分别报告结果，任一生成或下载失败都不得笼统显示“导出完成”，也不得清除会话或通过网络兜底；重试只能由用户再次触发。临时对象、下载 URL、非敏感错误码和资源限额已由 `Accepted` 的 [`ADR-0003`](../../adr/ADR-0003-export-contract.md) 固定；运行时证据已由 [`Prototype Accepted` 验收 readback](../../../evidence/acceptance/prototype-acceptance-readback-2026-08-28.md)闭环。
 
 ### 5.2 数据状态与状态转换
 
@@ -334,7 +334,7 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 
 ### 5.3 计算与解释
 
-以下为产品语义与概念公式；具体数值合同已由 [ADR-0002](../../adr/ADR-0002-calculation-and-rules.md) 固定。实际实现与运行证据仍须按该 ADR 第 9.2 节验收，本节不把计划写成已通过。
+以下为产品语义与概念公式；具体数值合同已由 [ADR-0002](../../adr/ADR-0002-calculation-and-rules.md) 固定，实际实现与运行证据已由 [`Prototype Accepted` 验收 readback](../../../evidence/acceptance/prototype-acceptance-readback-2026-08-28.md)闭环。本节继续作为规范合同，不单独替代验收证据。
 
 | 结果 | 输入 | 口径/规则版本 | 状态 | 用户可见解释 | 数据不足时 |
 | --- | --- | --- | --- | --- | --- |
@@ -352,7 +352,7 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 - 规则版本、生成时点、假设、限制和不足原因；
 - 返回修改、重新确认和重算入口。
 
-第 7 节概念样例与 [ADR-0002](../../adr/ADR-0002-calculation-and-rules.md) 共同形成已批准的计算合同；实现必须同时满足精确公式、输入限额、展示舍入、时间上下文和 `purchase-decision-rules@1.0.0`。在第 9.2 节运行证据完成前，相关验收仍只能保持“计划”，不能判定通过。
+第 7 节概念样例与 [ADR-0002](../../adr/ADR-0002-calculation-and-rules.md) 共同形成已批准的计算合同；实现必须同时满足精确公式、输入限额、展示舍入、时间上下文和 `purchase-decision-rules@1.0.0`。上述合同的运行证据已在 `Prototype Accepted` 验收中通过，后续变更仍须重新验证。
 
 ### 5.4 隐私与安全影响
 
@@ -421,7 +421,7 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 
 ### 7.1 验收标准
 
-以下均为**计划验收**，不是当前已通过证据。AC-01–AC-17 与 AC-20–AC-26 是 `Prototype Accepted` 的原型验收组；它们在三项 ADR、OpenSpec、合成 fixture、目标浏览器/VoiceOver 和性能配置就绪前不得标记通过。AC-18、AC-19 与 AC-27 是 `Recruitment Authorized` 的产品外研究治理组，不属于实现范围，也不阻塞 `Prototype Accepted`；它们只能在原型验收后，依据研究协议候选、合成研究记录、操作演练和独立挑战证据完成。该分组避免用尚未获准的招募工作反向阻塞原型验收。
+以下表格定义验收标准，不单独构成通过证据。AC-01–AC-17 与 AC-20–AC-26 是 `Prototype Accepted` 的原型验收组，已由 [`AC / VAL 矩阵`](../../../evidence/acceptance/ac-val-matrix.md)和 [`Prototype Accepted` 验收 readback](../../../evidence/acceptance/prototype-acceptance-readback-2026-08-28.md)闭环。AC-18、AC-19 与 AC-27 是 `Recruitment Authorized` 的产品外研究治理组，不属于实现范围，也不阻塞 `Prototype Accepted`；它们仍须依据研究协议候选、合成研究记录、操作演练和独立挑战证据完成。该分组避免用尚未获准的招募工作反向阻塞原型验收。
 
 | 编号 | 场景/前置条件 | 操作 | 预期结果 | 证据 |
 | --- | --- | --- | --- | --- |
@@ -455,7 +455,7 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 
 ### 7.2 合成计算样例
 
-下列 fixture 锁定输入依赖、精确数学值和状态传播；[ADR-0002](../../adr/ADR-0002-calculation-and-rules.md) 已固定展示精度、`half-away-from-zero` 舍入、小时主单位和货币最小单位。本地分组与小数符号只属于展示，不得改变规范十进制值；这些仍是计划验收，不是运行证据。
+下列 fixture 锁定输入依赖、精确数学值和状态传播；[ADR-0002](../../adr/ADR-0002-calculation-and-rules.md) 已固定展示精度、`half-away-from-zero` 舍入、小时主单位和货币最小单位。本地分组与小数符号只属于展示，不得改变规范十进制值；fixture 本身是规范基线，实际运行证据见 [`Prototype Accepted` 验收 readback](../../../evidence/acceptance/prototype-acceptance-readback-2026-08-28.md)。
 
 | Fixture | 输入 | 预期数学结果与状态 |
 | --- | --- | --- |
@@ -487,7 +487,7 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 | --- | --- | --- | --- |
 | `PRD Approved` | Alune 分别以产品、数据/隐私、设计/可理解性和工程角色完成最终 readback，确认问题、范围、数据边界、计划 AC 和后续门禁；不要求尚未实现的 AC 证据 | 允许开始具体 ADR；不授权初始化框架、实现、部署或招募 | 已通过；`0.5.0 / 已批准`，`2026-08-21` |
 | `Implementation Authorized` | PRD 已批准；随后交付形态与技术栈、计算与规则、导出合同 ADR 均为 `Accepted`；再随后 OpenSpec proposal/tasks 获批且不扩大 PRD/ADR 范围 | 允许按批准任务初始化框架和实现原型；不授权实现研究存储/同意系统，也不授权向参与者分发 | 已通过；Alune 于 `2026-08-24` 批准 [`build-single-purchase-decision-workbench`](../../../openspec/changes/archive/2026-08-28-build-single-purchase-decision-workbench/proposal.md) 的完整规划制品并明确通过本门禁；38/38 项实现清单与对应证据已完成并于 `2026-08-28` 归档；不等于 `Prototype Accepted` |
-| `Prototype Accepted` | 实现完成；原型验收组 AC-01–AC-17 与 AC-20–AC-26 均有可审计证据；无未解决关键隐私/信任事件；回滚和关闭路径演练通过 | 允许冻结研究构建并准备研究协议操作材料；不等于研究协议批准或招募授权 | 证据齐备，待 Alune 明确批准；当前仍未通过 |
+| `Prototype Accepted` | 实现完成；原型验收组 AC-01–AC-17 与 AC-20–AC-26 均有可审计证据；无未解决关键隐私/信任事件；回滚和关闭路径演练通过 | 允许冻结研究构建并准备研究协议操作材料；不等于研究协议批准或招募授权 | 已通过；Alune 于 `2026-08-28` 明确批准，固定研究构建为 `0e1e38c2906b5aab0fa7c64add9d6c8e6dd7fc79`，artifact manifest SHA-256 为 `33ad07978340129e5bf5f7326452d5e48db552db138fd602d5a32e559dcc4700` |
 | `Recruitment Authorized` | 原型已验收；研究治理组 AC-18、AC-19 与 AC-27 通过；`RESEARCH-0001` 已为 `Accepted`；两类加密存储、同意/撤回、日志与删除演练通过；独立人类挑战完成；具体日历已写回协议与 Issue #1；Alune 完成最终 readback | 允许邀请受控参与者并执行两批形成性研究 | 未通过 |
 
 - 只有 `Recruitment Authorized` 后，才能向已完成正式研究同意和脱敏观察授权的受控参与者提供研究原型；不作为正式产品公开发布或宣传，邀请中必须提供研究联系、退出和事件报告路径。
@@ -526,9 +526,9 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 | --- | --- | --- | --- | --- | --- |
 | 临时内存中的核心数据是否仍受 `PRODUCT.md` / `ARCHITECTURE.md` 的用户主动导出契约约束 | 产品范围已确定 | Alune | `2026-08-21` | RFC：否；纳入一次性本地 JSON/Markdown 导出 | 已解决 |
 | PRD 批准、实现授权、原型验收和招募授权是否分开 | 消除批准必须等待实现证据的循环 | Alune | `2026-08-21` | RFC/ADR：否 | 已解决；采用第 8.1 节四道门禁 |
-| JSON schema、Markdown 结构、字段映射、缺失值、本次会话修订事件、UTF-8/MIME、文件命名、版本兼容、自包含、生成限额、部分失败、临时对象撤销和浏览器下载行为 | 阻塞导出实现与 AC-22/AC-23 | Alune（正式产品/工程/数据评审） | PRD 批准后、编写导出代码前 | ADR：是；RFC：否 | 已解决；[`ADR-0003`](../../adr/ADR-0003-export-contract.md) 已为 `Accepted`；运行证据仍属于后续原型验收 |
-| 受控静态托管/本地降级、前端技术栈、构建/测试、依赖供应链、访问控制、日志配置、静态资源与关闭方式 | 阻塞 `Implementation Authorized` | Alune（正式产品/工程/隐私评审） | PRD 批准后、初始化框架前 | ADR：是；RFC：否 | 已解决；[`ADR-0001`](../../adr/ADR-0001-delivery-form-and-technology-stack.md) 已为 `Accepted`；运行证据仍属于后续原型验收 |
-| 比较周期表示、时区来源与确认、时间单位、ISO 4217 表示、数值精度、舍入、限额、规则版本和状态传播实现 | 阻塞 `Implementation Authorized` | Alune（正式产品/工程/数据评审） | PRD 批准后、编写计算代码前 | ADR：是；RFC：否 | 已解决；[`ADR-0002`](../../adr/ADR-0002-calculation-and-rules.md) 已为 `Accepted`；运行证据仍属于后续原型验收 |
+| JSON schema、Markdown 结构、字段映射、缺失值、本次会话修订事件、UTF-8/MIME、文件命名、版本兼容、自包含、生成限额、部分失败、临时对象撤销和浏览器下载行为 | 阻塞导出实现与 AC-22/AC-23 | Alune（正式产品/工程/数据评审） | PRD 批准后、编写导出代码前 | ADR：是；RFC：否 | 已解决；[`ADR-0003`](../../adr/ADR-0003-export-contract.md) 已为 `Accepted`，运行证据已通过 `Prototype Accepted` 验收 |
+| 受控静态托管/本地降级、前端技术栈、构建/测试、依赖供应链、访问控制、日志配置、静态资源与关闭方式 | 阻塞 `Implementation Authorized` | Alune（正式产品/工程/隐私评审） | PRD 批准后、初始化框架前 | ADR：是；RFC：否 | 已解决；[`ADR-0001`](../../adr/ADR-0001-delivery-form-and-technology-stack.md) 已为 `Accepted`，运行证据已通过 `Prototype Accepted` 验收 |
+| 比较周期表示、时区来源与确认、时间单位、ISO 4217 表示、数值精度、舍入、限额、规则版本和状态传播实现 | 阻塞 `Implementation Authorized` | Alune（正式产品/工程/数据评审） | PRD 批准后、编写计算代码前 | ADR：是；RFC：否 | 已解决；[`ADR-0002`](../../adr/ADR-0002-calculation-and-rules.md) 已为 `Accepted`，运行证据已通过 `Prototype Accepted` 验收 |
 | `RESEARCH-0001` 的加密存储工具、同意材料、联系路径、删除 readback 和无默认备份证明 | 阻塞 `Recruitment Authorized` | Alune | 招募授权前 | 当前不需要 RFC；若引入外部系统则判断 ADR/隐私影响 | 未解决；产品规则已确定 |
 | 招募前独立人类隐私/安全挑战者的姓名、范围、意见和处置记录 | 阻塞 `Recruitment Authorized` | Alune / 挑战者待指定 | 招募授权前 | RFC/ADR：否 | 未解决 |
 | 两批招募、会话和人工回访的具体日历 | 阻塞招募与实验到期 | Alune | 招募开始前写回 Issue #1 | RFC/ADR：否 | 未解决 |
@@ -552,10 +552,10 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 ### 10.2 `Prototype Accepted`
 
 - [x] 三项具体 ADR 均为 `Accepted`，OpenSpec proposal/tasks 已批准并链接；`2026-08-24` 完成。
-- [x] 原型验收组 AC-01–AC-17 与 AC-20–AC-26 的全部证据已链接；见 [`AC / VAL 矩阵`](../../../evidence/acceptance/ac-val-matrix.md) 与 [`Prototype Accepted 候选 readback`](../../../evidence/acceptance/prototype-acceptance-readback-2026-08-28.md)。
-- [x] 本轮关键隐私/信任事件为 `0`，当前候选的回滚、关闭和恢复演练通过；见 [`Prototype Accepted 候选 readback`](../../../evidence/acceptance/prototype-acceptance-readback-2026-08-28.md)。
+- [x] 原型验收组 AC-01–AC-17 与 AC-20–AC-26 的全部证据已链接；见 [`AC / VAL 矩阵`](../../../evidence/acceptance/ac-val-matrix.md) 与 [`Prototype Accepted 验收 readback`](../../../evidence/acceptance/prototype-acceptance-readback-2026-08-28.md)。
+- [x] 本轮关键隐私/信任事件为 `0`，固定研究构建的回滚、关闭和恢复演练通过；见 [`Prototype Accepted 验收 readback`](../../../evidence/acceptance/prototype-acceptance-readback-2026-08-28.md)。
 
-以上三项证据条件已经完成，但复选框本身不替代门禁决议。`Prototype Accepted` 仍保持未通过，等待 Alune 在查看 readback 与 diff 后明确批准。
+以上三项证据条件已经完成。Alune 已在查看 readback 与 diff 后于 `2026-08-28` 明确批准 `Prototype Accepted`，固定研究构建为 `0e1e38c2906b5aab0fa7c64add9d6c8e6dd7fc79`，artifact manifest SHA-256 为 `33ad07978340129e5bf5f7326452d5e48db552db138fd602d5a32e559dcc4700`。本决议不批准 `RESEARCH-0001`，也不授权招募或参与者分发。
 
 ### 10.3 `Recruitment Authorized`
 
@@ -563,4 +563,4 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 - [ ] 独立人类挑战者已完成复核，关键意见全部解决，其他意见已处置并记录。
 - [ ] 两批研究、门间评审、回访和 7 日内结论的具体日期已写入协议和 Issue #1。
 
-当前 `PRD Approved`、`ADR-0001`、`ADR-0002`、[`ADR-0003`](../../adr/ADR-0003-export-contract.md) 和 [`build-single-purchase-decision-workbench`](../../../openspec/changes/archive/2026-08-28-build-single-purchase-decision-workbench/proposal.md) 均已获批准，`Implementation Authorized` 已于 `2026-08-24` 通过。38/38 项实现任务及其规则、无障碍实现、人工支持矩阵、固定实验室性能、双格式离线内容核对和当前候选整体回滚证据均已完成，四项 delta spec 已同步到主规格，OpenSpec 已于 `2026-08-28` 归档。`Prototype Accepted` 的证据条件已齐备，但仍等待 Alune 明确批准；`Recruitment Authorized` 仍未通过。不得向参与者分发、部署或招募。
+当前 `PRD Approved`、`ADR-0001`、`ADR-0002`、[`ADR-0003`](../../adr/ADR-0003-export-contract.md) 和 [`build-single-purchase-decision-workbench`](../../../openspec/changes/archive/2026-08-28-build-single-purchase-decision-workbench/proposal.md) 均已获批准，`Implementation Authorized` 已于 `2026-08-24` 通过，`Prototype Accepted` 已于 `2026-08-28` 通过。38/38 项实现任务及其规则、无障碍实现、人工支持矩阵、固定实验室性能、双格式离线内容核对和固定研究构建整体回滚证据均已完成，四项 delta spec 已同步到主规格，OpenSpec 已于 `2026-08-28` 归档。`RESEARCH-0001` 仍为 `Draft`，`Recruitment Authorized` 仍未通过；不得向参与者分发、部署或招募。
