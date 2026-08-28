@@ -1,6 +1,6 @@
 # 合成 fixture / evidence 基线
 
-状态：`待实施`。本目录记录 OpenSpec `build-single-purchase-decision-workbench` 的 task 1.3 声明式证据基线；它不是 `Prototype Accepted`、研究授权或运行时验收结论。
+状态：`已实施并自动验证`。本目录记录已归档 OpenSpec `build-single-purchase-decision-workbench` 的 task 1.3 声明式证据基线；它不是 `Prototype Accepted`、研究授权或运行时验收结论。
 
 唯一测试数据入口是 [`tests/fixtures/synthetic/manifest.json`](../../tests/fixtures/synthetic/manifest.json)。每个会话 fixture 都有稳定的 `fixture_id`、非敏感 `evidence_label`、输入/边界描述、五项结果（可用时含精确值与展示值，不可用时为 `null`）、`evidence_status`、`primary_reason_code`、去重后的 `reason_codes` 以及 JSON/Markdown 导出语义；舍入 tie 与 129 位 rational 上限另作为 utility-only fixture，不伪装成五项财务结果、purchase-impact 或导出快照。
 

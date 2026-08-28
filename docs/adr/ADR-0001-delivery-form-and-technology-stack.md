@@ -342,11 +342,11 @@
 
 ## 10. 实施与后续
 
-- 实现 PR/提交：未开始；本 ADR 已为 `Accepted`，但不单独授权实现。
-- 配置/文档/培训：未开始；必须等待其余两项必需 ADR 均为 `Accepted`，且 OpenSpec proposal/tasks 获批后定义；本 ADR 中不创建。
-- 迁移演练记录：无；当前没有应用或产品数据。停止/回滚演练属于后续实现验证。
+- 实现 PR/提交：已按 [`build-single-purchase-decision-workbench`](../../openspec/changes/archive/2026-08-28-build-single-purchase-decision-workbench/proposal.md) 完成 38/38 项并归档；性能收口实现 commit 为 `0e1e38c2906b5aab0fa7c64add9d6c8e6dd7fc79`。
+- 配置/文档/培训：精确依赖、静态构建、loopback/受控 LAN 配置及运行证据已按归档 OpenSpec 形成；不含研究招募或正式产品培训。
+- 迁移演练记录：无数据迁移；整体构建回滚与恢复见 [`whole-unit-rollback-readback-2026-08-27.md`](../../evidence/rollback/whole-unit-rollback-readback-2026-08-27.md)。
 - 监测指标与复审日期：不加入真实用户遥测。每个研究构建只使用合成性能报告、网络/存储检查、版本清单和人工验收；Node.js 24 退出 LTS、任一主版本或数据边界变化时复审。
-- 后续任务：`PRD-0001` 已要求另行批准计算与规则 ADR、导出合同 ADR 和 OpenSpec proposal/tasks；本文件不创建、编号或提前决定它们。
+- 后续任务：如需进入研究准备，先独立完成并批准 `Prototype Accepted`；本归档不批准研究协议、招募、参与者分发或正式产品发布。
 - 云托管：当前不启用。出现远程独立访问需求，或取得能证明 FR-24/AC-25 全部边界的供应商证据时，修订本 ADR 或创建新 ADR。
 
 ## 11. 决议记录

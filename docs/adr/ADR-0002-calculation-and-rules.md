@@ -399,11 +399,11 @@ rule-execution-failed
 
 ## 10. 实施与后续
 
-- 实现 PR/提交：未开始；本 ADR 已为 `Accepted`，但不单独授权初始化框架或编写实现
+- 实现 PR/提交：已按 [`build-single-purchase-decision-workbench`](../../openspec/changes/archive/2026-08-28-build-single-purchase-decision-workbench/proposal.md) 完成 38/38 项并归档；规则与跨引擎规范向量均有实现证据
 - 配置/文档/培训：本 ADR、ADR 索引、`ARCHITECTURE.md` 与 `PRD-0001` 的状态同步；无配置或培训材料
-- 迁移演练记录：无迁移；回滚演练待实现后执行
+- 迁移演练记录：无数据迁移；整体构建回滚与恢复见 [`whole-unit-rollback-readback-2026-08-27.md`](../../evidence/rollback/whole-unit-rollback-readback-2026-08-27.md)
 - 监测指标与复审日期：不采集运行时遥测；以合成验证和研究批次固定构建 readback 为证据；首次定期复审为 `2026-09-21`，触发条件见元数据和第 7 节
-- 后续任务：起草并评审“导出合同”ADR，但本文件不创建或编号。三项 ADR 均为 `Accepted` 后才可创建并批准 OpenSpec change
+- 后续任务：导出合同 ADR 与 OpenSpec 已完成；如需进入研究准备，先独立完成并批准 `Prototype Accepted`
 
 ## 11. 决议记录
 

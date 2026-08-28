@@ -66,4 +66,4 @@ git diff --check             -> passed
 
 ## 未关闭的门禁
 
-Playwright WebKit 是规则跨引擎证据，不是实际 macOS Safari、iOS Safari 或 VoiceOver 证据，也不证明 WebKit 与任一 Safari 发布版完全等价。OpenSpec `4.6`、`6.3`、`6.4`、`6.6` 继续保持未完成；`Prototype Accepted=false`、研究协议非 `Accepted`、`Recruitment Authorized=false`。不得据此进行参与者分发、公开发布或招募。
+Playwright WebKit 是规则跨引擎证据，不是实际 macOS Safari、iOS Safari 或 VoiceOver 证据，也不证明 WebKit 与任一 Safari 发布版完全等价。本记录本身只关闭 `3.9`；后来形成的 [`4.6` 无障碍实现证据](accessibility-implementation-readback-2026-08-24.md)、[`6.3` 人工支持矩阵](manual-support-matrix-2026-08-28.md)、[`6.4` 固定实验室性能](max-session-performance-readback-2026-08-28.md) 和 [`6.6` 整体回滚](../rollback/whole-unit-rollback-readback-2026-08-27.md) 分别关闭对应任务。`Prototype Accepted=false`、研究协议非 `Accepted`、`Recruitment Authorized=false`；不得据此进行参与者分发、公开发布或招募。

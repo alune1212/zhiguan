@@ -1,7 +1,7 @@
 # OpenSpec 4.6 无障碍实现 readback
 
 日期：`2026-08-24`（Asia/Shanghai）
-OpenSpec：[`build-single-purchase-decision-workbench`](../../openspec/changes/build-single-purchase-decision-workbench/proposal.md)
+OpenSpec：[`build-single-purchase-decision-workbench`](../../openspec/changes/archive/2026-08-28-build-single-purchase-decision-workbench/proposal.md)
 任务：`4.6` 响应式、键盘、焦点、ARIA、VoiceOver 可解释语义与 `prefers-reduced-motion` 实现
 
 ## 判定边界

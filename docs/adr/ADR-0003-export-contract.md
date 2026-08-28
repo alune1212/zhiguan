@@ -16,7 +16,7 @@
 
 JSON 使用版本化、字段全显式的本地 wire contract；领域数字只使用规范十进制字符串或分子/分母字符串，不使用裸 `BigInt` 或会丢失精度的 JSON number。Markdown 是同一语义模型的用户可读投影，不直接执行用户文本中的 Markdown/HTML/链接语法。文件只由明确用户动作通过浏览器 `Blob`、短时 object URL 和临时 `<a download>` 分格式请求下载；界面只能声明页面已发起 `download-requested`，不能把请求发起冒充为浏览器接管或文件已经成功保存。
 
-本决定不增加服务器、云端分享、导入、恢复、ZIP、File System Access、Web Share、剪贴板、浏览器持久化、外部 schema、远程资源或新运行时依赖。本 ADR 已为 `Accepted`，完成三项架构前置决策中的第三项；后续 [`build-single-purchase-decision-workbench`](../../openspec/changes/build-single-purchase-decision-workbench/proposal.md) 已于 `2026-08-24` 获批准，`PRD-0001` 的 `Implementation Authorized` 同日通过。该后续门禁状态不改变本 ADR，也不代表运行时验证、`Prototype Accepted` 或 `Recruitment Authorized` 已通过。
+本决定不增加服务器、云端分享、导入、恢复、ZIP、File System Access、Web Share、剪贴板、浏览器持久化、外部 schema、远程资源或新运行时依赖。本 ADR 已为 `Accepted`，完成三项架构前置决策中的第三项；后续 [`build-single-purchase-decision-workbench`](../../openspec/changes/archive/2026-08-28-build-single-purchase-decision-workbench/proposal.md) 已完成 38/38 项并于 `2026-08-28` 归档。该状态不改变本 ADR，也不代表 `Prototype Accepted` 或 `Recruitment Authorized` 已通过。
 
 ## 2. 背景与问题
 
@@ -478,11 +478,11 @@ ADR-E-01～ADR-E-10 已全部完成，Alune 已明确批准，本 ADR 因此转�
 
 ## 10. 实施与后续
 
-- 实现 PR/提交：未开始；本 ADR、三项架构前置决策与 [`build-single-purchase-decision-workbench`](../../openspec/changes/build-single-purchase-decision-workbench/proposal.md) 均已批准，`Implementation Authorized` 已通过；只能在后续独立执行中按批准任务实施
+- 实现 PR/提交：性能收口实现 commit `0e1e38c2906b5aab0fa7c64add9d6c8e6dd7fc79`；[`build-single-purchase-decision-workbench`](../../openspec/changes/archive/2026-08-28-build-single-purchase-decision-workbench/proposal.md) 已完成 38/38 项并归档
 - 配置/文档/培训：本决定及 ADR 索引、`ARCHITECTURE.md`、`PRD-0001` 的状态同步；无配置或培训材料
-- 迁移演练记录：无迁移；回滚与临时对象清理演练待实现后执行
+- 迁移演练记录：无迁移；整体构建回滚与恢复见 [`whole-unit-rollback-readback-2026-08-27.md`](../../evidence/rollback/whole-unit-rollback-readback-2026-08-27.md)，临时对象清理由实现测试覆盖
 - 监测指标与复审日期：不采集真实用户遥测；只使用合成性能、跨格式 fixture、浏览器网络/存储检查和人工 readback；首次复审 `2026-09-21`
-- 后续任务：在收到独立实施指令后进入已批准 OpenSpec 的 apply 流程，从任务 1.1 开始核对授权、范围和当前 Git commit；本次状态同步不初始化框架、不安装依赖、不编写实现，也不创建其他 ADR
+- 后续任务：如需进入研究准备，先独立完成并批准 `Prototype Accepted`；本归档不批准研究协议、招募、参与者分发或正式产品发布
 
 ## 11. 决议记录
 
