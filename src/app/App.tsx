@@ -124,6 +124,27 @@ function summarySource(state: WorkbenchApplicationState, fieldId: WorkbenchField
   return valueOf(state, fieldId).trim().length > 0 ? "用户输入" : "未提供";
 }
 
+const LONG_TEXT_PREVIEW_LENGTH = 240;
+
+function LongTextValue({ label, value }: { readonly label: string; readonly value: string }) {
+  const [showFull, setShowFull] = useState(false);
+  if (!value) return <>未提供</>;
+  if (value.length <= LONG_TEXT_PREVIEW_LENGTH) return <>{value}</>;
+  return (
+    <div className="field">
+      {showFull ? (
+        <textarea aria-label={`${label}完整内容`} readOnly rows={6} value={value} />
+      ) : (
+        <p className="long-text-preview">{value.slice(0, LONG_TEXT_PREVIEW_LENGTH)}…</p>
+      )}
+      <span className="field-hint">当前仅展开前 {LONG_TEXT_PREVIEW_LENGTH} 个字符；完整内容仍保留在本次会话和导出中。</span>
+      <button className="button button-quiet long-text-toggle" type="button" onClick={() => setShowFull((current) => !current)}>
+        {showFull ? "收起完整内容" : "查看完整内容"}
+      </button>
+    </div>
+  );
+}
+
 function summaryStatus(state: WorkbenchApplicationState, fieldId: WorkbenchFieldId): string {
   const value = valueOf(state, fieldId).trim();
   if (!value) return "未提供";
@@ -531,7 +552,9 @@ function ConfirmationSection({ controller }: { readonly controller: WorkbenchCon
           <div className="summary-row" key={fieldId}>
             <dt>{FIELD_LABELS[fieldId]}</dt>
             <dd>
-              {summaryValue(state, fieldId) || "未提供"}
+              {fieldId === "value-expectation"
+                ? <LongTextValue label={FIELD_LABELS[fieldId]} value={summaryValue(state, fieldId)} />
+                : summaryValue(state, fieldId) || "未提供"}
               <span className="status-chip">来源：{summarySource(state, fieldId)}</span>
               <span className="status-chip">状态：{summaryStatus(state, fieldId)}</span>
             </dd>
@@ -612,7 +635,7 @@ function UnderstandingSection({ controller }: { readonly controller: WorkbenchCo
         <div><p className="section-kicker">Understand · Simulate</p><h2 id="understanding-title" data-stage-heading tabIndex={-1}>理解与推演</h2></div>
         <p className="section-summary">结果只来自当前确认的输入。数据不足会局部停下，不会用默认值填补。</p>
       </div>
-      <div className="expectation-callout"><span>你的价值期待</span><p>{valueOf(state, "value-expectation") || "未提供"}</p></div>
+      <div className="expectation-callout"><span>你的价值期待</span><LongTextValue label="个人价值期待" value={valueOf(state, "value-expectation")} /></div>
       <div className="result-list" aria-live="polite">
         {results.length > 0 ? results.map((result) => <ResultCard key={result.formulaId} result={result} />) : <p className="empty-state">当前没有可展示的结果，请返回确认阶段检查输入。</p>}
       </div>

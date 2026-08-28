@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -391,6 +391,23 @@ describe("purchase decision workbench", () => {
     expect(within(summary as HTMLElement).getAllByText("状态：未标记").length).toBe(3);
     expect(within(summary as HTMLElement).getAllByText("状态：待确认").length).toBe(5);
     expect(within(summary as HTMLElement).queryByText("用户确认")).toBeNull();
+  });
+
+  it("defers a maximum-size expectation until the user asks to read it", async () => {
+    const user = await startSession();
+    await fillCompleteInput(user);
+    const fullExpectation = "x".repeat(64 * 1024);
+    fireEvent.change(screen.getByRole("textbox", { name: /个人价值期待/ }), { target: { value: fullExpectation } });
+    await user.click(screen.getByRole("button", { name: "检查输入与口径" }));
+
+    expect(screen.queryByDisplayValue(fullExpectation)).toBeNull();
+    expect(screen.getByText(/完整内容仍保留在本次会话和导出中/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "查看完整内容" }));
+    expect((screen.getByRole("textbox", { name: "个人价值期待完整内容" }) as HTMLTextAreaElement).value).toBe(fullExpectation);
+
+    await user.click(screen.getByRole("button", { name: "确认口径并查看结果" }));
+    expect(screen.getByRole("heading", { name: "理解与推演" })).toBeTruthy();
+    expect(screen.queryByDisplayValue(fullExpectation)).toBeNull();
   });
 
   it("associates purchase inclusion and fixed-cost coverage errors with their controls", async () => {
