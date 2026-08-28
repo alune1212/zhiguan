@@ -487,7 +487,7 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 | --- | --- | --- | --- |
 | `PRD Approved` | Alune 分别以产品、数据/隐私、设计/可理解性和工程角色完成最终 readback，确认问题、范围、数据边界、计划 AC 和后续门禁；不要求尚未实现的 AC 证据 | 允许开始具体 ADR；不授权初始化框架、实现、部署或招募 | 已通过；`0.5.0 / 已批准`，`2026-08-21` |
 | `Implementation Authorized` | PRD 已批准；随后交付形态与技术栈、计算与规则、导出合同 ADR 均为 `Accepted`；再随后 OpenSpec proposal/tasks 获批且不扩大 PRD/ADR 范围 | 允许按批准任务初始化框架和实现原型；不授权实现研究存储/同意系统，也不授权向参与者分发 | 已通过；Alune 于 `2026-08-24` 批准 [`build-single-purchase-decision-workbench`](../../../openspec/changes/archive/2026-08-28-build-single-purchase-decision-workbench/proposal.md) 的完整规划制品并明确通过本门禁；38/38 项实现清单与对应证据已完成并于 `2026-08-28` 归档；不等于 `Prototype Accepted` |
-| `Prototype Accepted` | 实现完成；原型验收组 AC-01–AC-17 与 AC-20–AC-26 均有可审计证据；无未解决关键隐私/信任事件；回滚和关闭路径演练通过 | 允许冻结研究构建并准备研究协议操作材料；不等于研究协议批准或招募授权 | 未通过 |
+| `Prototype Accepted` | 实现完成；原型验收组 AC-01–AC-17 与 AC-20–AC-26 均有可审计证据；无未解决关键隐私/信任事件；回滚和关闭路径演练通过 | 允许冻结研究构建并准备研究协议操作材料；不等于研究协议批准或招募授权 | 证据齐备，待 Alune 明确批准；当前仍未通过 |
 | `Recruitment Authorized` | 原型已验收；研究治理组 AC-18、AC-19 与 AC-27 通过；`RESEARCH-0001` 已为 `Accepted`；两类加密存储、同意/撤回、日志与删除演练通过；独立人类挑战完成；具体日历已写回协议与 Issue #1；Alune 完成最终 readback | 允许邀请受控参与者并执行两批形成性研究 | 未通过 |
 
 - 只有 `Recruitment Authorized` 后，才能向已完成正式研究同意和脱敏观察授权的受控参与者提供研究原型；不作为正式产品公开发布或宣传，邀请中必须提供研究联系、退出和事件报告路径。
@@ -532,7 +532,7 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 | `RESEARCH-0001` 的加密存储工具、同意材料、联系路径、删除 readback 和无默认备份证明 | 阻塞 `Recruitment Authorized` | Alune | 招募授权前 | 当前不需要 RFC；若引入外部系统则判断 ADR/隐私影响 | 未解决；产品规则已确定 |
 | 招募前独立人类隐私/安全挑战者的姓名、范围、意见和处置记录 | 阻塞 `Recruitment Authorized` | Alune / 挑战者待指定 | 招募授权前 | RFC/ADR：否 | 未解决 |
 | 两批招募、会话和人工回访的具体日历 | 阻塞招募与实验到期 | Alune | 招募开始前写回 Issue #1 | RFC/ADR：否 | 未解决 |
-| 目标平台、VoiceOver 和性能预算 | 产品范围已确定；实际版本、设备、网络配置和最大会话数据仍阻塞可复现验收 | Alune | 交付形态 ADR 与 OpenSpec tasks 批准前 | 纳入交付形态 ADR/验收附录 | 部分解决；[`ADR-0001`](../../adr/ADR-0001-delivery-form-and-technology-stack.md) 已固定设计，实际运行证据仍待实施 |
+| 目标平台、VoiceOver 和性能预算 | 产品范围及可复现验收证据已确定 | Alune | 交付形态 ADR 与 OpenSpec tasks 批准前 | 纳入交付形态 ADR/验收附录 | 已解决；[`ADR-0001`](../../adr/ADR-0001-delivery-form-and-technology-stack.md) 已固定设计，[`人工支持矩阵`](../../../evidence/browser/manual-support-matrix-2026-08-28.md) 与 [`最大会话性能 readback`](../../../evidence/browser/max-session-performance-readback-2026-08-28.md) 已完成 |
 | 脱敏研究结论的记录位置 | 影响证据可追溯性 | Alune | 第一批开始前 | RFC/ADR：否 | 已解决；研究完成后新增 `RESEARCH-0001` 聚合结果文档，仓库不保存逐人记录 |
 | 正式评审角色 | 决定 PRD 签字责任 | Alune | `2026-08-21` | RFC/ADR：否 | 已解决；Alune 兼任四类正式角色，AI 不签字，独立挑战属于招募补偿控制 |
 
@@ -552,8 +552,10 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 ### 10.2 `Prototype Accepted`
 
 - [x] 三项具体 ADR 均为 `Accepted`，OpenSpec proposal/tasks 已批准并链接；`2026-08-24` 完成。
-- [ ] 原型验收组 AC-01–AC-17 与 AC-20–AC-26 的全部证据已链接。
-- [ ] 关键隐私/信任事件为 0，回滚、关闭和恢复演练通过。
+- [x] 原型验收组 AC-01–AC-17 与 AC-20–AC-26 的全部证据已链接；见 [`AC / VAL 矩阵`](../../../evidence/acceptance/ac-val-matrix.md) 与 [`Prototype Accepted 候选 readback`](../../../evidence/acceptance/prototype-acceptance-readback-2026-08-28.md)。
+- [x] 本轮关键隐私/信任事件为 `0`，当前候选的回滚、关闭和恢复演练通过；见 [`Prototype Accepted 候选 readback`](../../../evidence/acceptance/prototype-acceptance-readback-2026-08-28.md)。
+
+以上三项证据条件已经完成，但复选框本身不替代门禁决议。`Prototype Accepted` 仍保持未通过，等待 Alune 在查看 readback 与 diff 后明确批准。
 
 ### 10.3 `Recruitment Authorized`
 
@@ -561,4 +563,4 @@ FR-20、FR-21 与 FR-26 是**产品外研究协议和招募门禁合同**，不�
 - [ ] 独立人类挑战者已完成复核，关键意见全部解决，其他意见已处置并记录。
 - [ ] 两批研究、门间评审、回访和 7 日内结论的具体日期已写入协议和 Issue #1。
 
-当前 `PRD Approved`、`ADR-0001`、`ADR-0002`、[`ADR-0003`](../../adr/ADR-0003-export-contract.md) 和 [`build-single-purchase-decision-workbench`](../../../openspec/changes/archive/2026-08-28-build-single-purchase-decision-workbench/proposal.md) 均已获批准，`Implementation Authorized` 已于 `2026-08-24` 通过。38/38 项实现任务及其规则、无障碍实现、人工支持矩阵、固定实验室性能和整体回滚证据均已完成，四项 delta spec 已同步到主规格，OpenSpec 已于 `2026-08-28` 归档。`Prototype Accepted` 与 `Recruitment Authorized` 仍未通过；不得向参与者分发、部署或招募。
+当前 `PRD Approved`、`ADR-0001`、`ADR-0002`、[`ADR-0003`](../../adr/ADR-0003-export-contract.md) 和 [`build-single-purchase-decision-workbench`](../../../openspec/changes/archive/2026-08-28-build-single-purchase-decision-workbench/proposal.md) 均已获批准，`Implementation Authorized` 已于 `2026-08-24` 通过。38/38 项实现任务及其规则、无障碍实现、人工支持矩阵、固定实验室性能、双格式离线内容核对和当前候选整体回滚证据均已完成，四项 delta spec 已同步到主规格，OpenSpec 已于 `2026-08-28` 归档。`Prototype Accepted` 的证据条件已齐备，但仍等待 Alune 明确批准；`Recruitment Authorized` 仍未通过。不得向参与者分发、部署或招募。
