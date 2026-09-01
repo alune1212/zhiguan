@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { calculateDecision, parseAmount, parseWorkHours, type DecisionInput } from "../src/domain/calculation";
+import { calculateDecision, calculateGoalProgress, parseAmount, parseWorkHours, type DecisionInput, type GoalInput } from "../src/domain/calculation";
 
 const baseInput: DecisionInput = {
   income: "10000",
@@ -88,5 +88,82 @@ describe("purchase decision calculation", () => {
     expect(calculateDecision(excludedPurchase).inputErrors.purchaseIncluded).toBeUndefined();
     expect(result(excludedPurchase, "work-time-equivalent").availability).toBe("available");
     expect(result(excludedPurchase, "purchase-after-margin").availability).toBe("insufficient-data");
+  });
+});
+
+describe("goal progress calculation", () => {
+  const baseGoal: GoalInput = {
+    name: "应急金",
+    target: "10000",
+    current: "2500",
+    unit: "CNY",
+    evidence: { target: "user-confirmed", current: "user-confirmed" },
+  };
+
+  it("calculates progress and propagates estimated evidence", () => {
+    const output = calculateGoalProgress(baseGoal);
+    expect(output.inputErrors).toEqual({});
+    expect(output.result).toMatchObject({
+      id: "goal-progress",
+      availability: "available",
+      evidenceStatus: "user-confirmed",
+      completedDisplay: "25.00%",
+      remainingDisplay: "7500.00 CNY",
+      formula: "完成比例 = 当前值 ÷ 目标值 × 100%；剩余差距 = max(目标值 − 当前值, 0)",
+    });
+    expect(output.result.completedRatio).toMatchObject({ numerator: "1", denominator: "4", decimal: "0.25" });
+    expect(output.result.remainingGap).toMatchObject({ numerator: "7500", denominator: "1", decimal: "7500.00" });
+
+    const estimated = calculateGoalProgress({
+      ...baseGoal,
+      evidence: { ...baseGoal.evidence, current: "estimated" },
+    });
+    expect(estimated.result.evidenceStatus).toBe("estimated");
+  });
+
+  it("keeps an empty goal insufficient without inventing values", () => {
+    const empty: GoalInput = {
+      name: "",
+      target: "",
+      current: "",
+      unit: "",
+      evidence: { target: "", current: "" },
+    };
+    const output = calculateGoalProgress(empty);
+    expect(output.inputErrors).toEqual({
+      name: "goal-name-required",
+      target: "missing-input",
+      current: "missing-input",
+      unit: "goal-unit-required",
+    });
+    expect(output.result).toMatchObject({
+      availability: "insufficient-data",
+      evidenceStatus: "insufficient-data",
+      completedRatio: null,
+      completedDisplay: null,
+      remainingGap: null,
+      remainingDisplay: null,
+    });
+  });
+
+  it("rejects zero targets and negative current values", () => {
+    const output = calculateGoalProgress({ ...baseGoal, target: "0", current: "-1" });
+    expect(output.inputErrors).toMatchObject({ target: "zero-not-allowed", current: "invalid-input" });
+    expect(output.result.availability).toBe("insufficient-data");
+    expect(output.result.completedRatio).toBeNull();
+    expect(output.result.remainingGap).toBeNull();
+    expect(output.result.reasonCodes).toEqual(expect.arrayContaining(["zero-not-allowed", "invalid-input"]));
+  });
+
+  it("shows progress above 100 percent and no negative remaining gap", () => {
+    const output = calculateGoalProgress({ ...baseGoal, target: "100", current: "125", unit: "页" });
+    expect(output.inputErrors).toEqual({});
+    expect(output.result).toMatchObject({
+      availability: "available",
+      completedDisplay: "125.00%",
+      remainingDisplay: "0.00 页",
+    });
+    expect(output.result.completedRatio).toMatchObject({ numerator: "5", denominator: "4" });
+    expect(output.result.remainingGap).toMatchObject({ numerator: "0", denominator: "1" });
   });
 });
