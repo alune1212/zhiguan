@@ -25,9 +25,7 @@ export type InputErrorCode =
   | "tax-basis-required"
   | "before-tax-margin-unavailable"
   | "fixed-cost-coverage-required"
-  | "purchase-period-required"
-  | "goal-name-required"
-  | "goal-unit-required";
+  | "purchase-period-required";
 
 export interface DecisionInput {
   readonly income: string;
@@ -39,19 +37,6 @@ export interface DecisionInput {
   readonly purchaseIncluded: "included" | "excluded" | "";
   readonly valueExpectation: string;
   readonly evidence: Readonly<Record<NumericField, EvidenceStatus | "">>;
-}
-
-export type GoalField = "name" | "target" | "current" | "unit";
-
-export interface GoalInput {
-  readonly name: string;
-  readonly target: string;
-  readonly current: string;
-  readonly unit: string;
-  readonly evidence: Readonly<{
-    readonly target: EvidenceStatus | "";
-    readonly current: EvidenceStatus | "";
-  }>;
 }
 
 export interface ExactValue {
@@ -84,27 +69,6 @@ export interface CalculationResult {
 export interface CalculationOutput {
   readonly results: readonly CalculationResult[];
   readonly inputErrors: Readonly<Partial<Record<NumericField | "taxBasis" | "fixedCostCoverage" | "purchaseIncluded", InputErrorCode>>>;
-}
-
-export interface GoalProgressResult {
-  readonly id: "goal-progress";
-  readonly label: string;
-  readonly availability: "available" | "insufficient-data";
-  readonly evidenceStatus: EvidenceStatus | "insufficient-data";
-  readonly completedRatio: ExactValue | null;
-  readonly completedDisplay: string | null;
-  readonly remainingGap: ExactValue | null;
-  readonly remainingDisplay: string | null;
-  readonly unit: string;
-  readonly formula: string;
-  readonly dependencyFieldIds: readonly string[];
-  readonly reasonCodes: readonly InputErrorCode[];
-  readonly source: "ruleset-derived";
-}
-
-export interface GoalProgressOutput {
-  readonly result: GoalProgressResult;
-  readonly inputErrors: Readonly<Partial<Record<GoalField, InputErrorCode>>>;
 }
 
 interface Money {
@@ -207,12 +171,6 @@ export function parseWorkHours(raw: string): ParseResult<Rational> {
   return { ok: true, value: rational(numerator, denominator) };
 }
 
-function parseGoalValue(raw: string, allowZero = true): ParseResult<Rational> {
-  const parsed = parseAmount(raw, allowZero);
-  if (!parsed.ok) return parsed;
-  return { ok: true, value: rational(parsed.value.cents, 100n) };
-}
-
 function inputReasons(parsed: ParseResult<unknown>, evidence: EvidenceStatus | ""): InputErrorCode[] {
   const reasons: InputErrorCode[] = [];
   if (!parsed.ok) reasons.push(parsed.reasonCode);
@@ -283,14 +241,14 @@ export function calculateDecision(input: DecisionInput): CalculationOutput {
     : null;
   const rateResult = result(
     "income-rate",
-    "Income Rate",
+    "每小时收入",
     "CNY/小时",
     "月收入 ÷ 月工时",
     ["income", "workHours", "taxBasis"],
     rateReasons,
     statusFor(["income", "workHours"], input),
     rate ? ratioExact(rate) : null,
-    rate ? `${formatRational(rate)} CNY/小时` : null,
+    rate ? `${formatRational(rate)} 元/小时` : null,
   );
 
   const workTimeReasons = [...incomeReasons, ...hoursReasons, ...purchaseReasons, ...taxReason];
@@ -299,9 +257,9 @@ export function calculateDecision(input: DecisionInput): CalculationOutput {
     : null;
   const workTimeResult = result(
     "work-time-equivalent",
-    "Work-time Equivalent",
+    "这笔钱相当于多少工作时间",
     "小时",
-    "购买金额 ÷ Income Rate",
+    "购买金额 ÷ 每小时收入",
     ["income", "workHours", "purchaseAmount", "taxBasis"],
     workTimeReasons,
     statusFor(["income", "workHours", "purchaseAmount"], input),
@@ -314,14 +272,14 @@ export function calculateDecision(input: DecisionInput): CalculationOutput {
   const margin = income && fixed && input.taxBasis === "after-tax" ? income.cents - fixed.cents : null;
   const marginResult = result(
     "available-margin",
-    "可用余量",
+    "本月可用金额",
     "CNY",
     "税后月收入 − 月固定支出",
     ["income", "fixedExpenses", "taxBasis", "fixedCostCoverage"],
     marginReasons,
     statusFor(["income", "fixedExpenses"], input),
     margin !== null ? moneyExact(margin) : null,
-    margin !== null ? `${moneyExact(margin).decimal} CNY` : null,
+    margin !== null ? `${moneyExact(margin).decimal} 元` : null,
   );
 
   const afterReasons = [...marginReasons, ...purchaseReasons, ...purchasePeriodReason];
@@ -330,80 +288,31 @@ export function calculateDecision(input: DecisionInput): CalculationOutput {
     : null;
   const afterResult = result(
     "purchase-after-margin",
-    "购买后余量",
+    "买完后本月还剩",
     "CNY",
     "税后月收入 − 月固定支出 − 购买金额",
     ["income", "fixedExpenses", "purchaseAmount", "taxBasis", "fixedCostCoverage", "purchaseIncluded"],
     afterReasons,
     "forecast",
     after !== null ? moneyExact(after) : null,
-    after !== null ? `${moneyExact(after).decimal} CNY` : null,
+    after !== null ? `${moneyExact(after).decimal} 元` : null,
   );
 
   const impact = purchase ? moneyExact(-purchase.cents) : null;
   const impactResult = result(
     "purchase-impact",
-    "购买影响",
+    "这笔购买减少的余量",
     "CNY",
-    "购买后余量 − 可用余量",
+    "买完后本月还剩 − 本月可用金额",
     ["income", "fixedExpenses", "purchaseAmount", "taxBasis", "fixedCostCoverage", "purchaseIncluded"],
     afterReasons,
     "forecast",
     after !== null && impact !== null ? impact : null,
-    after !== null && impact !== null ? `${impact.decimal} CNY` : null,
+    after !== null && impact !== null ? `${impact.decimal} 元` : null,
   );
 
   return {
     results: [rateResult, workTimeResult, marginResult, afterResult, impactResult],
-    inputErrors,
-  };
-}
-
-export function calculateGoalProgress(input: GoalInput): GoalProgressOutput {
-  const parsedTarget = parseGoalValue(input.target, false);
-  const parsedCurrent = parseGoalValue(input.current);
-  const targetReasons = inputReasons(parsedTarget, input.evidence.target);
-  const currentReasons = inputReasons(parsedCurrent, input.evidence.current);
-  const nameReasons: InputErrorCode[] = input.name.trim() ? [] : ["goal-name-required"];
-  const unitReasons: InputErrorCode[] = input.unit.trim() ? [] : ["goal-unit-required"];
-  const reasons = [...nameReasons, ...unitReasons, ...targetReasons, ...currentReasons];
-  const inputErrors: Partial<Record<GoalField, InputErrorCode>> = {};
-  if (nameReasons[0]) inputErrors.name = nameReasons[0];
-  if (targetReasons[0]) inputErrors.target = targetReasons[0];
-  if (currentReasons[0]) inputErrors.current = currentReasons[0];
-  if (unitReasons[0]) inputErrors.unit = unitReasons[0];
-
-  const available = reasons.length === 0 && parsedTarget.ok && parsedCurrent.ok;
-  const completed = available
-    ? rational(parsedCurrent.value.numerator * parsedTarget.value.denominator, parsedCurrent.value.denominator * parsedTarget.value.numerator)
-    : null;
-  const difference = available
-    ? rational(
-        parsedTarget.value.numerator * parsedCurrent.value.denominator - parsedCurrent.value.numerator * parsedTarget.value.denominator,
-        parsedTarget.value.denominator * parsedCurrent.value.denominator,
-      )
-    : null;
-  const remaining = difference && difference.numerator > 0n ? difference : available ? rational(0n, 1n) : null;
-  const evidenceStatus: EvidenceStatus = input.evidence.target === "estimated" || input.evidence.current === "estimated"
-    ? "estimated"
-    : "user-confirmed";
-  const unit = input.unit.trim();
-  return {
-    result: {
-      id: "goal-progress",
-      label: "Goal Progress",
-      availability: available ? "available" : "insufficient-data",
-      evidenceStatus: available ? evidenceStatus : "insufficient-data",
-      completedRatio: available && completed ? ratioExact(completed) : null,
-      completedDisplay: available && completed ? `${formatRational(rational(completed.numerator * 100n, completed.denominator))}%` : null,
-      remainingGap: available && remaining ? ratioExact(remaining) : null,
-      remainingDisplay: available && remaining ? `${formatRational(remaining)} ${unit}` : null,
-      unit,
-      formula: "完成比例 = 当前值 ÷ 目标值 × 100%；剩余差距 = max(目标值 − 当前值, 0)",
-      dependencyFieldIds: ["name", "target", "current", "unit"],
-      reasonCodes: [...new Set(reasons)],
-      source: "ruleset-derived",
-    },
     inputErrors,
   };
 }

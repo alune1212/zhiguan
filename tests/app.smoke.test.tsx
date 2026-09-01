@@ -1,23 +1,21 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { App, createExportJson, createGoalExportJson } from "../src/app/App";
-import { calculateDecision, calculateGoalProgress, type DecisionInput, type GoalInput } from "../src/domain/calculation";
+import { App, createExportJson } from "../src/app/App";
+import { calculateDecision, type DecisionInput } from "../src/domain/calculation";
 
 describe("App", () => {
-  it("renders the single-page workbench and its trust boundaries", () => {
+  it("renders the smaller purchase flow and its trust boundaries", () => {
     const html = renderToStaticMarkup(<App />);
-    expect(html).toContain("购买决策");
-    expect(html).toContain("月收入");
-    expect(html).toContain("月工作小时");
-    expect(html).toContain("下载当前 JSON");
-    expect(html).toContain("目标名称");
-    expect(html).toContain("用户定义单位");
-    expect(html).toContain("下载目标 JSON");
-    expect(html).toContain("数据不足");
-    expect(html).toContain("aria-live=\"polite\"");
+    expect(html).toContain("这笔购买，要花你多少工作时间？");
+    expect(html).toContain("先填这三个数字");
+    expect(html).toContain("这些数字里有大概数");
+    expect(html).toContain("再算算本月买完还剩多少（可选）");
+    expect(html).toContain("不会上传，也不会保存在浏览器里");
+    expect(html).not.toContain("Goal");
+    expect(html).not.toContain("目标进度");
     expect(html).not.toContain("class=\"result ");
-    expect(html).not.toContain("请填写这一项");
+    expect(html).not.toContain("下载本次数据");
   });
 
   it("exports the current evidence and user decision as JSON", () => {
@@ -38,22 +36,4 @@ describe("App", () => {
     expect(exported.exported_at).toEqual(expect.any(String));
   });
 
-  it("exports only the current goal snapshot as JSON", () => {
-    const input: GoalInput = {
-      name: "读完一本书",
-      target: "320",
-      current: "80",
-      unit: "页",
-      evidence: { target: "user-confirmed", current: "estimated" },
-    };
-    const exported = JSON.parse(createGoalExportJson(input, calculateGoalProgress(input))) as Record<string, unknown>;
-    expect(exported).toMatchObject({
-      format: "zhiguan-goal-progress@1",
-      scope: "current-session",
-      goal: { name: "读完一本书", target: "320", current: "80", unit: "页", evidence: { target: "user-confirmed", current: "estimated" } },
-      result: { availability: "available", evidence_status: "estimated", completed_display: "25.00%", remaining_display: "240.00 页" },
-    });
-    expect(exported).not.toHaveProperty("inputs");
-    expect(exported.exported_at).toEqual(expect.any(String));
-  });
 });
