@@ -1,8 +1,0 @@
-blank_issues_enabled: false
-contact_links:
-  - name: 产品文档与决策记录
-    url: https://github.com/alune1212/zhiguan#readme
-    about: 先阅读产品宪法、策略、路线图及相关 PRD、RFC、ADR。
-  - name: 安全与隐私问题
-    url: https://github.com/alune1212/zhiguan/security/policy
-    about: 不要在公开 Issue 中披露安全漏洞、密钥或个人敏感数据。

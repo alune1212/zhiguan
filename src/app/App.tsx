@@ -1,46 +1,80 @@
 import { useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
 
 import {
-  type EvidenceChoice,
-  type NumericEvidenceField,
-  type WorkbenchApplicationState,
-  type WorkbenchController,
-  type WorkbenchErrorKey,
-  type WorkbenchFieldId,
-  resultsForState,
-  useWorkbenchController,
-} from "../application/workbench";
-import {
-  type ExportFormat,
-  type ExportWorkbenchOptions,
-  type ExportWorkbenchController,
-  useExportWorkbenchController,
-} from "../application/export-workbench";
-import { getBuildIdentityGate, type BuildIdentityGate } from "../adapters/browser/build-metadata";
-import type { CalculationResult } from "../domain/calculation";
-import type { DecisionCode } from "../domain/session";
+  CURRENCY,
+  NUMERIC_FIELDS,
+  PERIOD,
+  calculateDecision,
+  type CalculationOutput,
+  type DecisionInput,
+  type EvidenceStatus,
+  type InputErrorCode,
+  type NumericField,
+  type TaxBasis,
+} from "../domain/calculation";
 
-const FIELD_LABELS: Record<WorkbenchFieldId, string> = {
-  "comparison-period": "比较周期",
-  currency: "币种",
-  income: "同周期收入",
-  "income-tax-basis": "收入口径",
-  "work-hours": "同周期工作小时",
-  "purchase-price": "购买价格",
-  "purchase-period-inclusion": "是否计入所选周期",
-  "fixed-cost-total": "固定成本汇总",
-  "fixed-cost-coverage": "固定成本覆盖范围",
-  "fixed-cost-coverage-description": "覆盖范围说明",
-  "value-expectation": "个人价值期待",
+const EMPTY_INPUT: DecisionInput = {
+  income: "",
+  workHours: "",
+  fixedExpenses: "",
+  purchaseAmount: "",
+  taxBasis: "",
+  fixedCostCoverage: "",
+  purchaseIncluded: "",
+  valueExpectation: "",
+  evidence: {
+    income: "",
+    workHours: "",
+    fixedExpenses: "",
+    purchaseAmount: "",
+  },
 };
 
-const RESULT_LABELS: Record<string, string> = {
-  "income-rate": "Income Rate",
-  "work-time-equivalent": "Work-time Equivalent",
-  "coverage-available-margin": "覆盖范围内可用余量",
-  "purchase-after-margin": "购买后余量",
-  "purchase-impact": "购买影响",
+const FIELD_LABELS: Record<NumericField, string> = {
+  income: "月收入",
+  workHours: "月工作小时",
+  fixedExpenses: "月固定支出",
+  purchaseAmount: "购买金额",
 };
+
+const DEPENDENCY_LABELS: Record<string, string> = {
+  ...FIELD_LABELS,
+  taxBasis: "收入口径",
+  fixedCostCoverage: "固定支出覆盖范围",
+  purchaseIncluded: "购买是否计入当前月份",
+};
+
+const ERROR_LABELS: Record<InputErrorCode, string> = {
+  "missing-input": "请填写这一项。",
+  "invalid-input": "请输入非负数字，不要使用逗号或货币符号。",
+  "number-too-large": "数字超出当前原型支持的范围。",
+  "zero-not-allowed": "这一项必须大于零。",
+  "evidence-required": "请选择输入是用户确认还是近似输入。",
+  "tax-basis-required": "请选择税前或税后口径。",
+  "before-tax-margin-unavailable": "税前收入不足以直接计算可用余量；请改用税后口径。",
+  "fixed-cost-coverage-required": "固定支出需要完整覆盖后才能计算余量。",
+  "purchase-period-required": "购买只有计入当前月份后才计算购买后余量。",
+};
+
+const RESULT_REASON_LABELS: Record<InputErrorCode, string> = {
+  ...ERROR_LABELS,
+};
+
+function updateNumeric(input: DecisionInput, field: NumericField, value: string): DecisionInput {
+  return { ...input, [field]: value };
+}
+
+function updateEvidence(input: DecisionInput, field: NumericField, value: EvidenceStatus | ""): DecisionInput {
+  return { ...input, evidence: { ...input.evidence, [field]: value } };
+}
+
+type DecisionCode = "buy" | "wait" | "adjust-conditions" | "do-not-buy" | "undecided";
+export interface DecisionForm {
+  readonly code: DecisionCode | "";
+  readonly rationale: string;
+  readonly reviewCondition: string;
+}
 
 const DECISION_OPTIONS: readonly { readonly code: DecisionCode; readonly label: string }[] = [
   { code: "buy", label: "购买" },
@@ -50,925 +84,276 @@ const DECISION_OPTIONS: readonly { readonly code: DecisionCode; readonly label: 
   { code: "undecided", label: "暂不决定" },
 ];
 
-const REASON_LABELS: Record<string, string> = {
-  "missing-income": "缺少同周期收入",
-  "missing-work-hours": "缺少同周期工作小时",
-  "missing-purchase-price": "缺少购买价格",
-  "missing-fixed-cost": "缺少固定成本汇总",
-  "comparison-period-unconfirmed": "比较周期尚未确认",
-  "currency-unconfirmed": "币种尚未确认",
-  "tax-basis-unconfirmed": "收入口径尚未确认",
-  "input-unconfirmed": "输入状态尚未确认",
-  "invalid-decimal": "数字格式不符合当前输入规则",
-  "zero-not-allowed": "金额或工作小时不能为零",
-  "negative-not-allowed": "原始金额或工作小时不能为负数",
-  "fraction-exceeds-currency-minor-unit": "小数位超过该币种精度",
-  "numeric-limit-exceeded": "数字超过当前原型的边界",
-  "unsupported-currency": "币种不在固定 ISO 4217 快照中",
-  "currency-mismatch": "输入使用了不同币种",
-  "period-mismatch": "输入不属于同一比较周期",
-  "input-reconfirmation-required": "需要重新确认当前输入",
-  "tax-basis-not-after-tax": "覆盖余量需要税后收入",
-  "fixed-cost-coverage-incomplete": "固定成本覆盖范围不完整",
-  "fixed-cost-coverage-description-missing": "缺少固定成本覆盖范围说明",
-  "purchase-period-unconfirmed": "尚未确认购买是否计入所选周期",
-  "division-by-zero": "当前输入无法完成除法",
-  "rule-execution-failed": "规则内核未能完成这项计算",
-};
-
-const EVIDENCE_LABELS: Record<EvidenceChoice, string> = {
-  "user-confirmed": "用户确认",
-  estimated: "近似输入",
-};
-
-const PERIOD_LABELS: Readonly<Record<string, string>> = {
-  week: "周",
-  month: "月",
-  year: "年",
-  custom: "自定义周期",
-};
-
-const NUMERIC_SUMMARY_FIELDS: readonly NumericEvidenceField[] = [
-  "income",
-  "work-hours",
-  "purchase-price",
-  "fixed-cost-total",
-];
-
-function periodLabel(kind: string): string {
-  return PERIOD_LABELS[kind] ?? kind;
+export function createExportJson(input: DecisionInput, output: CalculationOutput, decision: DecisionForm): string {
+  const payload = {
+    format: "zhiguan-purchase-decision@1",
+    exported_at: new Date().toISOString(),
+    currency: CURRENCY,
+    period: PERIOD,
+    inputs: {
+      income: input.income,
+      work_hours: input.workHours,
+      fixed_expenses: input.fixedExpenses,
+      purchase_amount: input.purchaseAmount,
+      tax_basis: input.taxBasis || null,
+      fixed_cost_coverage: input.fixedCostCoverage || null,
+      purchase_included: input.purchaseIncluded || null,
+      value_expectation: input.valueExpectation,
+      evidence: input.evidence,
+    },
+    results: output.results.map((item) => ({
+      id: item.id,
+      label: item.label,
+      availability: item.availability,
+      evidence_status: item.evidenceStatus,
+      exact: item.exact,
+      display: item.display,
+      unit: item.unit,
+      formula: item.formula,
+      dependencies: item.dependencyFieldIds,
+      reasons: item.reasonCodes,
+      source: item.source,
+    })),
+    decision: {
+      code: decision.code || null,
+      rationale: decision.rationale || null,
+      review_condition: decision.reviewCondition || null,
+    },
+  };
+  return `${JSON.stringify(payload, null, 2)}\n`;
 }
 
-function summaryValue(state: WorkbenchApplicationState, fieldId: WorkbenchFieldId): string {
-  const value = valueOf(state, fieldId).trim();
-  if (!value) return "";
-  if (fieldId === "comparison-period") {
-    const customLabel = state.draft["period-custom-label"].trim();
-    return value === "custom" && customLabel.length > 0
-      ? `${periodLabel(value)}（${customLabel}）`
-      : periodLabel(value);
-  }
-  if (fieldId === "income-tax-basis") {
-    return value === "after-tax" ? "税后" : value === "before-tax" ? "税前" : value;
-  }
-  if (fieldId === "purchase-period-inclusion") {
-    return value === "included" ? "计入" : value === "excluded" ? "不计入" : value;
-  }
-  if (fieldId === "fixed-cost-coverage") {
-    return value === "complete" ? "完整" : value === "partial" ? "部分" : value === "unknown" ? "未知" : value;
-  }
-  return value;
+function exportJson(input: DecisionInput, output: CalculationOutput, decision: DecisionForm): void {
+  const text = createExportJson(input, output, decision);
+  const blob = new Blob([text], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "zhiguan-purchase-decision.json";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-function summarySource(state: WorkbenchApplicationState, fieldId: WorkbenchFieldId): string {
-  return valueOf(state, fieldId).trim().length > 0 ? "用户输入" : "未提供";
+function FieldError({ code, id }: { readonly code?: InputErrorCode; readonly id: string }) {
+  return code ? <span className="error" id={id} role="alert">{ERROR_LABELS[code]}</span> : null;
 }
 
-const LONG_TEXT_PREVIEW_LENGTH = 240;
-
-function LongTextValue({ label, value }: { readonly label: string; readonly value: string }) {
-  const [showFull, setShowFull] = useState(false);
-  if (!value) return <>未提供</>;
-  if (value.length <= LONG_TEXT_PREVIEW_LENGTH) return <>{value}</>;
+function NumericFieldControl({
+  field,
+  input,
+  error,
+  onChange,
+}: {
+  readonly field: NumericField;
+  readonly input: DecisionInput;
+  readonly error?: InputErrorCode;
+  readonly onChange: (value: string) => void;
+}) {
+  const inputId = `input-${field}`;
+  const errorId = `${inputId}-error`;
   return (
     <div className="field">
-      {showFull ? (
-        <textarea aria-label={`${label}完整内容`} readOnly rows={6} value={value} />
-      ) : (
-        <p className="long-text-preview">{value.slice(0, LONG_TEXT_PREVIEW_LENGTH)}…</p>
-      )}
-      <span className="field-hint">当前仅展开前 {LONG_TEXT_PREVIEW_LENGTH} 个字符；完整内容仍保留在本次会话和导出中。</span>
-      <button className="button button-quiet long-text-toggle" type="button" onClick={() => setShowFull((current) => !current)}>
-        {showFull ? "收起完整内容" : "查看完整内容"}
-      </button>
+      <label htmlFor={inputId}>{FIELD_LABELS[field]}</label>
+      <input
+        id={inputId}
+        name={field}
+        type="text"
+        inputMode="decimal"
+        value={input[field]}
+        aria-invalid={error ? "true" : undefined}
+        aria-describedby={error ? errorId : undefined}
+        onChange={(event) => onChange(event.currentTarget.value)}
+      />
+      <span className="hint">单位：{field === "workHours" ? "小时" : "CNY"}；当前比较周期：月。</span>
+      <FieldError code={error} id={errorId} />
     </div>
   );
 }
 
-function summaryStatus(state: WorkbenchApplicationState, fieldId: WorkbenchFieldId): string {
-  const value = valueOf(state, fieldId).trim();
-  if (!value) return "未提供";
-  if (NUMERIC_SUMMARY_FIELDS.includes(fieldId as NumericEvidenceField)) {
-    const evidence = state.evidence[fieldId as NumericEvidenceField];
-    return evidence ? EVIDENCE_LABELS[evidence] : "未标记";
-  }
-  return "待确认";
-}
-
-const STAGE_LABELS = ["输入与期待", "确认口径与状态", "理解与推演", "决定与复盘交接"] as const;
-
-function currentStage(state: WorkbenchApplicationState): number {
-  switch (state.session.phase) {
-    case "input":
-      return 1;
-    case "confirmation":
-      return 2;
-    case "understanding":
-      return 3;
-    case "decision":
-    case "review":
-      return 4;
-  }
-}
-
-function isInputStage(state: WorkbenchApplicationState): boolean {
-  return state.session.phase === "input";
-}
-
-function isConfirmationStage(state: WorkbenchApplicationState): boolean {
-  return state.session.phase === "confirmation";
-}
-
-function isUnderstandingStage(state: WorkbenchApplicationState): boolean {
-  return state.session.phase === "understanding";
-}
-
-function isDecisionStage(state: WorkbenchApplicationState): boolean {
-  return state.session.phase === "decision" || state.session.phase === "review";
-}
-
-function valueOf(state: WorkbenchApplicationState, fieldId: string): string {
-  return state.draft[fieldId] ?? "";
-}
-
-function inputError(state: WorkbenchApplicationState, fieldId: WorkbenchErrorKey): string | undefined {
-  return state.inputErrors[fieldId];
-}
-
-function describedBy(...ids: readonly (string | null | undefined)[]): string | undefined {
-  const value = ids.filter((id): id is string => Boolean(id)).join(" ");
-  return value.length > 0 ? value : undefined;
-}
-
-function FieldLabel({
-  htmlFor,
-  label,
-  required,
-}: {
-  readonly htmlFor: string;
-  readonly label: string;
-  readonly required: boolean;
-}) {
-  return (
-    <span className="field-label-row">
-      <label htmlFor={htmlFor}>{label}</label>
-      {required ? <em aria-hidden="true">必填</em> : <small aria-hidden="true">可选</small>}
-    </span>
-  );
-}
-
-function EvidenceSelect({
-  fieldId,
+function EvidenceControl({
+  field,
   value,
-  onChange,
-  label,
   error,
-  required,
+  onChange,
 }: {
-  readonly fieldId: NumericEvidenceField;
-  readonly value: EvidenceChoice | "";
-  readonly onChange: (value: EvidenceChoice | "") => void;
-  readonly label: string;
-  readonly error?: string;
-  readonly required: boolean;
+  readonly field: NumericField;
+  readonly value: EvidenceStatus | "";
+  readonly error?: InputErrorCode;
+  readonly onChange: (value: EvidenceStatus | "") => void;
 }) {
-  const id = `${fieldId}-evidence`;
-  const errorId = `${id}-error`;
+  const inputId = `evidence-${field}`;
+  const errorId = `${inputId}-error`;
   return (
     <div className="field evidence-field">
-      <FieldLabel htmlFor={id} label={`${label}的状态`} required={required} />
+      <label htmlFor={inputId}>{FIELD_LABELS[field]}的状态</label>
       <select
-        id={id}
-        name={id}
-        data-field-id={fieldId}
-        data-error-key={id}
+        id={inputId}
+        name={inputId}
         value={value}
-        aria-required={required ? "true" : undefined}
         aria-invalid={error ? "true" : undefined}
         aria-describedby={error ? errorId : undefined}
-        onChange={(event) => onChange(event.currentTarget.value as EvidenceChoice | "")}
+        onChange={(event) => onChange(event.currentTarget.value as EvidenceStatus | "")}
       >
-        <option value="">选择输入状态</option>
+        <option value="">选择状态</option>
         <option value="user-confirmed">用户确认</option>
         <option value="estimated">近似输入</option>
       </select>
-      <FieldError id={errorId} error={error} />
+      <FieldError code={error} id={errorId} />
     </div>
   );
 }
 
-function FieldError({ error, id }: { readonly error?: string; readonly id: string }) {
-  if (!error) return null;
+function ResultCard({ result, taxBasis }: { readonly result: CalculationOutput["results"][number]; readonly taxBasis: TaxBasis | "" }) {
+  const titleId = `${result.id}-title`;
   return (
-    <span className="field-error" id={id}>
-      {error}
-    </span>
-  );
-}
-
-function TextField({
-  id,
-  label,
-  value,
-  onChange,
-  error,
-  required = false,
-  hint,
-  inputMode,
-}: {
-  readonly id: WorkbenchFieldId | "period-custom-label";
-  readonly label: string;
-  readonly value: string;
-  readonly onChange: (value: string) => void;
-  readonly error?: string;
-  readonly required?: boolean;
-  readonly hint?: string;
-  readonly inputMode?: "decimal" | "text";
-}) {
-  const errorId = `${id}-error`;
-  const hintId = hint ? `${id}-hint` : null;
-  return (
-    <div className="field">
-      <FieldLabel htmlFor={id} label={label} required={required} />
-      <input
-        id={id}
-        name={id}
-        type="text"
-        value={value}
-        inputMode={inputMode}
-        required={required}
-        data-error-key={id}
-        aria-invalid={error ? "true" : undefined}
-        aria-describedby={describedBy(hintId, error ? errorId : null)}
-        onChange={(event) => onChange(event.currentTarget.value)}
-      />
-      {hint ? <span className="field-hint" id={hintId ?? undefined}>{hint}</span> : null}
-      <FieldError id={errorId} error={error} />
-    </div>
-  );
-}
-
-function InputForm({ controller }: { readonly controller: WorkbenchController }) {
-  const state = controller;
-  const errorKeys = Object.keys(state.inputErrors) as WorkbenchErrorKey[];
-  const hasFixedCost = valueOf(state, "fixed-cost-total").trim().length > 0;
-  const requiresCoverageDescription = valueOf(state, "fixed-cost-coverage") === "complete";
-  return (
-    <section className="section-block" aria-labelledby="input-title">
-      <div className="section-heading">
-        <div>
-          <p className="section-kicker">Capture</p>
-          <h2 id="input-title" data-stage-heading tabIndex={-1}>先放回你的口径</h2>
-        </div>
-        <p className="section-summary">只填写完成这次判断需要的最少信息。所有输入都可以留在当前页面内存中。</p>
+    <article className={`result ${result.availability}`} aria-labelledby={titleId}>
+      <div className="result-heading">
+        <h3 id={titleId}>{result.label}</h3>
+        <span className="status">{result.availability === "available" ? result.evidenceStatus : "数据不足"}</span>
       </div>
-
-      {errorKeys.length > 0 ? (
-        <p className="field-error-summary" role="alert">
-          有 {errorKeys.length} 项需要检查。焦点已移到第一项；你也可以退出当前会话。
-        </p>
+      <p className="result-value">{result.display ?? "数据不足"}</p>
+      <p className="formula">{result.formula} · 单位：{result.unit}</p>
+      {result.reasonCodes.length > 0 ? (
+        <p className="reason">{result.reasonCodes.map((code) => RESULT_REASON_LABELS[code]).join(" ")}</p>
       ) : null}
-
-      <div className="form-grid">
-        <div className="field">
-          <FieldLabel htmlFor="comparison-period" label="比较周期" required />
-          <select
-            id="comparison-period"
-            name="comparison-period"
-            required
-            data-error-key="comparison-period"
-            value={valueOf(state, "comparison-period")}
-            aria-invalid={inputError(state, "comparison-period") ? "true" : undefined}
-            aria-describedby={inputError(state, "comparison-period") ? "comparison-period-error" : undefined}
-            onChange={(event) => state.setField("comparison-period", event.currentTarget.value)}
-          >
-            <option value="">选择周期</option>
-            <option value="week">周</option>
-            <option value="month">月</option>
-            <option value="year">年</option>
-            <option value="custom">自定义周期</option>
-          </select>
-          <FieldError id="comparison-period-error" error={inputError(state, "comparison-period")} />
-        </div>
-
-        {valueOf(state, "comparison-period") === "custom" ? (
-          <TextField
-            id="period-custom-label"
-            label="自定义周期名称"
-            value={valueOf(state, "period-custom-label")}
-            required
-            onChange={(value) => state.setField("period-custom-label", value)}
-            error={inputError(state, "period-custom-label")}
-            hint="不需要填写精确起止日期。"
-          />
-        ) : null}
-
-        <TextField
-          id="currency"
-          label="币种"
-          value={valueOf(state, "currency")}
-          required
-          onChange={(value) => state.setField("currency", value)}
-          error={state.inputErrors.currency}
-          hint="使用固定 ISO 4217 大写代码，例如 CNY。"
-        />
-        <div className="field">
-          <FieldLabel htmlFor="income-tax-basis" label="收入口径" required />
-          <select
-            id="income-tax-basis"
-            name="income-tax-basis"
-            required
-            data-error-key="income-tax-basis"
-            value={valueOf(state, "income-tax-basis")}
-            aria-invalid={state.inputErrors["income-tax-basis"] ? "true" : undefined}
-            aria-describedby={state.inputErrors["income-tax-basis"] ? "income-tax-basis-error" : undefined}
-            onChange={(event) => state.setField("income-tax-basis", event.currentTarget.value)}
-          >
-            <option value="">选择口径</option>
-            <option value="after-tax">税后</option>
-            <option value="before-tax">税前</option>
-          </select>
-          <FieldError id="income-tax-basis-error" error={state.inputErrors["income-tax-basis"]} />
-        </div>
-
-        <TextField
-          id="income"
-          label="同周期收入"
-          value={valueOf(state, "income")}
-          required
-          inputMode="decimal"
-          onChange={(value) => state.setField("income", value)}
-          error={state.inputErrors.income}
-          hint="正数；不输入逗号或货币符号。"
-        />
-        <EvidenceSelect
-          fieldId="income"
-          label="同周期收入"
-          value={state.evidence.income}
-          required
-          error={inputError(state, "income-evidence")}
-          onChange={(value) => state.setEvidence("income", value)}
-        />
-
-        <TextField
-          id="work-hours"
-          label="同周期工作小时"
-          value={valueOf(state, "work-hours")}
-          required
-          inputMode="decimal"
-          onChange={(value) => state.setField("work-hours", value)}
-          error={state.inputErrors["work-hours"]}
-          hint="只用于时间比较，不代表生活价值。"
-        />
-        <EvidenceSelect
-          fieldId="work-hours"
-          label="同周期工作小时"
-          value={state.evidence["work-hours"]}
-          required
-          error={inputError(state, "work-hours-evidence")}
-          onChange={(value) => state.setEvidence("work-hours", value)}
-        />
-
-        <TextField
-          id="purchase-price"
-          label="购买价格"
-          value={valueOf(state, "purchase-price")}
-          required
-          inputMode="decimal"
-          onChange={(value) => state.setField("purchase-price", value)}
-          error={state.inputErrors["purchase-price"]}
-          hint="不需要商品链接、账单或凭证。"
-        />
-        <EvidenceSelect
-          fieldId="purchase-price"
-          label="购买价格"
-          value={state.evidence["purchase-price"]}
-          required
-          error={inputError(state, "purchase-price-evidence")}
-          onChange={(value) => state.setEvidence("purchase-price", value)}
-        />
-
-        <fieldset
-          className="field fieldset-field"
-          id="purchase-period-inclusion-group"
-          aria-invalid={state.inputErrors["purchase-period-inclusion"] ? "true" : undefined}
-          aria-describedby={state.inputErrors["purchase-period-inclusion"] ? "purchase-period-inclusion-error" : undefined}
-        >
-          <legend>是否计入所选周期<em aria-hidden="true">必填</em></legend>
-          <label className="choice-line"><input type="radio" name="purchase-period-inclusion" value="included" required data-error-key="purchase-period-inclusion" checked={valueOf(state, "purchase-period-inclusion") === "included"} onChange={(event) => state.setField("purchase-period-inclusion", event.currentTarget.value)} />计入</label>
-          <label className="choice-line"><input type="radio" name="purchase-period-inclusion" value="excluded" checked={valueOf(state, "purchase-period-inclusion") === "excluded"} onChange={(event) => state.setField("purchase-period-inclusion", event.currentTarget.value)} />不计入</label>
-          <FieldError id="purchase-period-inclusion-error" error={state.inputErrors["purchase-period-inclusion"]} />
-        </fieldset>
-
-        <TextField
-          id="fixed-cost-total"
-          label="固定成本汇总"
-          value={valueOf(state, "fixed-cost-total")}
-          inputMode="decimal"
-          onChange={(value) => state.setField("fixed-cost-total", value)}
-          error={state.inputErrors["fixed-cost-total"]}
-          hint="可留空；不要求列出交易明细。"
-        />
-        <EvidenceSelect
-          fieldId="fixed-cost-total"
-          label="固定成本汇总"
-          value={state.evidence["fixed-cost-total"]}
-          required={hasFixedCost}
-          error={inputError(state, "fixed-cost-total-evidence")}
-          onChange={(value) => state.setEvidence("fixed-cost-total", value)}
-        />
-
-        <div className="field">
-          <FieldLabel htmlFor="fixed-cost-coverage" label="固定成本覆盖范围" required={hasFixedCost} />
-          <select
-            id="fixed-cost-coverage"
-            data-error-key="fixed-cost-coverage"
-            required={hasFixedCost}
-            value={valueOf(state, "fixed-cost-coverage")}
-            aria-invalid={state.inputErrors["fixed-cost-coverage"] ? "true" : undefined}
-            aria-describedby={state.inputErrors["fixed-cost-coverage"] ? "fixed-cost-coverage-error" : undefined}
-            onChange={(event) => state.setField("fixed-cost-coverage", event.currentTarget.value)}
-          >
-            <option value="">未选择</option>
-            <option value="complete">完整</option>
-            <option value="partial">部分</option>
-            <option value="unknown">未知</option>
-          </select>
-          <FieldError id="fixed-cost-coverage-error" error={state.inputErrors["fixed-cost-coverage"]} />
-        </div>
-        <TextField
-          id="fixed-cost-coverage-description"
-          label="覆盖范围说明"
-          value={valueOf(state, "fixed-cost-coverage-description")}
-          required={requiresCoverageDescription}
-          onChange={(value) => state.setField("fixed-cost-coverage-description", value)}
-          error={state.inputErrors["fixed-cost-coverage-description"]}
-          hint="例如：只包含已确认的固定支出总额。"
-        />
-      </div>
-
-      <div className="field field-wide">
-        <FieldLabel htmlFor="value-expectation" label="个人价值期待" required />
-        <textarea
-          id="value-expectation"
-          name="value-expectation"
-          rows={3}
-          required
-          data-error-key="value-expectation"
-          value={valueOf(state, "value-expectation")}
-          aria-invalid={state.inputErrors["value-expectation"] ? "true" : undefined}
-          aria-describedby={describedBy("value-expectation-hint", state.inputErrors["value-expectation"] ? "value-expectation-error" : null)}
-          onChange={(event) => state.setField("value-expectation", event.currentTarget.value)}
-        />
-        <span className="field-hint" id="value-expectation-hint">写下你希望这项购买带来的结果；它不会被转换成分数或购买结论。</span>
-        <FieldError id="value-expectation-error" error={state.inputErrors["value-expectation"]} />
-      </div>
-
-      <div className="action-row">
-        <button className="button button-primary" type="button" onClick={state.openConfirmation}>检查输入与口径</button>
-        {state.session.confirmed && state.session.confirmedStability === "invalidated" && state.session.draft ? (
-          <button className="button button-secondary" type="button" onClick={() => state.dispatch({ type: "cancel-edit" })}>取消这次编辑</button>
-        ) : null}
-        <p className="action-note">不愿继续时可以随时退出，不需要说明原因。</p>
-      </div>
-    </section>
-  );
-}
-
-function ConfirmationSection({ controller }: { readonly controller: WorkbenchController }) {
-  const state = controller;
-  const summaryFields: readonly WorkbenchFieldId[] = [
-    "comparison-period", "currency", "income-tax-basis", "income", "work-hours", "purchase-price",
-    "purchase-period-inclusion", "fixed-cost-total", "fixed-cost-coverage", "fixed-cost-coverage-description", "value-expectation",
-  ];
-  return (
-    <section className="section-block" aria-labelledby="confirmation-title">
-      <div className="section-heading">
-        <div><p className="section-kicker">Normalize</p><h2 id="confirmation-title" data-stage-heading tabIndex={-1}>确认口径与状态</h2></div>
-        <p className="section-summary">请核对周期、币种、税口径和每项输入的证据状态。近似输入会保持为估算。</p>
-      </div>
-      <dl className="summary-list">
-        {summaryFields.map((fieldId) => (
-          <div className="summary-row" key={fieldId}>
-            <dt>{FIELD_LABELS[fieldId]}</dt>
-            <dd>
-              {fieldId === "value-expectation"
-                ? <LongTextValue label={FIELD_LABELS[fieldId]} value={summaryValue(state, fieldId)} />
-                : summaryValue(state, fieldId) || "未提供"}
-              <span className="status-chip">来源：{summarySource(state, fieldId)}</span>
-              <span className="status-chip">状态：{summaryStatus(state, fieldId)}</span>
-            </dd>
-          </div>
-        ))}
-      </dl>
-      {state.notice ? <p className="inline-notice" role="status">{state.notice}</p> : null}
-      <div className="action-row">
-        <button className="button button-secondary" type="button" onClick={() => state.session.confirmed ? state.dispatch({ type: "cancel-edit" }) : state.dispatch({ type: "back-to-input" })}>{state.session.confirmed ? "取消这次编辑" : "返回输入"}</button>
-        <button className="button button-primary" type="button" onClick={state.confirmInput}>{state.session.confirmed ? "重新确认当前输入" : "确认口径并查看结果"}</button>
-      </div>
-    </section>
-  );
-}
-
-function statusLabel(result: CalculationResult): string {
-  if (result.availability !== "available") return "数据不足";
-  switch (result.evidenceStatus) {
-    case "forecast": return "预测";
-    case "estimated": return "估算";
-    case "user-confirmed": return "用户确认";
-    default: return result.evidenceStatus;
-  }
-}
-
-function resultValue(result: CalculationResult): string {
-  return result.availability === "available" && result.display ? result.display.text : "数据不足";
-}
-
-function EvidenceDetails({ result }: { readonly result: CalculationResult }) {
-  const time = result.timeContext;
-  return (
-    <details className="evidence-details">
-      <summary>查看依据</summary>
-      <div className="evidence-body">
-        <dl className="evidence-list">
-          <div><dt>来源</dt><dd>{result.source}（规则内核）</dd></div>
-          <div><dt>输入</dt><dd>{result.dependencyFieldIds.map((fieldId) => FIELD_LABELS[fieldId as WorkbenchFieldId] ?? fieldId).join("、") || "无"}</dd></div>
-          <div><dt>估算输入</dt><dd>{result.estimatedDependencyFieldIds.map((fieldId) => FIELD_LABELS[fieldId as WorkbenchFieldId] ?? fieldId).join("、") || "无"}</dd></div>
-          <div><dt>公式/规则</dt><dd>{result.formulaExpression} · 规则版本 {result.rulesetRef}</dd></div>
-          <div><dt>单位与币种</dt><dd>{result.unit} · {result.currencyCode ?? "不适用"}</dd></div>
-          <div><dt>比较周期</dt><dd>{result.periodRef ? `${periodLabel(result.periodRef.kind)}${result.periodRef.customLabel ? `（${result.periodRef.customLabel}）` : ""} · ${result.periodRef.revision}` : "未提供"}</dd></div>
-          <div><dt>税口径</dt><dd>{result.taxBasis === "after-tax" ? "税后" : result.taxBasis === "before-tax" ? "税前" : "未提供"}</dd></div>
-          <div><dt>生成时点</dt><dd>{time ? `${time.recordedAtUtc} · ${time.timeZoneId}` : "未提供"}</dd></div>
-          <div><dt>状态</dt><dd>{statusLabel(result)}</dd></div>
-          <div><dt>假设</dt><dd>{result.assumptions.length > 0 ? result.assumptions.join("；") : "无额外假设"}</dd></div>
-          <div><dt>限制</dt><dd>{result.limitations.length > 0 ? result.limitations.join("；") : "结果只描述当前输入下的规则关系。"}</dd></div>
-          <div><dt>原因</dt><dd>{result.reasonCodes.length > 0 ? result.reasonCodes.map((code) => REASON_LABELS[code] ?? code).join("；") : "无"}</dd></div>
-          <div><dt>恢复</dt><dd>{result.availability === "available" ? "可返回确认阶段修改输入后重新确认。" : "补齐或修正上述原因后，再返回确认阶段重新确认。"}</dd></div>
-        </dl>
-      </div>
-    </details>
-  );
-}
-
-function ResultCard({ result }: { readonly result: CalculationResult }) {
-  const titleId = `${result.formulaId}-result-title`;
-  return (
-    <article
-      className={`result-card ${result.availability === "available" ? "is-available" : "is-unavailable"}`}
-      aria-labelledby={titleId}
-    >
-      <div className="result-card-heading">
-        <div><h3 id={titleId}>{RESULT_LABELS[result.formulaId] ?? result.formulaId}</h3><p>{resultValue(result)}</p></div>
-        <span className="result-status">{statusLabel(result)}</span>
-      </div>
-      <EvidenceDetails result={result} />
+      <details>
+        <summary>查看依据</summary>
+        <p>来源：规则计算。输入：{result.dependencyFieldIds.map((field) => DEPENDENCY_LABELS[field] ?? field).join("、")}。</p>
+        <p>口径：CNY · 月 · {taxBasis === "after-tax" ? "税后" : taxBasis === "before-tax" ? "税前" : "收入口径未确认"}。状态：{result.availability === "available" ? result.evidenceStatus : "insufficient-data"}。</p>
+        <p>假设：输入属于同一月份；余量要求固定支出完整覆盖，购买情景还要求购买计入当月。</p>
+        <p>限制：这里只描述当前输入关系，不是完整账本、真实时薪或购买建议。</p>
+        <p>修正：返回输入区修改数值、证据状态或覆盖范围，然后重新计算。</p>
+        <p>精确值：{result.exact ? `${result.exact.numerator}/${result.exact.denominator} = ${result.exact.decimal}` : "数据不足"}</p>
+      </details>
     </article>
   );
 }
 
-function UnderstandingSection({ controller }: { readonly controller: WorkbenchController }) {
-  const state = controller;
-  const results = resultsForState(state);
-  return (
-    <section className="section-block" aria-labelledby="understanding-title">
-      <div className="section-heading">
-        <div><p className="section-kicker">Understand · Simulate</p><h2 id="understanding-title" data-stage-heading tabIndex={-1}>理解与推演</h2></div>
-        <p className="section-summary">结果只来自当前确认的输入。数据不足会局部停下，不会用默认值填补。</p>
-      </div>
-      <div className="expectation-callout"><span>你的价值期待</span><LongTextValue label="个人价值期待" value={valueOf(state, "value-expectation")} /></div>
-      <div className="result-list" aria-live="polite">
-        {results.length > 0 ? results.map((result) => <ResultCard key={result.formulaId} result={result} />) : <p className="empty-state">当前没有可展示的结果，请返回确认阶段检查输入。</p>}
-      </div>
-      {state.notice ? <p className="inline-notice" role="status">{state.notice}</p> : null}
-      <div className="action-row">
-        <button className="button button-secondary" type="button" onClick={() => state.dispatch({ type: "begin-edit" })}>返回修改</button>
-        <button className="button button-primary" type="button" onClick={() => state.dispatch({ type: "open-decision" })}>继续到决定</button>
-      </div>
-    </section>
-  );
-}
+export function App() {
+  const [input, setInput] = useState<DecisionInput>(EMPTY_INPUT);
+  const [submittedInput, setSubmittedInput] = useState<DecisionInput | null>(null);
+  const [decision, setDecision] = useState<DecisionForm>({ code: "", rationale: "", reviewCondition: "" });
+  const calculated = submittedInput === input;
+  const output = calculateDecision(input);
+  const resultHeadingRef = useRef<HTMLHeadingElement>(null);
 
-const EXPORT_FORMAT_LABELS: Readonly<Record<ExportFormat, string>> = {
-  json: "JSON",
-  markdown: "Markdown",
-};
-
-const EXPORT_STATE_LABELS: Readonly<Record<string, string>> = {
-  idle: "未预览",
-  previewing: "正在预览",
-  ready: "等待确认",
-  generating: "正在生成",
-  "download-requested": "已发起下载请求",
-  failed: "导出失败",
-  cancelled: "已取消",
-};
-
-function ExportFormatPanel({
-  format,
-  controller,
-}: {
-  readonly format: ExportFormat;
-  readonly controller: ExportWorkbenchController;
-}) {
-  const state = controller[format];
-  const label = EXPORT_FORMAT_LABELS[format];
-  const errorId = `export-${format}-error`;
-  const statusRef = useRef<HTMLParagraphElement>(null);
-  const confirmRef = useRef<HTMLButtonElement>(null);
-  const previousStateRef = useRef(state.state);
   useEffect(() => {
-    const previousState = previousStateRef.current;
-    previousStateRef.current = state.state;
-    if (previousState === state.state) return;
-    if (state.state === "ready") {
-      confirmRef.current?.focus();
-      return;
-    }
-    if (state.state === "cancelled") {
-      statusRef.current?.focus();
-      return;
-    }
-    if (state.state === "download-requested") {
-      statusRef.current?.focus();
-    }
-  }, [state.state]);
-  return (
-    <article
-      className="export-format"
-      aria-labelledby={`export-${format}-title`}
-      aria-describedby={state.error ? errorId : undefined}
-      aria-busy={state.state === "previewing" || state.state === "generating" ? "true" : undefined}
-    >
-      <div className="export-format-heading">
-        <div>
-          <h4 id={`export-${format}-title`}>{label}</h4>
-          <p className="export-format-status" role="status" aria-live="polite" ref={statusRef} tabIndex={-1}>
-            {EXPORT_STATE_LABELS[state.state] ?? state.state}
-          </p>
-        </div>
-      </div>
-      {state.preview ? (
-        <div className="export-preview" aria-live="polite">
-          <dl className="export-preview-list">
-            <div><dt>文件名</dt><dd>{state.preview.file_name}</dd></div>
-            <div><dt>范围</dt><dd>当前会话的当前快照；含 {state.preview.included_field_ids.length} 个字段和已确认修订。</dd></div>
-            <div><dt>敏感类别</dt><dd>{state.preview.sensitive_field_ids.length} 个当前会话字段可能包含金额、时间或文本。</dd></div>
-            <div><dt>缺失与不足</dt><dd>数据不足仍按不可用结果保留，不以默认值补齐。</dd></div>
-            <div><dt>设备边界</dt><dd>页面只报告下载请求；是否保存、最终名称和位置由浏览器与设备决定。</dd></div>
-          </dl>
-          {state.state === "ready" ? (
-            <div className="action-row">
-              <button className="button button-primary" type="button" ref={confirmRef} onClick={() => controller.confirm(format)}>
-                确认并发起 {label} 下载请求
-              </button>
-              <button className="button button-secondary" type="button" onClick={() => controller.cancel(format)}>
-                取消 {label} 导出
-              </button>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-      {state.state === "download-requested" ? (
-        <p className="inline-notice" role="status">页面已发起下载请求；浏览器或设备是否保存、最终名称和位置未知。</p>
-      ) : null}
-      {!state.preview && state.state === "cancelled" ? <p className="inline-notice" role="status">已取消本格式导出；当前会话保持不变。</p> : null}
-      {state.error ? <p className="field-error" id={errorId}>{state.error.message}</p> : null}
-      {controller.snapshot && !state.preview && !controller.paused ? (
-        <button id={`export-${format}-preview`} className="button button-secondary" type="button" onClick={() => controller.preview(format)}>
-          预览 {label}
-        </button>
-      ) : null}
-    </article>
-  );
-}
+    if (calculated) resultHeadingRef.current?.focus();
+  }, [calculated]);
 
-function ExportSection({ controller }: { readonly controller: ExportWorkbenchController }) {
-  const canOpen = controller.canExport && !controller.snapshot && !controller.paused && !controller.cleanupBlocked;
-  const hasSnapshot = controller.snapshot !== null && !controller.snapshotStale;
-  const hasDownloadRequest = controller.json.state === "download-requested" || controller.markdown.state === "download-requested";
-  const sectionRef = useRef<HTMLElement>(null);
-  const failureRef = useRef<HTMLParagraphElement>(null);
-  const previousHasSnapshotRef = useRef(hasSnapshot);
-  const failureMessage = controller.pauseError?.message ?? controller.error?.message ?? null;
-  useEffect(() => {
-    const previouslyHadSnapshot = previousHasSnapshotRef.current;
-    previousHasSnapshotRef.current = hasSnapshot;
-    if (!previouslyHadSnapshot && hasSnapshot) {
-      sectionRef.current?.querySelector<HTMLButtonElement>("#export-json-preview")?.focus();
-    }
-  }, [hasSnapshot]);
-  useEffect(() => {
-    if (failureMessage) failureRef.current?.focus();
-  }, [failureMessage]);
-  return (
-    <section className="export-workbench" aria-labelledby="export-title" ref={sectionRef}>
-      <div className="export-heading">
-        <div>
-          <p className="section-kicker">本地出口</p>
-          <h3 id="export-title">当前会话导出</h3>
-        </div>
-        <p className="export-skip-note">导出可以跳过，不影响继续记录决定或退出。</p>
-      </div>
-      <p className="export-boundary">
-        预览只读取当前页面内存中的当前快照和已确认修订；下载文件进入设备后由你控制，原型不能召回、删除或恢复。
-      </p>
-      {!controller.buildVerified ? <p className="inline-notice" role="status">未验证实现预览，不能导出。</p> : null}
-      {controller.buildVerified && !controller.canExport ? <p className="inline-notice" role="status">暂无可导出内容；请先确认至少一项当前输入。</p> : null}
-      {controller.paused ? <p className="field-error" role="alert" ref={failureRef} tabIndex={-1}>{controller.pauseError?.message ?? "导出合同验证失败，当前构建已暂停。"}</p> : null}
-      {controller.error && !controller.pauseError ? <p className="field-error" role="alert" ref={failureRef} tabIndex={-1}>{controller.error.message}</p> : null}
-      <div className="action-row">
-        <button className="button button-secondary" type="button" onClick={controller.open} disabled={!canOpen}>
-          打开导出预览
-        </button>
-        {hasSnapshot ? <p className="action-note">已冻结一个共享快照；请分别预览并确认 JSON 或 Markdown。</p> : null}
-      </div>
-      {hasSnapshot || hasDownloadRequest ? (
-        <div className="export-format-grid">
-          <ExportFormatPanel format="json" controller={controller} />
-          <ExportFormatPanel format="markdown" controller={controller} />
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
-function DecisionSection({ controller, exportController }: { readonly controller: WorkbenchController; readonly exportController: ExportWorkbenchController }) {
-  const state = controller;
-  const [selected, setSelected] = useState<DecisionCode | "">(state.session.decision.code ?? "");
-  const [rationale, setRationale] = useState(state.session.decision.rationale ?? "");
-  const [error, setError] = useState<string | null>(null);
-  const [reviewError, setReviewError] = useState<string | null>(null);
-
-  const submitDecision = () => {
-    if (selected === "" || rationale.trim().length === 0) {
-      setError("请选择一种决定，并填写一句依据或尚待确认条件。");
-      const target = selected === ""
-        ? document.querySelector<HTMLInputElement>('input[name="decision"]')
-        : document.getElementById("decision-rationale");
-      target?.focus();
-      return;
-    }
-    setError(null);
-    controller.dispatch({ type: "set-decision", code: selected, rationale });
+  const clear = () => {
+    setInput(EMPTY_INPUT);
+    setSubmittedInput(null);
+    setDecision({ code: "", rationale: "", reviewCondition: "" });
   };
 
-  const saveReview = () => {
-    if (state.reviewDraft.kind === "" && state.reviewDraft.value.trim().length === 0) {
-      return;
-    }
-    if (state.reviewDraft.kind === "" || state.reviewDraft.value.trim().length === 0) {
-      setReviewError("如填写复盘交接，请同时选择日期或条件并填写内容。");
-      const target = state.reviewDraft.kind === ""
-        ? document.getElementById("review-kind")
-        : document.getElementById("review-value");
-      target?.focus();
-      return;
-    }
-    setReviewError(null);
-    controller.dispatch({ type: "save-review" });
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmittedInput(input);
   };
 
-  return (
-    <section className="section-block decision-block" aria-labelledby="decision-title">
-      <div className="section-heading">
-        <div><p className="section-kicker">Decide · Review handoff</p><h2 id="decision-title" data-stage-heading tabIndex={-1}>记录你的决定</h2></div>
-        <p className="section-summary">这里不评价、不排序，也不替你判断什么值得。复盘交接由产品外人工完成。</p>
-      </div>
+  const visibleErrors = calculated ? output.inputErrors : {};
 
-      <fieldset className="decision-options" aria-invalid={error ? "true" : undefined} aria-describedby={error ? "decision-error" : undefined}>
-        <legend>决定状态<em aria-hidden="true">必填</em></legend>
-        {DECISION_OPTIONS.map(({ code, label }) => (
-          <label className="decision-option" key={code}><input type="radio" name="decision" value={code} required checked={selected === code} onChange={() => setSelected(code)} /><span>{label}</span></label>
-        ))}
-      </fieldset>
-      <div className="field field-wide">
-        <FieldLabel htmlFor="decision-rationale" label="依据或尚待确认条件" required />
-        <textarea id="decision-rationale" rows={3} required value={rationale} onChange={(event) => { setRationale(event.currentTarget.value); setError(null); }} aria-invalid={error ? "true" : undefined} aria-describedby={describedBy("decision-rationale-hint", error ? "decision-error" : null)} />
-        <span className="field-hint" id="decision-rationale-hint">只记录你当时愿意保留的一句话，不会发送给研究者或其他服务。</span>
-      </div>
-      {error ? <p className="field-error" id="decision-error" role="alert">{error}</p> : null}
-      <div className="action-row">
-        <button className="button button-secondary" type="button" onClick={() => controller.dispatch({ type: "set-phase", phase: "understanding" })}>返回理解</button>
-        <button className="button button-primary" type="button" onClick={submitDecision}>记录我的决定</button>
-      </div>
-
-      {state.handoffComplete ? <div className="handoff-panel" role="status"><h3>决定交接已完成</h3><p>决定只保留在当前会话内存中。原型不创建提醒、不联系任何人，也不代表已经完成产品内复盘。</p></div> : null}
-
-      <div className="review-panel" aria-labelledby="review-title">
-        <div><h3 id="review-title">可选复盘条件</h3><p>如果你愿意，可以留下产品外人工复盘的条件或日期。这里不会保存、上传或自动提醒。</p></div>
-        <div className="review-grid">
-          <div className="field"><FieldLabel htmlFor="review-kind" label="复盘方式" required={false} /><select id="review-kind" value={state.reviewDraft.kind} aria-invalid={reviewError ? "true" : undefined} aria-describedby={reviewError ? "review-error" : undefined} onChange={(event) => { setReviewError(null); controller.dispatch({ type: "set-review-draft", kind: event.currentTarget.value as "" | "local-date" | "condition", value: state.reviewDraft.value }); }}><option value="">暂不设置</option><option value="local-date">日期</option><option value="condition">条件</option></select></div>
-          <div className="field"><FieldLabel htmlFor="review-value" label={state.reviewDraft.kind === "local-date" ? "复盘日期" : "复盘条件"} required={false} /><input id="review-value" type={state.reviewDraft.kind === "local-date" ? "date" : "text"} value={state.reviewDraft.value} aria-invalid={reviewError ? "true" : undefined} aria-describedby={reviewError ? "review-error" : undefined} onChange={(event) => { setReviewError(null); controller.dispatch({ type: "set-review-draft", kind: state.reviewDraft.kind, value: event.currentTarget.value }); }} /></div>
-        </div>
-        {reviewError ? <p className="field-error" id="review-error" role="alert">{reviewError}</p> : null}
-        <button className="button button-secondary" type="button" onClick={saveReview}>记录复盘交接</button>
-        {state.session.review.availability === "available" ? <p className="inline-notice" role="status">复盘交接条件已记录在当前会话内存中。</p> : null}
-      </div>
-
-      <ExportSection controller={exportController} />
-    </section>
-  );
-}
-
-function PrivacyNotice({ controller }: { readonly controller: WorkbenchController }) {
-  return (
-    <section className="privacy-card" aria-labelledby="privacy-title">
-      <p className="section-kicker">开始前</p>
-      <h1 id="privacy-title">先看清这次会话的边界</h1>
-      <p className="lead">这是用于形成性研究的单案例购买决策原型。它只帮助你查看输入、口径和规则关系，不替你定义什么值得，也不提供购买建议。</p>
-      <ul className="privacy-list">
-        <li>当前会话数据只在浏览器内存中处理；刷新或关闭页面后，原型不会保留或恢复。</li>
-        <li>只有你主动触发本地导出时，才会在你的设备上创建文件；下载后的文件由你的设备控制。</li>
-        <li>本页不写入 Cookie 或浏览器持久化，不发送产品数据，也不接入账户、联系人、提醒或外部服务。</li>
-        <li>当前原型只面向你控制的 loopback 或受控 LAN 页面；如果页面由受控静态托管提供，服务端可能看到最小访问元数据（例如请求时间、网络地址或用户代理）。这不表示会话数据会被上传。</li>
-        <li>正式研究同意、脱敏观察和后续联系属于产品外流程；本原型不替代这些授权，也不默认录音、录像或截图。</li>
-        <li>你可以在任一阶段退出，不需要解释原因。退出会清除原型内存中的当前会话。</li>
-      </ul>
-      <div className="action-row"><button className="button button-primary" type="button" onClick={controller.start}>我了解，开始输入</button><button className="button button-quiet" type="button" onClick={controller.exit}>退出当前会话</button></div>
-    </section>
-  );
-}
-
-function ExitScreen({ controller }: { readonly controller: WorkbenchController }) {
-  const headingRef = useRef<HTMLHeadingElement>(null);
-  useEffect(() => {
-    headingRef.current?.focus();
-  }, []);
   return (
     <main className="app-shell">
-      <section className="exit-card" aria-labelledby="exit-title">
-        <p className="section-kicker">会话已退出</p>
-        <h1 id="exit-title" ref={headingRef} tabIndex={-1}>当前页面内存已清除</h1>
-        <p>原型不会恢复这次会话，也不会声称可以删除你已经下载到设备上的文件。</p>
-        <button className="button button-primary" type="button" onClick={controller.start}>开始新的空白会话</button>
-      </section>
-    </main>
-  );
-}
-
-function Workbench({ controller, exportController }: { readonly controller: WorkbenchController; readonly exportController: ExportWorkbenchController }) {
-  const state = controller;
-  const stage = currentStage(state);
-  const stageRegionRef = useRef<HTMLElement>(null);
-  const previousPhaseRef = useRef<string | null>(null);
-  const previousErrorCountRef = useRef(0);
-  const inputErrorKeys = Object.keys(state.inputErrors) as WorkbenchErrorKey[];
-  const firstInputErrorKey = inputErrorKeys[0] ?? null;
-  useEffect(() => {
-    const previousPhase = previousPhaseRef.current;
-    const previousErrorCount = previousErrorCountRef.current;
-    const phaseChanged = previousPhase !== state.session.phase;
-    previousPhaseRef.current = state.session.phase;
-    previousErrorCountRef.current = inputErrorKeys.length;
-    if (
-      state.session.phase === "input" &&
-      firstInputErrorKey &&
-      (previousPhase !== "input" || previousErrorCount === 0)
-    ) {
-      const target = [...(stageRegionRef.current?.querySelectorAll<HTMLElement>("[data-error-key]") ?? [])]
-        .find((element) => element.dataset.errorKey === firstInputErrorKey);
-      target?.focus();
-      return;
-    }
-    if (!phaseChanged) return;
-    const heading = stageRegionRef.current?.querySelector<HTMLElement>("[data-stage-heading]");
-    heading?.focus();
-  }, [firstInputErrorKey, inputErrorKeys.length, state.session.phase]);
-  return (
-    <main className="app-shell" ref={stageRegionRef}>
       <header className="topbar">
-        <div className="brand-lockup"><span className="brand-mark">值观</span><span className="brand-subtitle">购买决策工作台</span></div>
-        <nav aria-label="会话阶段"><ol className="stage-progress">{STAGE_LABELS.map((label, index) => {
-          const step = index + 1;
-          const status = step === stage ? "当前阶段" : step < stage ? "已完成" : "未开始";
-          return <li className={step === stage ? "is-current" : step < stage ? "is-complete" : ""} aria-current={step === stage ? "step" : undefined} aria-label={`${label}，${status}`} key={label}><span aria-hidden="true">{step}</span><b aria-hidden="true">{label}</b><span className="visually-hidden">，{status}</span></li>;
-        })}</ol></nav>
-        <button className="exit-button" type="button" onClick={controller.exit}>退出当前会话</button>
+        <p className="eyebrow">值观 · 购买决策</p>
+        <button className="quiet-button" type="button" onClick={clear}>清空当前会话</button>
       </header>
+      <section className="intro" aria-labelledby="page-title">
+        <h1 id="page-title">把一次购买放回你的月度口径</h1>
+        <p>只在当前页面内存中计算。结果描述输入之间的关系，不替你做决定；缺失或不合适的输入会显示为数据不足。</p>
+      </section>
 
-      <section className="task-intro" aria-labelledby="page-title"><div><p className="section-kicker">当前任务</p><h1 id="page-title">把一次购买放回你的时间与口径</h1></div><p>先确认输入，再查看可以安全得出的关系。决定由你记录，复盘在产品外完成。</p></section>
-      {state.notice && !isConfirmationStage(state) && !isDecisionStage(state) ? <p className="global-notice" role="status">{state.notice}</p> : null}
-      {isInputStage(state) ? <InputForm controller={controller} /> : null}
-      {isConfirmationStage(state) ? <ConfirmationSection controller={controller} /> : null}
-      {isUnderstandingStage(state) ? <UnderstandingSection controller={controller} /> : null}
-      {isDecisionStage(state) ? <DecisionSection controller={controller} exportController={exportController} /> : null}
-      <footer className="session-footer"><span>当前会话只存在于此页面内存。</span><button className="button button-quiet" type="button" onClick={controller.exit}>退出并清除当前会话</button></footer>
+      <form className="card form" onSubmit={submit} noValidate autoComplete="off">
+        <div className="section-heading">
+          <div><p className="eyebrow">输入</p><h2>确认最少信息</h2></div>
+          <p className="hint">固定使用 CNY 与月周期，不联网、不保存。</p>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="tax-basis">收入口径</label>
+            <select
+              id="tax-basis"
+              name="tax-basis"
+              value={input.taxBasis}
+              aria-invalid={visibleErrors.taxBasis ? "true" : undefined}
+              aria-describedby={visibleErrors.taxBasis ? "tax-basis-error" : undefined}
+              onChange={({ currentTarget: { value } }) => setInput((current) => ({ ...current, taxBasis: value as TaxBasis | "" }))}
+            >
+              <option value="">选择口径</option>
+              <option value="after-tax">税后（可支配）</option>
+              <option value="before-tax">税前</option>
+            </select>
+            <FieldError code={visibleErrors.taxBasis} id="tax-basis-error" />
+          </div>
+          <div className="field field-static"><span className="label">币种与周期</span><output>CNY · 月</output></div>
+          {NUMERIC_FIELDS.map((field) => (
+            <div className="input-pair" key={field}>
+              <NumericFieldControl field={field} input={input} error={visibleErrors[field] === "evidence-required" ? undefined : visibleErrors[field]} onChange={(value) => setInput((current) => updateNumeric(current, field, value))} />
+              <EvidenceControl field={field} value={input.evidence[field]} error={input.evidence[field] === "" && visibleErrors[field] === "evidence-required" ? "evidence-required" : undefined} onChange={(value) => setInput((current) => updateEvidence(current, field, value))} />
+            </div>
+          ))}
+          <div className="field">
+            <label htmlFor="fixed-cost-coverage">固定支出覆盖范围</label>
+            <select id="fixed-cost-coverage" value={input.fixedCostCoverage} onChange={({ currentTarget: { value } }) => setInput((current) => ({ ...current, fixedCostCoverage: value as DecisionInput["fixedCostCoverage"] }))} aria-invalid={visibleErrors.fixedCostCoverage ? "true" : undefined} aria-describedby={visibleErrors.fixedCostCoverage ? "fixed-cost-coverage-error" : undefined}>
+              <option value="">选择范围</option>
+              <option value="complete">完整覆盖</option>
+              <option value="partial">部分覆盖</option>
+              <option value="unknown">不确定</option>
+            </select>
+            <span className="hint">可用余量只使用你确认过的完整固定支出范围。</span>
+            <FieldError code={visibleErrors.fixedCostCoverage} id="fixed-cost-coverage-error" />
+          </div>
+          <fieldset className="field choice-field" aria-invalid={visibleErrors.purchaseIncluded ? "true" : undefined} aria-describedby={visibleErrors.purchaseIncluded ? "purchase-included-error" : undefined}>
+            <legend>购买是否计入当前月份</legend>
+            <label><input type="radio" name="purchase-included" value="included" checked={input.purchaseIncluded === "included"} onChange={() => setInput((current) => ({ ...current, purchaseIncluded: "included" }))} />计入</label>
+            <label><input type="radio" name="purchase-included" value="excluded" checked={input.purchaseIncluded === "excluded"} onChange={() => setInput((current) => ({ ...current, purchaseIncluded: "excluded" }))} />不计入</label>
+            <FieldError code={visibleErrors.purchaseIncluded} id="purchase-included-error" />
+          </fieldset>
+          <div className="field field-wide">
+            <label htmlFor="value-expectation">个人价值期待</label>
+            <textarea id="value-expectation" rows={3} value={input.valueExpectation} onChange={({ currentTarget: { value } }) => setInput((current) => ({ ...current, valueExpectation: value }))} />
+            <span className="hint">只记录你希望这项购买带来的结果，不会转换成分数。</span>
+          </div>
+        </div>
+        <div className="form-actions">
+          <button className="primary-button" type="submit">计算当前关系</button>
+          <span className="hint">收入、工时、固定支出和购买金额均使用有限范围的正数；固定支出可为 0。</span>
+        </div>
+      </form>
+
+      <section className="results-section" aria-labelledby="results-title" aria-live="polite">
+        <div className="section-heading">
+          <div><p className="eyebrow">理解</p><h2 id="results-title" ref={resultHeadingRef} tabIndex={-1}>计算结果</h2></div>
+          <p className="hint">每个结果都显示来源、公式、单位和数据状态。</p>
+        </div>
+        {calculated ? (
+          <div className="result-grid">{output.results.map((result) => <ResultCard key={result.id} result={result} taxBasis={input.taxBasis} />)}</div>
+        ) : (
+          <p className="notice">填写输入后点击“计算当前关系”。修改输入后需要重新计算。</p>
+        )}
+      </section>
+
+      <section className="card decision-card" aria-labelledby="decision-title">
+        <div className="section-heading"><div><p className="eyebrow">决定 · 复盘</p><h2 id="decision-title">记录你的决定</h2></div><p className="hint">决定属于你；这里只保留当前页面内存。</p></div>
+        <fieldset className="decision-options">
+          <legend>决定状态</legend>
+          {DECISION_OPTIONS.map((option) => <label key={option.code}><input type="radio" name="decision" value={option.code} checked={decision.code === option.code} onChange={() => setDecision((current) => ({ ...current, code: option.code }))} />{option.label}</label>)}
+        </fieldset>
+        <div className="field field-wide"><label htmlFor="decision-rationale">依据或尚待确认条件</label><textarea id="decision-rationale" rows={3} value={decision.rationale} onChange={({ currentTarget: { value } }) => setDecision((current) => ({ ...current, rationale: value }))} /><span className="hint">不填写也不会替你生成决定。</span></div>
+        <div className="field field-wide"><label htmlFor="review-condition">可选复盘条件</label><input id="review-condition" type="text" value={decision.reviewCondition} onChange={({ currentTarget: { value } }) => setDecision((current) => ({ ...current, reviewCondition: value }))} /><span className="hint">产品外人工复盘；本页不提醒、不上传。</span></div>
+      </section>
+
+      <section className="card export-card" aria-labelledby="export-title">
+        <div className="section-heading"><div><p className="eyebrow">出口</p><h2 id="export-title">一次性 JSON 导出</h2></div><p className="hint">只有点击按钮时才在设备上创建文件。</p></div>
+        <p>导出包含当前输入和当前结果（包括数据不足状态）；下载后的文件由浏览器和设备控制。</p>
+        <button className="secondary-button" type="button" disabled={!calculated} onClick={() => exportJson(input, output, decision)}>下载当前 JSON</button>
+      </section>
+
+      <footer className="footer">退出或刷新页面即可清空当前页面内存；本页不会上传或持久化数据。</footer>
     </main>
   );
 }
-
-export interface AppProps {
-  readonly buildIdentityGate?: Readonly<BuildIdentityGate>;
-  readonly exportOptions?: Omit<ExportWorkbenchOptions, "buildIdentityGate">;
-}
-
-export function App({ buildIdentityGate = getBuildIdentityGate(), exportOptions }: AppProps = {}) {
-  const controller = useWorkbenchController();
-  const exportController = useExportWorkbenchController(controller.session, { ...exportOptions, buildIdentityGate });
-  const exited = controller.session.lifecycle === "exited";
-  if (exited) return <ExitScreen controller={controller} />;
-  if (!controller.privacyAcknowledged) return <main className="app-shell"><PrivacyNotice controller={controller} /></main>;
-  return <Workbench controller={controller} exportController={exportController} />;
-}
-
-export { FIELD_LABELS, RESULT_LABELS, STAGE_LABELS };
