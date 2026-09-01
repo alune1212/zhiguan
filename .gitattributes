@@ -4,3 +4,5 @@
 *.yml text eol=lf
 *.yaml text eol=lf
 *.json text eol=lf
+
+fixtures/currency/iso4217-list-one-2026-01-01.xml binary

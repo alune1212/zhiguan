@@ -1,0 +1,30 @@
+{
+  "name": "zhiguan-purchase-decision-workbench",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "allowScripts": {
+    "fsevents": false
+  },
+  "scripts": {
+    "check": "npm run typecheck && npm test && npm run build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "dev": "vite --host 127.0.0.1 --port 4173",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173"
+  },
+  "dependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "@vitejs/plugin-react": "6.1.0",
+    "typescript": "7.0.2",
+    "vite": "8.2.2",
+    "vitest": "4.1.11"
+  }
+}
