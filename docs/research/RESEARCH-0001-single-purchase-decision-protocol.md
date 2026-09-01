@@ -11,8 +11,8 @@
 | 负责人 | Alune |
 | 正式评审角色 | Alune 兼任产品、数据/隐私、设计/可理解性和工程角色 |
 | 独立挑战者 | 待指定；必须在 `Recruitment Authorized` 前完成复核 |
-| 版本与日期 | `0.1.0` / `2026-08-21` |
-| 相关文档 | [`PRD-0001`](../product/prd/PRD-0001-single-purchase-decision-workbench.md)；[Experiment Issue #1](https://github.com/alune1212/zhiguan/issues/1)；[`PRODUCT.md`](../../PRODUCT.md)；[`ARCHITECTURE.md`](../../ARCHITECTURE.md) |
+| 版本与日期 | `0.2.0` / `2026-09-01` |
+| 相关文档 | [`PRD-0001`](../product/prd/PRD-0001-single-purchase-decision-workbench.md)；[`ADR-0004`](../adr/ADR-0004-research-data-custody-and-deletion.md)；[`AC-18 runbook`](RESEARCH-0001-storage-runbook.md)；[Experiment Issue #1](https://github.com/alune1212/zhiguan/issues/1)；[`PRODUCT.md`](../../PRODUCT.md)；[`ARCHITECTURE.md`](../../ARCHITECTURE.md) |
 | 结果文档 | 研究完成后创建 `docs/research/RESEARCH-0001-single-purchase-decision-results.md`；不得预填虚构结果 |
 
 ## 1. 目的与授权边界
@@ -50,7 +50,7 @@
 
 原型内的会话边界确认不能替代正式研究同意。所有说明使用平静、具体、可退出的语言，不暗示拒绝会带来损失。
 
-本协议 `0.1.0` 只定义上述可选授权的分层原则，不授权实际采集原话、录音、录像或截屏。若后续确有必要，必须先修订协议，明确与存储 A/B 分离的加密位置、访问者、最短保留期限、删除 readback 和结果使用边界，并重新完成独立人类挑战与 `Recruitment Authorized`；在此之前，即使参与者表示愿意，也不得采集。
+本协议 `0.2.0` 只定义上述可选授权的分层原则，不授权实际采集原话、录音、录像或截屏。若后续确有必要，必须先修订协议，明确与存储 A/B 分离的加密位置、访问者、最短保留期限、删除 readback 和结果使用边界，并重新完成独立人类挑战与 `Recruitment Authorized`；在此之前，即使参与者表示愿意，也不得采集。
 
 ### 3.2 退出与撤回
 
@@ -71,7 +71,7 @@
 
 共同要求：
 
-- 加密工具、实际存储位置、访问 readback 和删除方法必须在招募前确定并演练；当前未确定。
+- 加密工具、固定存储位置、访问边界和删除方法已由 [`ADR-0004`](../adr/ADR-0004-research-data-custody-and-deletion.md) 确定；实际路径、权限、无默认同步/备份和删除 readback 尚未通过另行授权的合成演练证明，AC-18 仍未通过。
 - 默认不启用云同步或备份；若候选工具无法证明这一点，不得使用。
 - 两个存储都不得位于本仓库、GitHub Issue、原型、浏览器存储、普通日志或分析系统中。
 - 研究编号使用无语义随机值，不编码姓名、日期、批次、设备或购买内容。
@@ -99,12 +99,12 @@
 | 随机研究编号 | 无语义随机 ID | 研究层 `actual` | 不编码身份或场景 |
 | 批次 | `1` / `2` | 研究层 `actual` | 不含精确会话日期 |
 | 四个宏观阶段结果 | `completed` / `aborted` / `not-reached` | 研究层 `actual` | 分别记录输入与期待、确认口径、理解与推演、决定与交接 |
-| 解释检查项 | 来源、公式、证据状态、不确定性四个布尔值 | 研究层 `actual` | 不保存参与者回答原文 |
-| 价值期待关联检查 | `passed` / `not-passed` / `not-reached` | 研究层 `actual` + 参与者回答为 `user-confirmed` | 只判断能否把决定或不决定与自己的价值期待关联，不保存期待或回答全文 |
+| 解释检查项 | 来源、公式、证据状态、不确定性四项分别为 `true` / `false` / 条件性 `null` | 研究层 `actual` | `null` 只按下方阶段规则表示 `not-reached` 或 `not-observed`；不保存参与者回答原文 |
+| 价值期待关联检查 | `passed` / `not-passed` / `not-reached` / `not-observed` | 研究层 `actual` + 参与者回答为 `user-confirmed` | 只判断能否把决定或不决定与自己的价值期待关联，不保存期待或回答全文 |
 | 输入轮次 | `1` / `2` / `3+` / `not-reached` | 研究层 `actual` | 只记录到首次有效理解前的宏观输入轮次，不记录按键流或字段原值 |
 | 首次阻塞阶段 | `none` / `stage-1` / `stage-2` / `stage-3` / `stage-4` / `not-reached` | 研究层 `actual` | 使用第 2 节四个宏观阶段，不保存自由文本原因 |
-| 主动修正次数 | `0` / `1` / `2+` | 研究层 `actual` | 不保存按键或字段原值 |
-| 决定类别 | `purchase` / `wait` / `adjust-condition` / `do-not-purchase` / `undecided` | 研究层 `user-confirmed` | 不保存决定依据全文 |
+| 主动修正次数 | `0` / `1` / `2+` / `not-reached` | 研究层 `actual` | 不保存按键或字段原值；第一阶段未到达时使用 `not-reached` |
+| 决定类别 | `purchase` / `wait` / `adjust-condition` / `do-not-purchase` / `undecided` / 条件性 `null` | 研究层 `user-confirmed` | `undecided` 只表示已到达决定阶段后的明确确认；未完成第四阶段时使用 `null`，不保存决定依据全文 |
 | 输入耗时 | `under-5m` / `5-to-under-10m` / `10-to-under-20m` / `20m-plus` / `not-reached` / `not-observed` | 研究层 `actual` | 可现场计时后只保存分档，不保存精确起止时间戳 |
 | 信任事件 | `none`、`not-observed` 或本节下方有限代码，可记录多个 | 研究层 `actual` 或参与者确认 | 不保存自由文本描述；关键事件立即暂停并按下方无逐人扩张规则处置 |
 | 复盘结果类别 | `result-observed` / `feedback-only` / `no-result` / `not-reached` | 研究层 `actual` / `user-confirmed` | 不保存完整体验叙述 |
@@ -113,13 +113,24 @@
 
 禁止添加自由文本“备注”列。若研究确需引用原话，必须使用单独可选授权和独立存储，并先修订本协议；不得把原话放入封闭字段观察表。
 
-缺失语义固定为：已到达且未发生使用 `none`，未到达使用 `not-reached`，已到达但无法可靠观察使用 `not-observed`，三者不得互换。信任事件代码只允许：
+缺失语义固定为：已到达且未发生使用 `none`，未到达使用 `not-reached`，已到达但无法可靠观察使用 `not-observed`，三者不得互换。
+
+- 后一阶段只有在前一阶段为 `completed` 后才能为 `completed` 或 `aborted`；一旦某阶段为 `aborted` 或 `not-reached`，之后各阶段必须为 `not-reached`。
+- 第三阶段为 `completed` 时，四个解释检查项都必须为布尔值；为 `aborted` 时，已可靠观察项使用布尔值，无法可靠观察项使用 `null=not-observed`；为 `not-reached` 时四项都使用 `null=not-reached`。
+- 第四阶段为 `completed` 时，决定类别必须为一个封闭值；为 `aborted` 或 `not-reached` 时决定类别必须为 `null`。`undecided` 不得用来代替未到达或未观察。
+- 第一阶段为 `not-reached` 时，输入轮次、输入耗时和主动修正次数都必须为 `not-reached`；第一阶段已到达（`completed` 或 `aborted`）时，三者不得使用 `not-reached`。
+- 首次阻塞阶段必须等于第一个 `aborted` 阶段；没有 `aborted` 但存在 `not-reached` 时使用 `not-reached`；四阶段全部完成时使用 `none`。
+- 第四阶段为 `not-reached` 时，价值期待关联检查必须为 `not-reached`；第四阶段已到达时不得使用 `not-reached`。第一阶段未到达时复盘结果也必须为 `not-reached`；第一阶段已到达后，复盘可暂时为空，聚合前必须解析为封闭值或 `not-reached`。
+
+信任事件代码只允许：
 
 - `unexpected-product-data-egress`、`unexpected-persistence-or-copy`、`sensitive-log-or-capture`、`evidence-state-overclaim`、`untraceable-or-stale-result`、`cannot-correct-exit-clear`、`coercive-or-shaming-decision`、`export-contract-breach`：均为 `critical`，立即暂停；
 - `boundary-explanation-confusion`、`evidence-label-confusion`、`input-burden-friction`：均为 `non-critical`；
 - 不能归入上述有限代码的事件不得写入自由文本“其他”，应暂停记录、先修订协议并重新评审 schema。
 
-事件处置不得形成第三个逐人数据集。存储 B 只保留事件代码、级别和随机研究编号；需要联系参与者时，存储 A 只记录联系状态，不复制事件叙述。根因与恢复记录只能使用事件代码、构建/规则/配置版本、受影响数据类别和非识别化数量，不得包含研究编号、联系人、原始输入或参与者原话；若无法在这些边界内处置，研究保持暂停并删除不合规副本。
+信任事件在 B 中使用集合语义：无子记录表示 `none`；一条 `not-observed` 记录必须独占；其他记录只保存唯一事件代码，同一代码重复发生不新增次数。级别由上方固定映射推导，不在 B 中重复存储。
+
+事件处置不得形成第三个逐人数据集。存储 B 只保留事件代码和随机研究编号；需要联系参与者时，存储 A 只记录联系状态，不复制事件叙述。根因与恢复记录只能使用事件代码、构建/规则/配置版本、受影响数据类别和非识别化数量，不得包含研究编号、联系人、原始输入或参与者原话；若无法在这些边界内处置，研究保持暂停并删除不合规副本。
 
 ## 7. 静态托管与访问元数据
 
