@@ -25,7 +25,9 @@ export type InputErrorCode =
   | "tax-basis-required"
   | "before-tax-margin-unavailable"
   | "fixed-cost-coverage-required"
-  | "purchase-period-required";
+  | "purchase-period-required"
+  | "goal-name-required"
+  | "goal-unit-required";
 
 export interface DecisionInput {
   readonly income: string;
@@ -37,6 +39,19 @@ export interface DecisionInput {
   readonly purchaseIncluded: "included" | "excluded" | "";
   readonly valueExpectation: string;
   readonly evidence: Readonly<Record<NumericField, EvidenceStatus | "">>;
+}
+
+export type GoalField = "name" | "target" | "current" | "unit";
+
+export interface GoalInput {
+  readonly name: string;
+  readonly target: string;
+  readonly current: string;
+  readonly unit: string;
+  readonly evidence: Readonly<{
+    readonly target: EvidenceStatus | "";
+    readonly current: EvidenceStatus | "";
+  }>;
 }
 
 export interface ExactValue {
@@ -69,6 +84,27 @@ export interface CalculationResult {
 export interface CalculationOutput {
   readonly results: readonly CalculationResult[];
   readonly inputErrors: Readonly<Partial<Record<NumericField | "taxBasis" | "fixedCostCoverage" | "purchaseIncluded", InputErrorCode>>>;
+}
+
+export interface GoalProgressResult {
+  readonly id: "goal-progress";
+  readonly label: string;
+  readonly availability: "available" | "insufficient-data";
+  readonly evidenceStatus: EvidenceStatus | "insufficient-data";
+  readonly completedRatio: ExactValue | null;
+  readonly completedDisplay: string | null;
+  readonly remainingGap: ExactValue | null;
+  readonly remainingDisplay: string | null;
+  readonly unit: string;
+  readonly formula: string;
+  readonly dependencyFieldIds: readonly string[];
+  readonly reasonCodes: readonly InputErrorCode[];
+  readonly source: "ruleset-derived";
+}
+
+export interface GoalProgressOutput {
+  readonly result: GoalProgressResult;
+  readonly inputErrors: Readonly<Partial<Record<GoalField, InputErrorCode>>>;
 }
 
 interface Money {
@@ -169,6 +205,12 @@ export function parseWorkHours(raw: string): ParseResult<Rational> {
   if (numerator === 0n) return { ok: false, reasonCode: "zero-not-allowed" };
   if (numerator > MAX_WORK_HOURS_NUMERATOR) return { ok: false, reasonCode: "number-too-large" };
   return { ok: true, value: rational(numerator, denominator) };
+}
+
+function parseGoalValue(raw: string, allowZero = true): ParseResult<Rational> {
+  const parsed = parseAmount(raw, allowZero);
+  if (!parsed.ok) return parsed;
+  return { ok: true, value: rational(parsed.value.cents, 100n) };
 }
 
 function inputReasons(parsed: ParseResult<unknown>, evidence: EvidenceStatus | ""): InputErrorCode[] {
@@ -313,6 +355,55 @@ export function calculateDecision(input: DecisionInput): CalculationOutput {
 
   return {
     results: [rateResult, workTimeResult, marginResult, afterResult, impactResult],
+    inputErrors,
+  };
+}
+
+export function calculateGoalProgress(input: GoalInput): GoalProgressOutput {
+  const parsedTarget = parseGoalValue(input.target, false);
+  const parsedCurrent = parseGoalValue(input.current);
+  const targetReasons = inputReasons(parsedTarget, input.evidence.target);
+  const currentReasons = inputReasons(parsedCurrent, input.evidence.current);
+  const nameReasons: InputErrorCode[] = input.name.trim() ? [] : ["goal-name-required"];
+  const unitReasons: InputErrorCode[] = input.unit.trim() ? [] : ["goal-unit-required"];
+  const reasons = [...nameReasons, ...unitReasons, ...targetReasons, ...currentReasons];
+  const inputErrors: Partial<Record<GoalField, InputErrorCode>> = {};
+  if (nameReasons[0]) inputErrors.name = nameReasons[0];
+  if (targetReasons[0]) inputErrors.target = targetReasons[0];
+  if (currentReasons[0]) inputErrors.current = currentReasons[0];
+  if (unitReasons[0]) inputErrors.unit = unitReasons[0];
+
+  const available = reasons.length === 0 && parsedTarget.ok && parsedCurrent.ok;
+  const completed = available
+    ? rational(parsedCurrent.value.numerator * parsedTarget.value.denominator, parsedCurrent.value.denominator * parsedTarget.value.numerator)
+    : null;
+  const difference = available
+    ? rational(
+        parsedTarget.value.numerator * parsedCurrent.value.denominator - parsedCurrent.value.numerator * parsedTarget.value.denominator,
+        parsedTarget.value.denominator * parsedCurrent.value.denominator,
+      )
+    : null;
+  const remaining = difference && difference.numerator > 0n ? difference : available ? rational(0n, 1n) : null;
+  const evidenceStatus: EvidenceStatus = input.evidence.target === "estimated" || input.evidence.current === "estimated"
+    ? "estimated"
+    : "user-confirmed";
+  const unit = input.unit.trim();
+  return {
+    result: {
+      id: "goal-progress",
+      label: "Goal Progress",
+      availability: available ? "available" : "insufficient-data",
+      evidenceStatus: available ? evidenceStatus : "insufficient-data",
+      completedRatio: available && completed ? ratioExact(completed) : null,
+      completedDisplay: available && completed ? `${formatRational(rational(completed.numerator * 100n, completed.denominator))}%` : null,
+      remainingGap: available && remaining ? ratioExact(remaining) : null,
+      remainingDisplay: available && remaining ? `${formatRational(remaining)} ${unit}` : null,
+      unit,
+      formula: "完成比例 = 当前值 ÷ 目标值 × 100%；剩余差距 = max(目标值 − 当前值, 0)",
+      dependencyFieldIds: ["name", "target", "current", "unit"],
+      reasonCodes: [...new Set(reasons)],
+      source: "ruleset-derived",
+    },
     inputErrors,
   };
 }

@@ -11,6 +11,7 @@ body { min-height: 100vh; margin: 0; background: #f4f7f3; }
 button, input, select, textarea { font: inherit; }
 button, input, select { min-height: 2.75rem; }
 button { cursor: pointer; border: 0; }
+button:disabled { cursor: not-allowed; opacity: .55; }
 :focus-visible { outline: 3px solid #19735d; outline-offset: 3px; }
 
 .app-shell { width: min(100% - 2rem, 68rem); margin: 0 auto; padding: 1.5rem 0 3rem; }
@@ -53,6 +54,9 @@ p { line-height: 1.6; }
 .status { color: #237158; font-size: .8rem; }
 .insufficient-data .status { color: #a13f34; }
 .result-value { margin: 1rem 0 .4rem; font-size: 1.35rem; font-weight: 750; }
+.goal-results { margin-top: 1.5rem; }
+.goal-results > h3 { margin-bottom: .75rem; }
+.goal-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .formula, .reason, details { color: #5a6c62; font-size: .86rem; }
 .reason { color: #a13f34; }
 details { margin-top: .75rem; }
@@ -61,7 +65,7 @@ summary { cursor: pointer; color: #237158; }
 .footer { margin-top: 2rem; color: #617269; font-size: .85rem; }
 
 @media (max-width: 42rem) {
-  .intro, .input-pair { grid-template-columns: 1fr; }
+  .intro, .input-pair, .goal-metrics { grid-template-columns: 1fr; }
   .topbar, .section-heading, .form-actions { align-items: flex-start; flex-direction: column; }
   .quiet-button { padding-left: 0; }
 }

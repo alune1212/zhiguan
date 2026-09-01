@@ -8,7 +8,7 @@ ADR 只记录会改变长期系统边界、数据含义或公开格式的决定�
 | --- | --- | --- |
 | ADR-0001 | Accepted | 本地浏览器内存态 React/Vite 单页应用 |
 | ADR-0002 | Accepted | CNY 精确分、确定性计算、证据状态与不足降级 |
-| ADR-0003 | Accepted | 当前确认会话的单一 JSON 导出 |
+| ADR-0003 | Accepted | 购买决策与 Goal 当前快照的一次性 JSON 导出 |
 
 ## 退役记录
 

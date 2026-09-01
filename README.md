@@ -1,6 +1,6 @@
 # 值观 Zhiguan
 
-值观是一个帮助用户理解单次购买选择的 Personal Value Flow 单页工具：把收入、工作时间、固定成本、购买价格和个人期待放在同一份可解释的当前会话里。
+值观是一个 Personal Value Flow 单页工具：帮助用户理解一次购买选择，也可以独立查看一个数字目标的当前进度。
 
 ## 当前实现
 
@@ -10,6 +10,7 @@
 - 在同一页面展示 Income Rate、Work-time Equivalent、覆盖范围内可用余量、购买后余量、购买影响五个结果。
 - 结果说明来源、公式、状态和不足原因；输入冲突或缺失时诚实降级。
 - 用户可以记录购买、等待、调整条件、不购买或暂不决定，并主动导出当前 JSON；应用不联网、不持久化。
+- 用户可以输入一个目标名称、目标值、当前值和自定义单位，查看完成比例、剩余差距和证据状态，并独立导出 Goal JSON。
 
 ## 本地运行
 
@@ -22,7 +23,7 @@ npm run check
 ## 产品与实现边界
 
 - 产品定义见 PRODUCT.md、PRODUCT_STRATEGY.md 和 ROADMAP.md。
-- 当前功能短规格见 docs/product/prd/PRD-0001-single-purchase-decision-workbench.md。
+- 当前功能短规格见 docs/product/prd/PRD-0001-single-purchase-decision-workbench.md 和 docs/product/prd/PRD-0002-goal-progress.md。
 - 当前不可逆技术决定见 docs/adr/README.md。
 - 术语、指标、数据和品牌边界见 docs/product/glossary.md、docs/product/metrics.md、docs/product/data-principles.md 和 docs/design/brand.md。
 
