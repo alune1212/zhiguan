@@ -153,6 +153,13 @@ describe("goal progress calculation", () => {
     expect(output.result.completedRatio).toBeNull();
     expect(output.result.remainingGap).toBeNull();
     expect(output.result.reasonCodes).toEqual(expect.arrayContaining(["zero-not-allowed", "invalid-input"]));
+
+    const unknownEvidence = calculateGoalProgress({
+      ...baseGoal,
+      evidence: { target: "unknown", current: "user-confirmed" },
+    } as unknown as GoalInput);
+    expect(unknownEvidence.inputErrors.target).toBe("evidence-required");
+    expect(unknownEvidence.result.availability).toBe("insufficient-data");
   });
 
   it("shows progress above 100 percent and no negative remaining gap", () => {

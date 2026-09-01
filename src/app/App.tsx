@@ -331,10 +331,10 @@ function GoalProgressCard({ input, output }: { readonly input: GoalInput; readon
       ) : null}
       <details>
         <summary>查看依据</summary>
-        <p>来源：规则计算。单位：{input.unit.trim() || "未确认"}。状态：{result.evidenceStatus}。</p>
+        <p>来源：规则计算。时间：当前提交快照。单位：{input.unit.trim() || "未确认"}。状态：{result.evidenceStatus}。</p>
         <p>证据：目标值为{evidenceLabel(input.evidence.target)}；当前值为{evidenceLabel(input.evidence.current)}。</p>
         <p>假设：目标值和当前值使用相同单位与口径。</p>
-        <p>限制：这里只显示当前快照，不记录历史、不预测完成时间，也不评价目标。</p>
+        <p>限制：本版不采集截止或预计时间；这里只显示当前快照，不记录历史、不预测完成时间，也不评价目标。</p>
         <p>修正：返回 Goal 输入区修改数值、单位或证据状态，然后重新计算。</p>
         <p>精确值：完成比例 {result.completedRatio ? `${result.completedRatio.numerator}/${result.completedRatio.denominator}` : "数据不足"}；剩余差距 {result.remainingGap ? `${result.remainingGap.numerator}/${result.remainingGap.denominator}` : "数据不足"}。</p>
       </details>

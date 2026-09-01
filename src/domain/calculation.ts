@@ -216,7 +216,7 @@ function parseGoalValue(raw: string, allowZero = true): ParseResult<Rational> {
 function inputReasons(parsed: ParseResult<unknown>, evidence: EvidenceStatus | ""): InputErrorCode[] {
   const reasons: InputErrorCode[] = [];
   if (!parsed.ok) reasons.push(parsed.reasonCode);
-  if (parsed.ok && evidence === "") reasons.push("evidence-required");
+  if (parsed.ok && evidence !== "user-confirmed" && evidence !== "estimated") reasons.push("evidence-required");
   return reasons;
 }
 
