@@ -14,11 +14,19 @@
 
 ## 本地运行
 
+使用 **Bun 1.4.0** 管理依赖和运行开发工具，无需另装 Node.js 或 npm。React、Vite、Vitest 和 TypeScript 保持现有用途。
+
 ~~~text
-npm ci
-npm run dev
-npm run check
+bun ci
+bun run dev
+bun run check
 ~~~
+
+`bun run build` 生成静态产物，`bun run preview` 在本机预览。`bun run test` 执行现有 Vitest 测试；`bun test` 是 Bun 自带的另一套测试运行器。
+
+新增依赖使用 `bun add <包名>`（开发依赖加 `--dev`），默认保存精确版本；依赖变更一并提交 `package.json` 和 `bun.lock`。干净安装及 CI 使用 `bun ci`，锁文件与声明不一致时失败。
+
+依赖安装脚本默认全部禁用，确需执行时先审查再加入 `trustedDependencies`。安装后和 `bun run check` 都会检查 peer dependencies，缺少必要依赖或版本不兼容时失败。`bunfig.toml` 统一使用 Bun 运行时，并关闭运行时自动安装依赖。
 
 ## 产品与实现边界
 

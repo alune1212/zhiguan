@@ -1,0 +1,7 @@
+[install]
+exact = true
+auto = "disable"
+linker = "hoisted"
+
+[run]
+bun = true
