@@ -7,6 +7,9 @@ import {
   DECISION_OPTIONS,
   inputErrorText,
   resultText,
+  updateAllEvidence,
+  updateNumeric,
+  updateWorkTimeMode,
   visibleResultsFor,
 } from "../src/app/App";
 import { calculateDecision, type CalculationOutput, type DecisionInput } from "../src/domain/calculation";
@@ -41,13 +44,21 @@ describe("App", () => {
     const html = renderToStaticMarkup(<App />);
     expect(html).toContain("这次购买要花多少工作时间？");
     expect(html).toContain("清空重填");
-    expect(html).toContain("先填三个数字");
-    expect(html).toContain("金额都填人民币。收入、工作时间和固定支出都填一个月的数；购买价格填这一次要付的金额。");
+    expect(html).toContain("先填收入和价格，再选作息");
+    expect(html).toContain("金额都填人民币。收入和固定支出填每月的数；购买价格填这一次要付的金额。");
     expect(html).toContain("这个收入是税前还是到手？");
     expect(html).toContain("每月收入（元）");
-    expect(html).toContain("每月工作时间（小时）");
+    expect(html).toContain("你平时怎么上班？");
+    expect(html).toContain("每周 5 天，每天 8 小时");
+    expect(html).toContain("每周 6 天，每天 8 小时");
+    expect(html).toContain("自己调整");
+    expect(html).toContain("直接填写每月工作小时数");
+    expect(html).not.toContain('name="workHours"');
+    const workModes = html.match(/<input\b[^>]*name="work-time-mode"[^>]*>/gu) ?? [];
+    expect(workModes).toHaveLength(4);
+    expect(workModes.every((control) => !/\bchecked\b/u.test(control))).toBe(true);
     expect(html).toContain("这笔购买要花多少（元）");
-    expect(html).toContain("这些数字里有大概数");
+    expect(html).toContain("我填写的数字里有大概数");
     expect(html).toContain("还想看买完后，这个月剩多少？（可选）");
     expect(html).toContain("没有固定支出可以填 0。");
     expect(html).toContain("确认并查看结果");
@@ -220,5 +231,76 @@ describe("App", () => {
       display: "-1000.00 元",
     });
     expect(exported.exported_at).toEqual(expect.any(String));
+  });
+
+  it("keeps schedule estimates when the user clears the approximate-input checkbox", () => {
+    const scheduled = updateWorkTimeMode(baseInput, "five-day");
+    const input = updateAllEvidence(updateAllEvidence(scheduled, "estimated"), "user-confirmed");
+    const output = calculateDecision(input);
+    expect(output.workTime.workHours).toBe("173.333");
+    expect(resultFor(output, "work-time-equivalent").evidenceStatus).toBe("estimated");
+    expect(resultFor(output, "available-margin").evidenceStatus).toBe("user-confirmed");
+    expect(resultFor(output, "purchase-after-margin").evidenceStatus).toBe("forecast");
+    expect(resultText(resultFor(output, "work-time-equivalent"), output.inputErrors, output.workTime.basis)).toBe(
+      "按平时作息估算，这笔钱约相当于你工作 17.33 小时的收入。",
+    );
+    expect(resultText(resultFor(output, "income-rate"), output.inputErrors, output.workTime.basis)).toBe(
+      "按平时作息估算，每小时收入约为 57.69 元。",
+    );
+
+    const exported = JSON.parse(createExportJson(input, output, { code: "wait", rationale: "", reviewCondition: "" }));
+    expect(exported).toMatchObject({
+      format: "zhiguan-purchase-decision@1",
+      inputs: {
+        work_hours: "173.333",
+        evidence: { workHours: "estimated", income: "user-confirmed" },
+        work_time_basis: {
+          mode: "five-day",
+          days_per_week: "5",
+          hours_per_day: "8",
+          conversion: { weeks_per_year: 52, months_per_year: 12, decimal_places: 3, rounding: "half-up" },
+        },
+      },
+    });
+    expect(exported.inputs.work_time_basis.conversion.assumptions).toHaveLength(2);
+    expect(exported.results).toHaveLength(5);
+  });
+
+  it("clears obsolete hours on mode changes and exports invalid custom input without a fallback", () => {
+    let input = updateWorkTimeMode(baseInput, "custom");
+    expect(input.workHours).toBe("");
+    input = updateNumeric(updateNumeric(input, "workDaysPerWeek", "5.5"), "workHoursPerDay", "7.5");
+    expect(calculateDecision(input).workTime.workHours).toBe("178.750");
+    const cleared = calculateDecision(updateNumeric(input, "workDaysPerWeek", ""));
+    expect(cleared.workTime.workHours).toBe("");
+    expect(cleared.inputErrors.workDaysPerWeek).toBe("missing-input");
+    expect(resultFor(cleared, "work-time-equivalent").availability).toBe("insufficient-data");
+    input = updateNumeric(input, "workDaysPerWeek", "8");
+    const output = calculateDecision(input);
+    expect(output.inputErrors.workDaysPerWeek).toBe("out-of-range");
+    expect(inputErrorText("workDaysPerWeek", "out-of-range")).toBe("每周上班天数不能超过 7 天。");
+    expect(resultFor(output, "work-time-equivalent").availability).toBe("insufficient-data");
+    expect(resultFor(output, "available-margin").display).toBe("7000.00 元");
+    const exported = JSON.parse(createExportJson(input, output, { code: "", rationale: "", reviewCondition: "" }));
+    expect(exported.inputs).toMatchObject({
+      work_hours: "",
+      work_time_basis: { mode: "custom", days_per_week: "8", hours_per_day: "7.5" },
+    });
+
+    const manual = updateWorkTimeMode(input, "monthly");
+    expect(manual.workHours).toBe("");
+    expect(calculateDecision(manual).workTime.basis.conversion).toBeNull();
+    const filled = updateNumeric(manual, "workHours", "160");
+    const filledOutput = calculateDecision(filled);
+    expect(resultFor(filledOutput, "work-time-equivalent").display).toBe("16.00 小时");
+    expect(resultFor(filledOutput, "work-time-equivalent").evidenceStatus).toBe("user-confirmed");
+    const manualExport = JSON.parse(createExportJson(filled, filledOutput, { code: "", rationale: "", reviewCondition: "" }));
+    expect(manualExport.inputs.work_time_basis).toMatchObject({ mode: "monthly", days_per_week: null, hours_per_day: null, conversion: null });
+
+    const unselected = calculateDecision(updateWorkTimeMode(filled, "unselected"));
+    expect(unselected.workTime.workHours).toBe("");
+    expect(resultText(resultFor(unselected, "work-time-equivalent"), unselected.inputErrors, unselected.workTime.basis)).toBe(
+      "还缺工作安排，所以现在算不了买它要花多少工作时间。",
+    );
   });
 });

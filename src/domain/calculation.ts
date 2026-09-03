@@ -11,16 +11,36 @@ export const MAX_WORK_HOURS_INTEGER_DIGITS = 6;
 export const MAX_WORK_HOURS_FRACTION_DIGITS = 3;
 export const MAX_AMOUNT_CENTS = 99999999999999999n;
 export const MAX_WORK_HOURS_NUMERATOR = 999999999n;
+export const WORK_TIME_ESTIMATE_RULE = {
+  formula: "每周天数 × 每天小时 × 52 ÷ 12",
+  weeks_per_year: 52,
+  months_per_year: 12,
+  decimal_places: 3,
+  rounding: "half-up",
+  assumptions: [
+    "典型周平均到月，不逐月扣除节假日、请假或添加临时加班",
+    "每日平均小时包含经常性加班，不含通勤与休息",
+  ],
+} as const;
 
 export const NUMERIC_FIELDS = ["income", "workHours", "fixedExpenses", "purchaseAmount"] as const;
 export type NumericField = (typeof NUMERIC_FIELDS)[number];
 export type TaxBasis = "before-tax" | "after-tax";
 export type EvidenceStatus = "user-confirmed" | "estimated";
+export type WorkTimeMode = "unselected" | "five-day" | "six-day" | "custom" | "monthly";
+export type WorkTimeInput =
+  | { readonly mode: "unselected" }
+  | { readonly mode: "five-day" }
+  | { readonly mode: "six-day" }
+  | { readonly mode: "custom"; readonly daysPerWeek: string; readonly hoursPerDay: string }
+  | { readonly mode: "monthly" };
 export type InputErrorCode =
   | "missing-input"
   | "invalid-input"
   | "number-too-large"
   | "zero-not-allowed"
+  | "out-of-range"
+  | "number-too-small"
   | "evidence-required"
   | "tax-basis-required"
   | "before-tax-margin-unavailable"
@@ -30,6 +50,7 @@ export type InputErrorCode =
 export interface DecisionInput {
   readonly income: string;
   readonly workHours: string;
+  readonly workTime?: WorkTimeInput;
   readonly fixedExpenses: string;
   readonly purchaseAmount: string;
   readonly taxBasis: TaxBasis | "";
@@ -37,6 +58,20 @@ export interface DecisionInput {
   readonly purchaseIncluded: "included" | "excluded" | "";
   readonly valueExpectation: string;
   readonly evidence: Readonly<Record<NumericField, EvidenceStatus | "">>;
+}
+
+export interface WorkTimeBasis {
+  readonly mode: WorkTimeMode;
+  readonly days_per_week: string | null;
+  readonly hours_per_day: string | null;
+  readonly conversion: typeof WORK_TIME_ESTIMATE_RULE | null;
+}
+
+export interface ResolvedWorkTime {
+  readonly workHours: string;
+  readonly evidence: EvidenceStatus | "";
+  readonly basis: WorkTimeBasis;
+  readonly inputErrors: Readonly<Partial<Record<"workDaysPerWeek" | "workHoursPerDay", InputErrorCode>>>;
 }
 
 export interface ExactValue {
@@ -68,7 +103,8 @@ export interface CalculationResult {
 
 export interface CalculationOutput {
   readonly results: readonly CalculationResult[];
-  readonly inputErrors: Readonly<Partial<Record<NumericField | "taxBasis" | "fixedCostCoverage" | "purchaseIncluded", InputErrorCode>>>;
+  readonly workTime: ResolvedWorkTime;
+  readonly inputErrors: Readonly<Partial<Record<NumericField | "workDaysPerWeek" | "workHoursPerDay" | "taxBasis" | "fixedCostCoverage" | "purchaseIncluded", InputErrorCode>>>;
 }
 
 interface Money {
@@ -171,6 +207,84 @@ export function parseWorkHours(raw: string): ParseResult<Rational> {
   return { ok: true, value: rational(numerator, denominator) };
 }
 
+function parseBoundedWorkTimeValue(raw: string, maximum: bigint): ParseResult<Rational> {
+  const parsed = parseWorkHours(raw);
+  if (!parsed.ok) return parsed;
+  return parsed.value.numerator > maximum * parsed.value.denominator
+    ? { ok: false, reasonCode: "out-of-range" }
+    : parsed;
+}
+
+function workTimeBasis(
+  mode: WorkTimeMode,
+  daysPerWeek: string | null,
+  hoursPerDay: string | null,
+  conversion: typeof WORK_TIME_ESTIMATE_RULE | null,
+): WorkTimeBasis {
+  return { mode, days_per_week: daysPerWeek, hours_per_day: hoursPerDay, conversion };
+}
+
+function resolveEstimatedWorkTime(mode: WorkTimeMode, daysPerWeek: string, hoursPerDay: string): ResolvedWorkTime {
+  const basis = workTimeBasis(mode, daysPerWeek, hoursPerDay, WORK_TIME_ESTIMATE_RULE);
+  const parsedDays = parseBoundedWorkTimeValue(daysPerWeek, 7n);
+  const parsedHours = parseBoundedWorkTimeValue(hoursPerDay, 24n);
+  const inputErrors: Partial<Record<"workDaysPerWeek" | "workHoursPerDay", InputErrorCode>> = {};
+  if (!parsedDays.ok) inputErrors.workDaysPerWeek = parsedDays.reasonCode;
+  if (!parsedHours.ok) inputErrors.workHoursPerDay = parsedHours.reasonCode;
+  if (Object.keys(inputErrors).length > 0 || !parsedDays.ok || !parsedHours.ok) {
+    return { workHours: "", evidence: "", basis, inputErrors };
+  }
+
+  const monthly = rational(
+    parsedDays.value.numerator * parsedHours.value.numerator * BigInt(WORK_TIME_ESTIMATE_RULE.weeks_per_year),
+    parsedDays.value.denominator * parsedHours.value.denominator * BigInt(WORK_TIME_ESTIMATE_RULE.months_per_year),
+  );
+  const rounded = formatRational(monthly, WORK_TIME_ESTIMATE_RULE.decimal_places);
+  const parsedRounded = parseWorkHours(rounded);
+  if (!parsedRounded.ok) {
+    const reasonCode = parsedRounded.reasonCode === "zero-not-allowed" ? "number-too-small" : parsedRounded.reasonCode;
+    return {
+      workHours: "",
+      evidence: "",
+      basis,
+      inputErrors: { workDaysPerWeek: reasonCode, workHoursPerDay: reasonCode },
+    };
+  }
+
+  return { workHours: rounded, evidence: "estimated", basis, inputErrors };
+}
+
+export function resolveWorkTime(input: DecisionInput): ResolvedWorkTime {
+  const mode = input.workTime?.mode ?? "monthly";
+  if (mode === "monthly") {
+    return {
+      workHours: input.workHours,
+      evidence: input.evidence.workHours,
+      basis: workTimeBasis(mode, null, null, null),
+      inputErrors: {},
+    };
+  }
+  if (mode === "unselected") {
+    return {
+      workHours: "",
+      evidence: "",
+      basis: workTimeBasis(mode, null, null, null),
+      inputErrors: {},
+    };
+  }
+  if (mode === "five-day") return resolveEstimatedWorkTime(mode, "5", "8");
+  if (mode === "six-day") return resolveEstimatedWorkTime(mode, "6", "8");
+  if (input.workTime?.mode === "custom") {
+    return resolveEstimatedWorkTime(mode, input.workTime.daysPerWeek, input.workTime.hoursPerDay);
+  }
+  return {
+    workHours: "",
+    evidence: "",
+    basis: workTimeBasis("unselected", null, null, null),
+    inputErrors: {},
+  };
+}
+
 function inputReasons(parsed: ParseResult<unknown>, evidence: EvidenceStatus | ""): InputErrorCode[] {
   const reasons: InputErrorCode[] = [];
   if (!parsed.ok) reasons.push(parsed.reasonCode);
@@ -178,8 +292,14 @@ function inputReasons(parsed: ParseResult<unknown>, evidence: EvidenceStatus | "
   return reasons;
 }
 
-function statusFor(fields: readonly NumericField[], input: DecisionInput): EvidenceStatus {
-  return fields.some((field) => input.evidence[field] === "estimated") ? "estimated" : "user-confirmed";
+function statusFor(
+  fields: readonly NumericField[],
+  input: DecisionInput,
+  evidenceOverrides: Partial<Record<NumericField, EvidenceStatus | "">> = {},
+): EvidenceStatus {
+  return fields.some((field) => (evidenceOverrides[field] ?? input.evidence[field]) === "estimated")
+    ? "estimated"
+    : "user-confirmed";
 }
 
 function result(
@@ -211,20 +331,24 @@ function result(
 }
 
 export function calculateDecision(input: DecisionInput): CalculationOutput {
+  const resolvedWorkTime = resolveWorkTime(input);
   const parsedIncome = parseAmount(input.income, false);
-  const parsedHours = parseWorkHours(input.workHours);
+  const parsedHours = parseWorkHours(resolvedWorkTime.workHours);
   const parsedFixed = parseAmount(input.fixedExpenses);
   const parsedPurchase = parseAmount(input.purchaseAmount, false);
   const taxReason: InputErrorCode[] = input.taxBasis === "" ? ["tax-basis-required"] : [];
   const coverageReason: InputErrorCode[] = input.fixedCostCoverage === "complete" ? [] : ["fixed-cost-coverage-required"];
   const purchasePeriodReason: InputErrorCode[] = input.purchaseIncluded === "included" ? [] : ["purchase-period-required"];
   const incomeReasons = inputReasons(parsedIncome, input.evidence.income);
-  const hoursReasons = inputReasons(parsedHours, input.evidence.workHours);
+  const workTimeReasons = Object.values(resolvedWorkTime.inputErrors);
+  const hoursReasons = workTimeReasons.length > 0 ? workTimeReasons : inputReasons(parsedHours, resolvedWorkTime.evidence);
   const fixedReasons = inputReasons(parsedFixed, input.evidence.fixedExpenses);
   const purchaseReasons = inputReasons(parsedPurchase, input.evidence.purchaseAmount);
-  const inputErrors: Partial<Record<NumericField | "taxBasis" | "fixedCostCoverage" | "purchaseIncluded", InputErrorCode>> = {};
+  const inputErrors: Partial<Record<NumericField | "workDaysPerWeek" | "workHoursPerDay" | "taxBasis" | "fixedCostCoverage" | "purchaseIncluded", InputErrorCode>> = {};
   if (incomeReasons[0]) inputErrors.income = incomeReasons[0];
   if (hoursReasons[0]) inputErrors.workHours = hoursReasons[0];
+  if (resolvedWorkTime.inputErrors.workDaysPerWeek) inputErrors.workDaysPerWeek = resolvedWorkTime.inputErrors.workDaysPerWeek;
+  if (resolvedWorkTime.inputErrors.workHoursPerDay) inputErrors.workHoursPerDay = resolvedWorkTime.inputErrors.workHoursPerDay;
   if (fixedReasons[0]) inputErrors.fixedExpenses = fixedReasons[0];
   if (purchaseReasons[0]) inputErrors.purchaseAmount = purchaseReasons[0];
   if (taxReason[0]) inputErrors.taxBasis = taxReason[0];
@@ -246,12 +370,12 @@ export function calculateDecision(input: DecisionInput): CalculationOutput {
     "月收入 ÷ 月工时",
     ["income", "workHours", "taxBasis"],
     rateReasons,
-    statusFor(["income", "workHours"], input),
+    statusFor(["income", "workHours"], input, { workHours: resolvedWorkTime.evidence }),
     rate ? ratioExact(rate) : null,
     rate ? `${formatRational(rate)} 元/小时` : null,
   );
 
-  const workTimeReasons = [...incomeReasons, ...hoursReasons, ...purchaseReasons, ...taxReason];
+  const workTimeResultReasons = [...incomeReasons, ...hoursReasons, ...purchaseReasons, ...taxReason];
   const workTime = income && hours && purchase
     ? rational(purchase.cents * hours.numerator, income.cents * hours.denominator)
     : null;
@@ -261,8 +385,8 @@ export function calculateDecision(input: DecisionInput): CalculationOutput {
     "小时",
     "购买金额 ÷ 每小时收入",
     ["income", "workHours", "purchaseAmount", "taxBasis"],
-    workTimeReasons,
-    statusFor(["income", "workHours", "purchaseAmount"], input),
+    workTimeResultReasons,
+    statusFor(["income", "workHours", "purchaseAmount"], input, { workHours: resolvedWorkTime.evidence }),
     workTime ? ratioExact(workTime) : null,
     workTime ? `${formatRational(workTime)} 小时` : null,
   );
@@ -313,6 +437,7 @@ export function calculateDecision(input: DecisionInput): CalculationOutput {
 
   return {
     results: [rateResult, workTimeResult, marginResult, afterResult, impactResult],
+    workTime: resolvedWorkTime,
     inputErrors,
   };
 }

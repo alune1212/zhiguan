@@ -49,6 +49,16 @@ p { line-height: 1.6; }
 .field-hint { color: #687269; }
 .error { color: #a33f33; }
 
+.work-time-inputs { min-width: 0; margin: 1.5rem 0 0; border: 0; padding: 0; }
+.work-time-inputs legend { margin-bottom: .5rem; color: #35463c; font-weight: 680; }
+.work-time-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+.work-time-options label { display: flex; align-items: center; gap: .6rem; min-height: 2.75rem; border: 1px solid #c8c1b3; border-radius: .55rem; padding: .65rem .75rem; cursor: pointer; }
+.work-time-options label:has(input:checked) { border-color: #246b55; background: #e3eee7; }
+.work-time-options input, .work-time-manual input { flex: 0 0 auto; min-height: auto; margin: 0; accent-color: #246b55; }
+.work-time-manual { display: flex; align-items: center; gap: .6rem; min-height: 2.75rem; margin-top: .4rem; color: #536158; cursor: pointer; }
+.work-time-custom { margin-top: .75rem; }
+.work-time-note { margin: .75rem 0 0; }
+
 .check-row { display: flex; align-items: flex-start; gap: .65rem; margin-top: 1rem; color: #35463c; line-height: 1.45; }
 .check-row input { flex: 0 0 auto; min-height: auto; margin-top: .2rem; accent-color: #246b55; }
 .optional-inputs { margin: 1.5rem 0; border-top: 1px solid #d9d2c5; border-bottom: 1px solid #d9d2c5; padding: 1rem 0; color: #536158; }
@@ -89,7 +99,7 @@ p { line-height: 1.6; }
 @media (max-width: 42rem) {
   .app-shell { width: min(100% - 1.25rem, 62rem); }
   .intro { padding-top: 3.5rem; }
-  .field-grid, .optional-content, .result-grid { grid-template-columns: 1fr; }
+  .field-grid, .optional-content, .result-grid, .work-time-options { grid-template-columns: 1fr; }
   .optional-content > .field:first-child { grid-column: auto; max-width: none; }
   .section-heading { flex-direction: column; }
   .primary-button { width: 100%; }

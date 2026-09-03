@@ -12,11 +12,14 @@ import {
   type NumericField,
   type ResultId,
   type TaxBasis,
+  type WorkTimeBasis,
+  type WorkTimeInput,
 } from "../domain/calculation";
 
 const EMPTY_INPUT: DecisionInput = {
   income: "",
   workHours: "",
+  workTime: { mode: "unselected" },
   fixedExpenses: "",
   purchaseAmount: "",
   taxBasis: "",
@@ -31,18 +34,24 @@ const EMPTY_INPUT: DecisionInput = {
   },
 };
 
-const FIELD_LABELS: Record<NumericField, string> = {
+type NumericInputField = NumericField | "workDaysPerWeek" | "workHoursPerDay";
+
+const FIELD_LABELS: Record<NumericInputField, string> = {
   income: "每月收入",
   workHours: "每月工作时间",
   fixedExpenses: "每月固定支出",
   purchaseAmount: "这笔购买要花多少",
+  workDaysPerWeek: "每周平均上班几天",
+  workHoursPerDay: "每个上班日平均工作几小时",
 };
 
-type InputErrorField = NumericField | "taxBasis" | "fixedCostCoverage" | "purchaseIncluded";
+type InputErrorField = NumericInputField | "taxBasis" | "fixedCostCoverage" | "purchaseIncluded";
 
 const PROBLEM_FIELD_LABELS: Record<InputErrorField, string> = {
   ...FIELD_LABELS,
   purchaseAmount: "购买价格",
+  workDaysPerWeek: "每周上班天数",
+  workHoursPerDay: "每天工作小时数",
   taxBasis: "税前或到手的选择",
   fixedCostCoverage: "固定支出是否已经填全",
   purchaseIncluded: "是否按本月付款来算",
@@ -55,15 +64,24 @@ export function inputErrorText(field: InputErrorField, code: InputErrorCode): st
       if (field === "purchaseAmount") return "填一下购买价格。";
       return `填一下${PROBLEM_FIELD_LABELS[field]}。`;
     case "invalid-input":
+      if (field === "workDaysPerWeek" || field === "workHoursPerDay") return "只填数字，可以带小数，例如 5.5。";
       return field === "workHours" ? "只填数字，例如 160 或 160.5。" : "只填数字，不要加逗号或“元”。";
     case "number-too-large":
+      if (field === "workDaysPerWeek" || field === "workHoursPerDay") return "这个数字超出可填写范围，请检查；小数最多三位。";
       return field === "workHours"
         ? "这个时间超出可填写范围，请检查；小数最多三位。"
         : "这个金额超出可填写范围，请检查；小数最多两位。";
     case "zero-not-allowed":
       if (field === "income") return "每月收入需要大于 0。";
       if (field === "workHours") return "每月工作时间需要大于 0。";
+      if (field === "workDaysPerWeek" || field === "workHoursPerDay") return `${PROBLEM_FIELD_LABELS[field]}需要大于 0。`;
       return "购买价格需要大于 0。";
+    case "out-of-range":
+      if (field === "workDaysPerWeek") return "每周上班天数不能超过 7 天。";
+      if (field === "workHoursPerDay") return "每天工作小时数不能超过 24 小时。";
+      return "请检查作息：每周不超过 7 天，每天不超过 24 小时。";
+    case "number-too-small":
+      return "折算后的月工作时间不足 0.001 小时，请调整作息。";
     case "evidence-required":
       return "请确认这些数字里有没有大概数。";
     case "tax-basis-required":
@@ -77,11 +95,24 @@ export function inputErrorText(field: InputErrorField, code: InputErrorCode): st
   }
 }
 
-function updateNumeric(input: DecisionInput, field: NumericField, value: string): DecisionInput {
+export function updateNumeric(input: DecisionInput, field: NumericInputField, value: string): DecisionInput {
+  if (field === "workDaysPerWeek" || field === "workHoursPerDay") {
+    if (input.workTime?.mode !== "custom") return input;
+    const key = field === "workDaysPerWeek" ? "daysPerWeek" : "hoursPerDay";
+    return { ...input, workTime: { ...input.workTime, [key]: value } };
+  }
   return { ...input, [field]: value };
 }
 
-function updateAllEvidence(input: DecisionInput, value: EvidenceStatus): DecisionInput {
+export function updateWorkTimeMode(input: DecisionInput, mode: WorkTimeInput["mode"]): DecisionInput {
+  return {
+    ...input,
+    workHours: "",
+    workTime: mode === "custom" ? { mode, daysPerWeek: "", hoursPerDay: "" } : { mode },
+  };
+}
+
+export function updateAllEvidence(input: DecisionInput, value: EvidenceStatus): DecisionInput {
   return {
     ...input,
     evidence: {
@@ -116,14 +147,15 @@ export function createExportJson(input: DecisionInput, output: CalculationOutput
     period: PERIOD,
     inputs: {
       income: input.income,
-      work_hours: input.workHours,
+      work_hours: output.workTime.workHours,
+      work_time_basis: output.workTime.basis,
       fixed_expenses: input.fixedExpenses,
       purchase_amount: input.purchaseAmount,
       tax_basis: input.taxBasis || null,
       fixed_cost_coverage: input.fixedCostCoverage || null,
       purchase_included: input.purchaseIncluded || null,
       value_expectation: input.valueExpectation,
-      evidence: input.evidence,
+      evidence: { ...input.evidence, workHours: output.workTime.evidence },
     },
     results: output.results.map((item) => ({
       id: item.id,
@@ -174,7 +206,7 @@ function NumericFieldControl({
   hint,
   onChange,
 }: {
-  readonly field: NumericField;
+  readonly field: NumericInputField;
   readonly input: DecisionInput;
   readonly error?: InputErrorCode;
   readonly hint?: string;
@@ -184,7 +216,13 @@ function NumericFieldControl({
   const errorId = `${inputId}-error`;
   const hintId = `${inputId}-hint`;
   const describedBy = [hint ? hintId : null, error ? errorId : null].filter(Boolean).join(" ") || undefined;
-  const unit = field === "workHours" ? "小时" : "元";
+  const unit = field === "workDaysPerWeek" ? "天" : field === "workHours" || field === "workHoursPerDay" ? "小时" : "元";
+  const schedule = input.workTime?.mode === "custom" ? input.workTime : null;
+  const value = field === "workDaysPerWeek"
+    ? schedule?.daysPerWeek ?? ""
+    : field === "workHoursPerDay"
+      ? schedule?.hoursPerDay ?? ""
+      : input[field];
   return (
     <div className="field">
       <label htmlFor={inputId}>{FIELD_LABELS[field]}（{unit}）</label>
@@ -193,7 +231,7 @@ function NumericFieldControl({
         name={field}
         type="text"
         inputMode="decimal"
-        value={input[field]}
+        value={value}
         aria-invalid={error ? "true" : undefined}
         aria-describedby={describedBy}
         onChange={(event) => onChange(event.currentTarget.value)}
@@ -233,6 +271,8 @@ const RESULT_OUTCOMES: Record<ResultId, string> = {
 function isInputErrorField(field: string): field is InputErrorField {
   return field === "income"
     || field === "workHours"
+    || field === "workDaysPerWeek"
+    || field === "workHoursPerDay"
     || field === "fixedExpenses"
     || field === "purchaseAmount"
     || field === "taxBasis"
@@ -250,7 +290,7 @@ function isZeroDecimal(value: string): boolean {
   return /^-?0(?:\.0+)?$/u.test(value);
 }
 
-function unavailableResultText(result: CalculationResult, inputErrors: InputErrors): string {
+function unavailableResultText(result: CalculationResult, inputErrors: InputErrors, basis?: WorkTimeBasis): string {
   if (result.reasonCodes.includes("before-tax-margin-unavailable")) {
     return inputErrorText("taxBasis", "before-tax-margin-unavailable");
   }
@@ -264,18 +304,22 @@ function unavailableResultText(result: CalculationResult, inputErrors: InputErro
   });
   const invalidFields = problemFields.filter((field) => {
     const code = inputErrors[field];
-    return code === "invalid-input" || code === "number-too-large" || code === "zero-not-allowed";
+    return code === "invalid-input" || code === "number-too-large" || code === "zero-not-allowed"
+      || code === "out-of-range" || code === "number-too-small";
   });
   const outcome = RESULT_OUTCOMES[result.id];
+  const label = (field: InputErrorField) => field === "workHours" && basis && basis.mode !== "monthly"
+    ? "工作安排"
+    : PROBLEM_FIELD_LABELS[field];
 
   if (missingFields.length > 0 && invalidFields.length === 0) {
     if (missingFields.length === 1 && missingFields[0] === "fixedExpenses") {
       return "还缺每月固定支出，所以现在算不了本月剩余金额。没有固定支出可以填 0。";
     }
-    return `还缺${joinChinese(missingFields.map((field) => PROBLEM_FIELD_LABELS[field]))}，所以现在算不了${outcome}。`;
+    return `还缺${joinChinese(missingFields.map(label))}，所以现在算不了${outcome}。`;
   }
   if (invalidFields.length > 0 && missingFields.length === 0) {
-    return `先改正${joinChinese(invalidFields.map((field) => PROBLEM_FIELD_LABELS[field]))}，才能计算${outcome}。`;
+    return `先改正${joinChinese(invalidFields.map(label))}，才能计算${outcome}。`;
   }
   if (missingFields.length > 0 || invalidFields.length > 0) {
     return `上面标出的内容还没填好，所以现在算不了${outcome}。`;
@@ -291,16 +335,20 @@ function unavailableResultText(result: CalculationResult, inputErrors: InputErro
   return `上面的信息还没填好，所以现在算不了${outcome}。`;
 }
 
-export function resultText(result: CalculationResult, inputErrors: InputErrors): string {
+export function resultText(result: CalculationResult, inputErrors: InputErrors, basis?: WorkTimeBasis): string {
   if (result.availability === "insufficient-data" || !result.exact) {
-    return unavailableResultText(result, inputErrors);
+    return unavailableResultText(result, inputErrors, basis);
   }
 
   const value = result.exact.decimal;
   switch (result.id) {
     case "work-time-equivalent":
+      if (basis?.conversion) return `按平时作息估算，这笔钱约相当于你工作 ${value} 小时的收入。`;
+      if (result.evidenceStatus === "estimated") return `按你填的大概数，这笔钱约相当于你工作 ${value} 小时的收入。`;
       return `按这些数字，这笔钱相当于你工作 ${value} 小时的收入。`;
     case "income-rate":
+      if (basis?.conversion) return `按平时作息估算，每小时收入约为 ${value} 元。`;
+      if (result.evidenceStatus === "estimated") return `按你填的大概数，每小时收入约为 ${value} 元。`;
       return `按你填的月收入和工作时间，每小时收入约为 ${value} 元。`;
     case "available-margin":
       if (isZeroDecimal(value)) return "扣掉固定支出后，本月刚好没有余量。";
@@ -349,19 +397,27 @@ function ResultCard({
   result,
   taxBasis,
   inputErrors,
+  workTime,
 }: {
   readonly result: CalculationResult;
   readonly taxBasis: TaxBasis | "";
   readonly inputErrors: InputErrors;
+  readonly workTime: CalculationOutput["workTime"];
 }) {
   const titleId = `${result.id}-title`;
   const primary = result.id === "work-time-equivalent";
   return (
     <article className={`result ${primary ? "result-primary " : ""}${result.availability}`} aria-labelledby={titleId}>
       <h3 id={titleId}>{RESULT_TITLES[result.id]}</h3>
-      <p className="result-value">{resultText(result, inputErrors)}</p>
+      <p className="result-value">{resultText(result, inputErrors, workTime.basis)}</p>
       <details>
         <summary>怎么算出来的</summary>
+        {(result.id === "work-time-equivalent" || result.id === "income-rate") && workTime.basis.conversion ? (
+          <>
+            <p>按每周 {workTime.basis.days_per_week} 天、每个上班日 {workTime.basis.hours_per_day} 小时估算。{workTime.basis.conversion.formula}，月工时四舍五入保留三位小数。{workTime.workHours ? `本次按每月 ${workTime.workHours} 小时换算。` : "作息填写完整且有效后才能换算。"}</p>
+            {workTime.basis.conversion.assumptions.map((assumption) => <p key={assumption}>{assumption}</p>)}
+          </>
+        ) : null}
         <p>{resultDetails(result, taxBasis)}</p>
       </details>
     </article>
@@ -396,6 +452,8 @@ export function App() {
 
   const visibleErrors = calculated ? output.inputErrors : {};
   const hasEstimatedValues = Object.values(input.evidence).some((status) => status === "estimated");
+  const workTimeMode = input.workTime?.mode ?? "monthly";
+  const hasScheduleFieldError = Boolean(visibleErrors.workDaysPerWeek || visibleErrors.workHoursPerDay);
 
   return (
     <main className="app-shell">
@@ -406,16 +464,16 @@ export function App() {
 
       <section className="intro" aria-labelledby="page-title">
         <h1 id="page-title">这次购买要花多少工作时间？</h1>
-        <p>先填月收入、每月工作时间和购买价格，看看它相当于多少工作时间。想算买完后这个月还剩多少，再补每月固定支出。</p>
+        <p>填月收入和购买价格，再选平时作息，看看它相当于多少工作时间。想算买完后这个月还剩多少，再补每月固定支出。</p>
       </section>
 
       <form className="card form" onSubmit={submit} noValidate autoComplete="off">
         <div className="section-heading">
-          <h2>先填三个数字</h2>
-          <p>金额都填人民币。收入、工作时间和固定支出都填一个月的数；购买价格填这一次要付的金额。</p>
+          <h2>先填收入和价格，再选作息</h2>
+          <p>金额都填人民币。收入和固定支出填每月的数；购买价格填这一次要付的金额。</p>
         </div>
         <div className="field-grid">
-          <div className="field">
+          <div className="field field-wide">
             <label htmlFor="tax-basis">这个收入是税前还是到手？</label>
             <select
               id="tax-basis"
@@ -432,9 +490,44 @@ export function App() {
             <FieldError field="taxBasis" code={visibleErrors.taxBasis} id="tax-basis-error" />
           </div>
           <NumericFieldControl field="income" input={input} error={visibleErrors.income} onChange={(value) => setInput((current) => updateNumeric(current, "income", value))} />
-          <NumericFieldControl field="workHours" input={input} error={visibleErrors.workHours} onChange={(value) => setInput((current) => updateNumeric(current, "workHours", value))} />
           <NumericFieldControl field="purchaseAmount" input={input} error={visibleErrors.purchaseAmount} onChange={(value) => setInput((current) => updateNumeric(current, "purchaseAmount", value))} />
         </div>
+
+        <fieldset className="work-time-inputs" aria-invalid={visibleErrors.workHours ? "true" : undefined} aria-describedby={visibleErrors.workHours && workTimeMode === "unselected" ? "work-time-hint work-time-error" : "work-time-hint"}>
+          <legend>你平时怎么上班？</legend>
+          <p className="field-hint" id="work-time-hint">选平时作息即可，不用统计这个月实际上了多少小时。</p>
+          <div className="work-time-options">
+            {([
+              ["five-day", "每周 5 天，每天 8 小时"],
+              ["six-day", "每周 6 天，每天 8 小时"],
+              ["custom", "自己调整"],
+            ] as const).map(([mode, label]) => (
+              <label key={mode}>
+                <input type="radio" name="work-time-mode" value={mode} checked={workTimeMode === mode} onChange={() => setInput((current) => updateWorkTimeMode(current, mode))} />
+                {label}
+              </label>
+            ))}
+          </div>
+          <label className="work-time-manual">
+            <input type="radio" name="work-time-mode" value="monthly" checked={workTimeMode === "monthly"} onChange={() => setInput((current) => updateWorkTimeMode(current, "monthly"))} />
+            直接填写每月工作小时数
+          </label>
+          {workTimeMode === "custom" ? (
+            <div className="field-grid work-time-custom">
+              <NumericFieldControl field="workDaysPerWeek" input={input} error={visibleErrors.workDaysPerWeek} hint="可以填小数，例如大小周填 5.5。" onChange={(value) => setInput((current) => updateNumeric(current, "workDaysPerWeek", value))} />
+              <NumericFieldControl field="workHoursPerDay" input={input} error={visibleErrors.workHoursPerDay} hint="包含经常性加班，不含通勤和休息。" onChange={(value) => setInput((current) => updateNumeric(current, "workHoursPerDay", value))} />
+            </div>
+          ) : null}
+          {workTimeMode === "monthly" ? (
+            <div className="work-time-custom">
+              <NumericFieldControl field="workHours" input={input} error={visibleErrors.workHours} onChange={(value) => setInput((current) => updateNumeric(current, "workHours", value))} />
+            </div>
+          ) : null}
+          {workTimeMode !== "monthly" && visibleErrors.workHours && !hasScheduleFieldError ? (
+            <span className="error" id="work-time-error" role="alert">{workTimeMode === "unselected" ? "选一下平时作息，或直接填写每月工作小时数。" : inputErrorText("workHours", visibleErrors.workHours)}</span>
+          ) : null}
+          {output.workTime.basis.conversion ? <p className="field-hint work-time-note">按平时作息估算，不是本月实际出勤。包含经常性加班，不含通勤和休息。</p> : null}
+        </fieldset>
 
         <label className="check-row">
           <input
@@ -442,7 +535,7 @@ export function App() {
             checked={hasEstimatedValues}
             onChange={({ currentTarget: { checked } }) => setInput((current) => updateAllEvidence(current, checked ? "estimated" : "user-confirmed"))}
           />
-          这些数字里有大概数
+          我填写的数字里有大概数
         </label>
 
         <details className="optional-inputs" open={optionalStarted || undefined}>
@@ -487,12 +580,12 @@ export function App() {
           <h2 id="results-title" ref={resultHeadingRef} tabIndex={-1}>结果</h2>
           <div className="result-grid">
             {visibleResults.map((result) => (
-              <ResultCard key={result.id} result={result} taxBasis={input.taxBasis} inputErrors={output.inputErrors} />
+              <ResultCard key={result.id} result={result} taxBasis={input.taxBasis} inputErrors={output.inputErrors} workTime={output.workTime} />
             ))}
           </div>
           <div className="result-notes">
             {hasAvailableResult ? (
-              <p>{hasEstimatedValues ? "你填了大概数，所以这些结果也都是大概值。" : "按你刚刚确认的数字计算。"}</p>
+              <p>{hasEstimatedValues ? "你填写的数字里有大概数，相关结果也是大概值。" : output.workTime.basis.conversion && output.workTime.evidence === "estimated" ? "作息换算的工作时间和每小时收入都是估算，不代表本月实际出勤。" : "按你刚刚确认的数字计算。"}</p>
             ) : null}
             <p>这里只根据你这次填写的数字计算，不是完整账本，也不会替你决定要不要买。</p>
           </div>

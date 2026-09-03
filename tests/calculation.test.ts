@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { calculateDecision, parseAmount, parseWorkHours, type DecisionInput } from "../src/domain/calculation";
+import {
+  calculateDecision,
+  parseAmount,
+  parseWorkHours,
+  resolveWorkTime,
+  WORK_TIME_ESTIMATE_RULE,
+  type DecisionInput,
+} from "../src/domain/calculation";
 
 const baseInput: DecisionInput = {
   income: "10000",
@@ -106,5 +113,121 @@ describe("purchase decision calculation", () => {
     expect(calculateDecision(excludedPurchase).inputErrors.purchaseIncluded).toBeUndefined();
     expect(result(excludedPurchase, "work-time-equivalent").availability).toBe("available");
     expect(result(excludedPurchase, "purchase-after-margin").availability).toBe("insufficient-data");
+  });
+
+  it("resolves the fixed weekly schedules to estimated monthly hours", () => {
+    const fiveDay = resolveWorkTime({ ...baseInput, workTime: { mode: "five-day" } });
+    expect(fiveDay).toMatchObject({
+      workHours: "173.333",
+      evidence: "estimated",
+      basis: {
+        mode: "five-day",
+        days_per_week: "5",
+        hours_per_day: "8",
+        conversion: WORK_TIME_ESTIMATE_RULE,
+      },
+      inputErrors: {},
+    });
+
+    const sixDay = resolveWorkTime({ ...baseInput, workTime: { mode: "six-day" } });
+    expect(sixDay.workHours).toBe("208.000");
+    expect(sixDay.evidence).toBe("estimated");
+  });
+
+  it("resolves custom decimals with exact arithmetic and half-up precision", () => {
+    const resolved = resolveWorkTime({
+      ...baseInput,
+      workTime: { mode: "custom", daysPerWeek: "4.5", hoursPerDay: "7.25" },
+    });
+    expect(resolved.workHours).toBe("141.375");
+    expect(resolved.basis.days_per_week).toBe("4.5");
+    expect(resolved.basis.hours_per_day).toBe("7.25");
+
+    const halfUp = resolveWorkTime({
+      ...baseInput,
+      workTime: { mode: "custom", daysPerWeek: "0.001", hoursPerDay: "1.5" },
+    });
+    expect(halfUp.workHours).toBe("0.007");
+
+    const upperBound = resolveWorkTime({
+      ...baseInput,
+      workTime: { mode: "custom", daysPerWeek: "7", hoursPerDay: "24" },
+    });
+    expect(upperBound.workHours).toBe("728.000");
+    expect(upperBound.inputErrors).toEqual({});
+  });
+
+  it.each([
+    {
+      name: "missing days",
+      workTime: { mode: "custom", daysPerWeek: "", hoursPerDay: "8" } as const,
+      errors: { workDaysPerWeek: "missing-input" },
+    },
+    {
+      name: "missing hours",
+      workTime: { mode: "custom", daysPerWeek: "5", hoursPerDay: "" } as const,
+      errors: { workHoursPerDay: "missing-input" },
+    },
+    {
+      name: "malformed days",
+      workTime: { mode: "custom", daysPerWeek: "five", hoursPerDay: "8" } as const,
+      errors: { workDaysPerWeek: "invalid-input" },
+    },
+    {
+      name: "zero days",
+      workTime: { mode: "custom", daysPerWeek: "0", hoursPerDay: "8" } as const,
+      errors: { workDaysPerWeek: "zero-not-allowed" },
+    },
+    {
+      name: "too many days",
+      workTime: { mode: "custom", daysPerWeek: "7.001", hoursPerDay: "8" } as const,
+      errors: { workDaysPerWeek: "out-of-range" },
+    },
+    {
+      name: "too many hours",
+      workTime: { mode: "custom", daysPerWeek: "5", hoursPerDay: "24.001" } as const,
+      errors: { workHoursPerDay: "out-of-range" },
+    },
+    {
+      name: "too many fraction digits",
+      workTime: { mode: "custom", daysPerWeek: "5.0001", hoursPerDay: "8" } as const,
+      errors: { workDaysPerWeek: "number-too-large" },
+    },
+    {
+      name: "rounds to zero",
+      workTime: { mode: "custom", daysPerWeek: "0.001", hoursPerDay: "0.001" } as const,
+      errors: { workDaysPerWeek: "number-too-small", workHoursPerDay: "number-too-small" },
+    },
+  ])("rejects $name schedule input without using a fallback", ({ workTime, errors }) => {
+    const resolved = resolveWorkTime({ ...baseInput, workHours: "160", workTime });
+    expect(resolved.workHours).toBe("");
+    expect(resolved.evidence).toBe("");
+    expect(resolved.inputErrors).toEqual(errors);
+    const output = calculateDecision({ ...baseInput, workHours: "160", workTime });
+    expect(output.inputErrors.workHours).toBe(Object.values(errors)[0]);
+    expect(output.inputErrors).toMatchObject(errors);
+    expect(result({ ...baseInput, workHours: "160", workTime }, "work-time-equivalent").availability).toBe("insufficient-data");
+  });
+
+  it("forces schedule-derived hours to estimated without changing margin evidence", () => {
+    const output = calculateDecision({ ...baseInput, workTime: { mode: "five-day" } });
+    expect(output.workTime.evidence).toBe("estimated");
+    expect(result({ ...baseInput, workTime: { mode: "five-day" } }, "income-rate").evidenceStatus).toBe("estimated");
+    expect(result({ ...baseInput, workTime: { mode: "five-day" } }, "work-time-equivalent").evidenceStatus).toBe("estimated");
+    expect(result({ ...baseInput, workTime: { mode: "five-day" } }, "available-margin").evidenceStatus).toBe("user-confirmed");
+    expect(result({ ...baseInput, workTime: { mode: "five-day" } }, "purchase-after-margin").evidenceStatus).toBe("forecast");
+  });
+
+  it("ignores old monthly hours when no schedule is selected and preserves direct monthly input", () => {
+    const unselected = { ...baseInput, workTime: { mode: "unselected" } as const };
+    const unselectedOutput = calculateDecision(unselected);
+    expect(unselectedOutput.workTime.workHours).toBe("");
+    expect(unselectedOutput.inputErrors.workHours).toBe("missing-input");
+    expect(result(unselected, "work-time-equivalent").availability).toBe("insufficient-data");
+    expect(result(unselected, "available-margin").availability).toBe("available");
+
+    const direct = resolveWorkTime(baseInput);
+    expect(direct).toMatchObject({ workHours: "160", evidence: "user-confirmed", basis: { mode: "monthly", conversion: null } });
+    expect(result(baseInput, "income-rate").display).toBe("62.50 元/小时");
   });
 });
