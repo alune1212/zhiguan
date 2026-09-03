@@ -1,3 +1,5 @@
+> 归档说明（2026-09-03 核对）：本目录保留本次界面调整时的提案、设计、规格与验证记录。它先于同日的 Bun 迁移，文中的 npm 命令和当时文案属于历史记录；当前命令见根目录 `README.md`，当前规格见 `openspec/specs/purchase-decision-workbench/spec.md`，当前文案见 `docs/design/purchase-page-copy.md`。以上路径均相对仓库根目录。
+
 ## Why
 
 当前单次购买页已经能完成计算和决定闭环，但主要信息仍被机械化标签、重复状态说明和同等权重的结果卡片遮住，用户难以一眼理解数字代表什么。页面文案草案已经确认，现在应先把这套语言和信息层级同步到现有界面，再考虑任何新功能。
@@ -24,7 +26,7 @@
 
 ## Impact
 
-- 主要影响 `src/app/App.tsx`、`src/app/styles.css` 和现有组件测试。
+- 主要影响 `src/app/App.tsx`、`src/styles/app.css` 和现有组件测试。
 - `src/domain/calculation.ts` 的公式、结果 ID、原因码和导出用精确值保持不变；如需自然句子所需的 view-model 分支，只能在界面呈现层派生。
 - `docs/design/purchase-page-copy.md` 是验收基线；实施完成后更新其状态和对应测试断言。
 - 不增加依赖，不涉及 API、数据库、存储、同步、外部服务或公开格式迁移。

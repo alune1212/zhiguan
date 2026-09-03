@@ -14,17 +14,19 @@
 
 - CNY 金额以整数分表示并使用 BigInt 计算；中间除法保留精确有理数，展示时再按固定规则舍入。
 - 计算使用用户确认的同一比较周期、税口径和工作时间；不自动换汇、跨期或填充默认值。
-- 每个结果保留来源、依赖、公式和证据状态：actual、user-confirmed、estimated、forecast 或 insufficient-data。
-- 缺少、冲突、过期或无效输入时，只让受影响结果降级为 insufficient-data，并给出修正路径；不显示零值、旧值或猜测。
+- 每个结果保留来源、依赖、公式和证据状态。当前自填输入只有 user-confirmed 和 estimated，不声明为 actual；可计算的未来结果使用 forecast，无法计算时使用 insufficient-data。
+- 缺少、冲突或无效输入时，只让受影响结果降级为 insufficient-data，并给出修正路径；不显示零值、旧值或猜测。当前会话未采集有效日期或历史记录，不自动判断输入是否过期。
 - 未来购买情景保持 forecast；近似输入不会被提升为事实。
 
-## 当前五个结果
+## 当前计算与导出的五个结果
 
-1. Income Rate
-2. Work-time Equivalent
-3. 覆盖范围内可用余量
-4. 购买后余量
-5. 购买影响
+1. `income-rate`：每小时收入。
+2. `work-time-equivalent`：这笔钱相当于多少工作时间。
+3. `available-margin`：本月可用金额。
+4. `purchase-after-margin`：买完后本月还剩。
+5. `purchase-impact`：这笔购买减少的余量。
+
+页面先展示工作时间结论，再补充每小时收入；开始补充余量信息后显示两项余量结果。购买影响只保留在导出中。每项结果的具体依赖见 `src/domain/calculation.ts`，当前页面文案见 `docs/design/purchase-page-copy.md`（均相对仓库根目录）。
 
 ## 结果
 

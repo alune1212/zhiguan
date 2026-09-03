@@ -1,32 +1,7 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
-
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
-
-# Per-operation guidance (optional)
-# Add advisory guidance for how apply and archive work should be conducted.
-# This is separate from artifact rules above.
-# Example:
-#   operations:
-#     apply:
-#       guidance:
-#         - Keep test summaries concise
-#     archive:
-#       guidance:
-#         - Summarize the archive outcome before finishing
+context: |
+  执行入口为 AGENTS.md；产品边界以 PRODUCT.md 为准，当前范围见 PRODUCT_STRATEGY.md 和 ROADMAP.md。
+  当前实现是 React + TypeScript + Vite 浏览器内存态单页，使用 Bun 管理依赖并运行工具；版本与命令见 package.json、bunfig.toml 和 README.md。
+  购买工作台需求见 docs/product/prd/PRD-0001-single-purchase-decision-workbench.md；页面文案基线见 docs/design/purchase-page-copy.md。
+  openspec/specs 保存当前规格；openspec/changes/archive 保存当时的提案、设计与验证记录，不作为当前安装命令的来源。
