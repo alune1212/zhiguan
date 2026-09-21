@@ -1,0 +1,362 @@
+[
+  {
+    "id": "case-01",
+    "text": "我税后月收入 8,000 元，想买一台价格 3,000 元的相机。",
+    "expected": {
+      "monthly_income": {
+        "span": "8,000",
+        "status": "present"
+      },
+      "income_basis": {
+        "value": "post-tax",
+        "status": "present"
+      },
+      "purchase_price": {
+        "span": "3,000",
+        "status": "present"
+      }
+    }
+  },
+  {
+    "id": "case-02",
+    "text": "我的税前月薪是 12,000 元，准备买一台 6,800 元的显示器。",
+    "expected": {
+      "monthly_income": {
+        "span": "12,000",
+        "status": "present"
+      },
+      "income_basis": {
+        "value": "pre-tax",
+        "status": "present"
+      },
+      "purchase_price": {
+        "span": "6,800",
+        "status": "present"
+      }
+    }
+  },
+  {
+    "id": "case-03",
+    "text": "每月到手 9千，想买 2千5百元的办公椅。",
+    "expected": {
+      "monthly_income": {
+        "span": "9千",
+        "status": "present"
+      },
+      "income_basis": {
+        "value": "post-tax",
+        "status": "present"
+      },
+      "purchase_price": {
+        "span": "2千5百",
+        "status": "present"
+      }
+    }
+  },
+  {
+    "id": "case-04",
+    "text": "我税后每月收入 7,500 元，最近想换一台相机。",
+    "expected": {
+      "monthly_income": {
+        "span": "7,500",
+        "status": "present"
+      },
+      "income_basis": {
+        "value": "post-tax",
+        "status": "present"
+      },
+      "purchase_price": {
+        "span": null,
+        "status": "missing"
+      }
+    }
+  },
+  {
+    "id": "case-05",
+    "text": "我想买一个 2,999 元的机械键盘。",
+    "expected": {
+      "monthly_income": {
+        "span": null,
+        "status": "missing"
+      },
+      "income_basis": {
+        "value": null,
+        "status": "missing"
+      },
+      "purchase_price": {
+        "span": "2,999",
+        "status": "present"
+      }
+    }
+  },
+  {
+    "id": "case-06",
+    "text": "我每月收入 10,000 元，想买 4,500 元的显示器。",
+    "expected": {
+      "monthly_income": {
+        "span": "10,000",
+        "status": "present"
+      },
+      "income_basis": {
+        "value": null,
+        "status": "missing"
+      },
+      "purchase_price": {
+        "span": "4,500",
+        "status": "present"
+      }
+    }
+  },
+  {
+    "id": "case-07",
+    "text": "我税后月薪 9,000 元，房租每月 3,200 元，准备买一支 6,000 元的镜头。",
+    "expected": {
+      "monthly_income": {
+        "span": "9,000",
+        "status": "present"
+      },
+      "income_basis": {
+        "value": "post-tax",
+        "status": "present"
+      },
+      "purchase_price": {
+        "span": "6,000",
+        "status": "present"
+      }
+    }
+  },
+  {
+    "id": "case-08",
+    "text": "税前月薪 12,000 元，商品预算 5,000 元，原价 5,800 元，用券后实际支付 5,200 元，我想按实际支付价算。",
+    "expected": {
+      "monthly_income": {
+        "span": "12,000",
+        "status": "present"
+      },
+      "income_basis": {
+        "value": "pre-tax",
+        "status": "present"
+      },
+      "purchase_price": {
+        "span": "5,200",
+        "status": "present"
+      }
+    }
+  },
+  {
+    "id": "case-09",
+    "text": "我税后每月大约 八千 元，想买一辆 3,000 元的自行车。",
+    "expected": {
+      "monthly_income": {
+        "span": "八千",
+        "status": "estimated"
+      },
+      "income_basis": {
+        "value": "post-tax",
+        "status": "present"
+      },
+      "purchase_price": {
+        "span": "3,000",
+        "status": "present"
+      }
+    }
+  },
+  {
+    "id": "case-10",
+    "text": "我的税前月收入是 15,000 元，想买大约 7,000 元的平板电脑。",
+    "expected": {
+      "monthly_income": {
+        "span": "15,000",
+        "status": "present"
+      },
+      "income_basis": {
+        "value": "pre-tax",
+        "status": "present"
+      },
+      "purchase_price": {
+        "span": "7,000",
+        "status": "estimated"
+      }
+    }
+  },
+  {
+    "id": "case-11",
+    "text": "税后月入大约 1.1万，准备买大约 6,000 元的相机。",
+    "expected": {
+      "monthly_income": {
+        "span": "1.1万",
+        "status": "estimated"
+      },
+      "income_basis": {
+        "value": "post-tax",
+        "status": "present"
+      },
+      "purchase_price": {
+        "span": "6,000",
+        "status": "estimated"
+      }
+    }
+  },
+  {
+    "id": "case-12",
+    "text": "我每月大约有 9,000 元收入，想买 2,000 元的台灯。",
+    "expected": {
+      "monthly_income": {
+        "span": "9,000",
+        "status": "estimated"
+      },
+      "income_basis": {
+        "value": null,
+        "status": "missing"
+      },
+      "purchase_price": {
+        "span": "2,000",
+        "status": "present"
+      }
+    }
+  },
+  {
+    "id": "case-13",
+    "text": "我的月收入不是税前 8,000 元，实际是税后 9,000 元；相机价格 3,500 元。",
+    "expected": {
+      "monthly_income": {
+        "span": "9,000",
+        "status": "present"
+      },
+      "income_basis": {
+        "value": "post-tax",
+        "status": "present"
+      },
+      "purchase_price": {
+        "span": "3,500",
+        "status": "present"
+      }
+    }
+  },
+  {
+    "id": "case-14",
+    "text": "先按税后月收入 7,000 元算，后来确认应是税后 7,800 元；电脑价格 6,000 元。",
+    "expected": {
+      "monthly_income": {
+        "span": "7,800",
+        "status": "present"
+      },
+      "income_basis": {
+        "value": "post-tax",
+        "status": "present"
+      },
+      "purchase_price": {
+        "span": "6,000",
+        "status": "present"
+      }
+    }
+  },
+  {
+    "id": "case-15",
+    "text": "月收入之前说税前 10,000 元，改口为税后 8,500 元，打算买 2,500 元的耳机。",
+    "expected": {
+      "monthly_income": {
+        "span": "8,500",
+        "status": "present"
+      },
+      "income_basis": {
+        "value": "post-tax",
+        "status": "present"
+      },
+      "purchase_price": {
+        "span": "2,500",
+        "status": "present"
+      }
+    }
+  },
+  {
+    "id": "case-16",
+    "text": "我的月收入大概在 8,000 到 10,000 元之间，想买 3,000 元的书桌。",
+    "expected": {
+      "monthly_income": {
+        "span": null,
+        "status": "ambiguous"
+      },
+      "income_basis": {
+        "value": null,
+        "status": "missing"
+      },
+      "purchase_price": {
+        "span": "3,000",
+        "status": "present"
+      }
+    }
+  },
+  {
+    "id": "case-17",
+    "text": "我月收入 9,000 元，税前还是税后我说不清，想买 2,000 元的灯。",
+    "expected": {
+      "monthly_income": {
+        "span": "9,000",
+        "status": "present"
+      },
+      "income_basis": {
+        "value": null,
+        "status": "ambiguous"
+      },
+      "purchase_price": {
+        "span": "2,000",
+        "status": "present"
+      }
+    }
+  },
+  {
+    "id": "case-18",
+    "text": "我税后月收入 8,000 元，考虑买 2,500 元或 3,500 元的相机，还没决定。",
+    "expected": {
+      "monthly_income": {
+        "span": "8,000",
+        "status": "present"
+      },
+      "income_basis": {
+        "value": "post-tax",
+        "status": "present"
+      },
+      "purchase_price": {
+        "span": null,
+        "status": "ambiguous"
+      }
+    }
+  },
+  {
+    "id": "case-19",
+    "text": "税后月收入 8,000 元，商品原价 4,000 元，活动价 3,000 元，实际要按哪个价格还没决定。",
+    "expected": {
+      "monthly_income": {
+        "span": "8,000",
+        "status": "present"
+      },
+      "income_basis": {
+        "value": "post-tax",
+        "status": "present"
+      },
+      "purchase_price": {
+        "span": null,
+        "status": "ambiguous"
+      }
+    }
+  },
+  {
+    "id": "case-20",
+    "text": "我年薪 18 万元，准备买 6,000 元的相机。",
+    "expected": {
+      "monthly_income": {
+        "span": null,
+        "status": "missing"
+      },
+      "income_basis": {
+        "value": null,
+        "status": "missing"
+      },
+      "purchase_price": {
+        "span": "6,000",
+        "status": "present"
+      }
+    }
+  }
+]

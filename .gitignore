@@ -19,6 +19,8 @@ coverage/
 dist/
 build/
 node_modules/
+.venv/
+__pycache__/
 
 # Temporary files
 .tmp/

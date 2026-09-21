@@ -31,6 +31,8 @@ bun run check
 
 ## 产品与实现边界
 
+独立的 Jev 开发实验使用 Python/uv，仅向外部服务发送固定虚构样本，不接入前端。配置、运行方式和验证边界见 [ADR-0006](docs/adr/ADR-0006-jev-integration.md)。
+
 - 产品定义见 PRODUCT.md、PRODUCT_STRATEGY.md 和 ROADMAP.md。
 - 当前功能短规格见 docs/product/prd/PRD-0001-single-purchase-decision-workbench.md；docs/product/prd/PRD-0002-goal-progress.md 已于 2026-09-01 按回滚条件退役，仅保留历史记录。
 - 当前不可逆技术决定见 docs/adr/README.md。
