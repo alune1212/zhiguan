@@ -62,7 +62,7 @@ describe("App", () => {
     expect(html).toContain("还想看买完后，这个月剩多少？（可选）");
     expect(html).toContain("没有固定支出可以填 0。");
     expect(html).toContain("确认并查看结果");
-    expect(html).toContain("你填写的内容只在当前页面使用。刷新或关闭后会清空，不会上传，也不会保存在浏览器里。");
+    expect(html).toContain("表单内容只在当前页面使用；只有你主动点击辅助整理时，输入的描述才会发送给 TypeSafe/Jev，不会发送表单其他内容。第三方服务是否留存描述以其服务说明为准。");
     expect(html).not.toContain("Goal");
     expect(html).not.toContain("目标进度");
     expect(html).not.toContain("购买前算一算");

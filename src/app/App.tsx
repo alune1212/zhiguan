@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
+import { AssistInput, applyAssistFields, type AssistFields } from "./AssistInput";
 import {
   CURRENCY,
   PERIOD,
@@ -120,6 +121,28 @@ export function updateAllEvidence(input: DecisionInput, value: EvidenceStatus): 
       workHours: value,
       fixedExpenses: value,
       purchaseAmount: value,
+    },
+  };
+}
+
+export interface AssistEstimatedValues {
+  readonly income: string | null;
+  readonly purchaseAmount: string | null;
+}
+
+export function updateEvidencePreservingAssistEstimates(
+  input: DecisionInput,
+  value: EvidenceStatus,
+  estimatedValues: AssistEstimatedValues,
+): DecisionInput {
+  const next = updateAllEvidence(input, value);
+  if (value !== "user-confirmed") return next;
+  return {
+    ...next,
+    evidence: {
+      ...next.evidence,
+      income: estimatedValues.income !== null && input.income === estimatedValues.income ? "estimated" : next.evidence.income,
+      purchaseAmount: estimatedValues.purchaseAmount !== null && input.purchaseAmount === estimatedValues.purchaseAmount ? "estimated" : next.evidence.purchaseAmount,
     },
   };
 }
@@ -428,6 +451,8 @@ export function App() {
   const [input, setInput] = useState<DecisionInput>(EMPTY_INPUT);
   const [submittedInput, setSubmittedInput] = useState<DecisionInput | null>(null);
   const [decision, setDecision] = useState<DecisionForm>({ code: "", rationale: "", reviewCondition: "" });
+  const [assistResetKey, setAssistResetKey] = useState(0);
+  const [assistEstimatedValues, setAssistEstimatedValues] = useState<AssistEstimatedValues>({ income: null, purchaseAmount: null });
   const calculated = submittedInput === input;
   const output = calculateDecision(input);
   const optionalStarted = Boolean(input.fixedExpenses.trim() || input.fixedCostCoverage || input.purchaseIncluded);
@@ -443,6 +468,32 @@ export function App() {
     setInput(EMPTY_INPUT);
     setSubmittedInput(null);
     setDecision({ code: "", rationale: "", reviewCondition: "" });
+    setAssistResetKey((current) => current + 1);
+    setAssistEstimatedValues({ income: null, purchaseAmount: null });
+  };
+
+  const updateNumericField = (field: NumericInputField, value: string) => {
+    const next = updateNumeric(input, field, value);
+    setInput(next);
+    if (field === "income" || field === "purchaseAmount") {
+      setAssistEstimatedValues((current) => ({
+        ...current,
+        [field]: current[field] !== null && next[field] !== current[field] ? null : current[field],
+      }));
+    }
+  };
+
+  const applyAssist = (fields: AssistFields) => {
+    const next = applyAssistFields(input, fields);
+    setInput(next);
+    setAssistEstimatedValues((current) => ({
+      income: fields.income.status === "estimated" && !input.income.trim() && next.income ? next.income : current.income,
+      purchaseAmount: fields.purchaseAmount.status === "estimated" && !input.purchaseAmount.trim() && next.purchaseAmount ? next.purchaseAmount : current.purchaseAmount,
+    }));
+  };
+
+  const updateEvidence = (value: EvidenceStatus) => {
+    setInput(updateEvidencePreservingAssistEstimates(input, value, assistEstimatedValues));
   };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -489,9 +540,15 @@ export function App() {
             </select>
             <FieldError field="taxBasis" code={visibleErrors.taxBasis} id="tax-basis-error" />
           </div>
-          <NumericFieldControl field="income" input={input} error={visibleErrors.income} onChange={(value) => setInput((current) => updateNumeric(current, "income", value))} />
-          <NumericFieldControl field="purchaseAmount" input={input} error={visibleErrors.purchaseAmount} onChange={(value) => setInput((current) => updateNumeric(current, "purchaseAmount", value))} />
+          <NumericFieldControl field="income" input={input} error={visibleErrors.income} onChange={(value) => updateNumericField("income", value)} />
+          <NumericFieldControl field="purchaseAmount" input={input} error={visibleErrors.purchaseAmount} onChange={(value) => updateNumericField("purchaseAmount", value)} />
         </div>
+
+        <AssistInput
+          key={assistResetKey}
+          currentInput={input}
+          onApply={applyAssist}
+        />
 
         <fieldset className="work-time-inputs" aria-invalid={visibleErrors.workHours ? "true" : undefined} aria-describedby={visibleErrors.workHours && workTimeMode === "unselected" ? "work-time-hint work-time-error" : "work-time-hint"}>
           <legend>你平时怎么上班？</legend>
@@ -533,10 +590,12 @@ export function App() {
           <input
             type="checkbox"
             checked={hasEstimatedValues}
-            onChange={({ currentTarget: { checked } }) => setInput((current) => updateAllEvidence(current, checked ? "estimated" : "user-confirmed"))}
+            aria-describedby={assistEstimatedValues.income !== null || assistEstimatedValues.purchaseAmount !== null ? "assist-estimate-hint" : undefined}
+            onChange={({ currentTarget: { checked } }) => updateEvidence(checked ? "estimated" : "user-confirmed")}
           />
           我填写的数字里有大概数
         </label>
+        {assistEstimatedValues.income !== null || assistEstimatedValues.purchaseAmount !== null ? <p className="field-hint" id="assist-estimate-hint">辅助整理识别的大概金额仍按估算；填写更准确的金额后可重新确认。</p> : null}
 
         <details className="optional-inputs" open={optionalStarted || undefined}>
           <summary>还想看买完后，这个月剩多少？（可选）</summary>
@@ -612,7 +671,7 @@ export function App() {
         </section>
       ) : null}
 
-      <footer className="footer">你填写的内容只在当前页面使用。刷新或关闭后会清空，不会上传，也不会保存在浏览器里。</footer>
+      <footer className="footer">表单内容只在当前页面使用；只有你主动点击辅助整理时，输入的描述才会发送给 TypeSafe/Jev，不会发送表单其他内容。第三方服务是否留存描述以其服务说明为准。刷新或关闭后页面内容会清空，不会保存在浏览器里。</footer>
     </main>
   );
 }

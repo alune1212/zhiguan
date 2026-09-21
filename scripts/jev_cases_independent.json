@@ -1,0 +1,146 @@
+[
+  {
+    "id": "new-01",
+    "text": "我的月收入是九千六百元，税前还是到手不清楚，打算买一千两百元的耳机。",
+    "expected": {
+      "monthly_income": {
+        "span": "九千六百",
+        "status": "present"
+      },
+      "income_basis": {
+        "value": null,
+        "status": "ambiguous"
+      },
+      "purchase_price": {
+        "span": "一千两百",
+        "status": "present"
+      }
+    }
+  },
+  {
+    "id": "new-02",
+    "text": "每月挣7200元，不知道是否扣了税，买一把680元的椅子。",
+    "expected": {
+      "monthly_income": {
+        "span": "7200",
+        "status": "present"
+      },
+      "income_basis": {
+        "value": null,
+        "status": "ambiguous"
+      },
+      "purchase_price": {
+        "span": "680",
+        "status": "present"
+      }
+    }
+  },
+  {
+    "id": "new-03",
+    "text": "月薪税前还是税后还不确定，金额是13500元，相机2300元。",
+    "expected": {
+      "monthly_income": {
+        "span": "13500",
+        "status": "present"
+      },
+      "income_basis": {
+        "value": null,
+        "status": "ambiguous"
+      },
+      "purchase_price": {
+        "span": "2300",
+        "status": "present"
+      }
+    }
+  },
+  {
+    "id": "new-04",
+    "text": "月入大约一万二千元，不清楚税前税后，想买大约两千五百元的显示器。",
+    "expected": {
+      "monthly_income": {
+        "span": "一万二千",
+        "status": "estimated"
+      },
+      "income_basis": {
+        "value": null,
+        "status": "ambiguous"
+      },
+      "purchase_price": {
+        "span": "两千五百",
+        "status": "estimated"
+      }
+    }
+  },
+  {
+    "id": "new-05",
+    "text": "每月到手8500元，商品有1800元和2400元两个款式，我没选好。",
+    "expected": {
+      "monthly_income": {
+        "span": "8500",
+        "status": "present"
+      },
+      "income_basis": {
+        "value": "post-tax",
+        "status": "present"
+      },
+      "purchase_price": {
+        "span": null,
+        "status": "ambiguous"
+      }
+    }
+  },
+  {
+    "id": "new-06",
+    "text": "月收入可能是六千也可能是七千，税后口径，想买599元的灯。",
+    "expected": {
+      "monthly_income": {
+        "span": null,
+        "status": "ambiguous"
+      },
+      "income_basis": {
+        "value": "post-tax",
+        "status": "present"
+      },
+      "purchase_price": {
+        "span": "599",
+        "status": "present"
+      }
+    }
+  },
+  {
+    "id": "new-07",
+    "text": "只知道税前年收入240000元，这次要买3999元的电脑。",
+    "expected": {
+      "monthly_income": {
+        "span": null,
+        "status": "missing"
+      },
+      "income_basis": {
+        "value": null,
+        "status": "missing"
+      },
+      "purchase_price": {
+        "span": "3999",
+        "status": "present"
+      }
+    }
+  },
+  {
+    "id": "new-08",
+    "text": "月收入原来说是税前9000元，现在更正为税后8100元。椅子原价1600元，本次付款1299元。",
+    "expected": {
+      "monthly_income": {
+        "span": "8100",
+        "status": "present"
+      },
+      "income_basis": {
+        "value": "post-tax",
+        "status": "present"
+      },
+      "purchase_price": {
+        "span": "1299",
+        "status": "present"
+      }
+    }
+  }
+]

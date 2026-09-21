@@ -1,10 +1,10 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
-/** Keep the static preview local, uncached, and unable to send session data. */
+/** Local preview permits only the same-origin, explicitly invoked assistance API. */
 export const PREVIEW_HEADERS: Record<string, string> = {
   "Cache-Control": "no-store",
-  "Content-Security-Policy": "default-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; script-src 'self'; style-src 'self'",
+  "Content-Security-Policy": "default-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; script-src 'self'; style-src 'self'",
   "Cross-Origin-Resource-Policy": "same-origin",
   "Permissions-Policy": "camera=(), geolocation=(), microphone=(), payment=(), usb=()",
   "Referrer-Policy": "no-referrer",
@@ -15,10 +15,14 @@ export const PREVIEW_HEADERS: Record<string, string> = {
 export default defineConfig({
   base: "./",
   plugins: [react()],
+  server: {
+    proxy: { "/api": { target: "http://127.0.0.1:4174", changeOrigin: false } },
+  },
   preview: {
     host: "127.0.0.1",
     port: 4173,
     headers: PREVIEW_HEADERS,
+    proxy: { "/api": { target: "http://127.0.0.1:4174", changeOrigin: false } },
   },
   build: {
     outDir: "dist",

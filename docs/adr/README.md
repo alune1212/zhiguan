@@ -10,6 +10,7 @@ ADR 只记录会改变长期系统边界、数据含义或公开格式的决定�
 | ADR-0002 | Accepted | CNY 精确分、确定性计算、证据状态与不足降级 |
 | ADR-0003 | Accepted | 购买决策当前快照的一次性 JSON 导出 |
 | ADR-0005 | Accepted | 明确作息估算、证据状态与增量导出依据 |
+| [ADR-0006](ADR-0006-jev-integration.md) | Accepted | 本机服务承接主动提交的三字段 Jev 辅助填写，用户核对后只填空白字段 |
 
 ## 退役记录
 
