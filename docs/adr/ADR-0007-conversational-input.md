@@ -1,6 +1,6 @@
 # ADR-0007：对话优先输入与最少上下文
 
-状态：Accepted；本机实现与本轮验证已完成（2026-09-22）。用户确认七项选择并授权实施，本决定取代 ADR-0006 的首版交互范围；具体结果和限制见[变更验证记录](../../openspec/changes/conversational-purchase-input/tasks.md)。
+状态：Accepted；本机实现完成；已核验并带一项非阻断警告归档（2026-09-22）。用户确认七项选择并授权实施，本决定取代 ADR-0006 的首版交互范围；具体结果和限制见[变更验证记录](../../openspec/changes/archive/2026-09-22-conversational-purchase-input/tasks.md)；[归档核验报告](../../openspec/changes/archive/2026-09-22-conversational-purchase-input/verification.md)记录了含糊改口的追问偏差。
 
 ## 已确认的选择
 
