@@ -164,14 +164,13 @@ export function updateEvidencePreservingAssistEstimates(
   };
 }
 
-type DecisionCode = "buy" | "wait" | "adjust-conditions" | "do-not-buy" | "undecided";
 export interface DecisionForm {
   readonly code: PurchaseDecisionCode | "";
   readonly rationale: string;
   readonly reviewCondition: string;
 }
 
-export const DECISION_OPTIONS: readonly { readonly code: DecisionCode; readonly label: string }[] = [
+export const DECISION_OPTIONS: readonly { readonly code: PurchaseDecisionCode; readonly label: string }[] = [
   { code: "buy", label: "现在买" },
   { code: "wait", label: "再等等" },
   { code: "adjust-conditions", label: "换个条件再看" },
@@ -525,6 +524,9 @@ export function App({
   };
 
   const updateDraft = (next: DecisionInput, nextEstimates: AssistEstimateMap = assistEstimatedValues) => {
+    const workTimeUnchanged = (next.workTime && input.workTime)
+      ? JSON.stringify(next.workTime) === JSON.stringify(input.workTime)
+      : next.workTime === input.workTime;
     if (next.income === input.income
       && next.workHours === input.workHours
       && next.fixedExpenses === input.fixedExpenses
@@ -533,7 +535,7 @@ export function App({
       && next.fixedCostCoverage === input.fixedCostCoverage
       && next.purchaseIncluded === input.purchaseIncluded
       && next.valueExpectation === input.valueExpectation
-      && next.workTime === input.workTime
+      && workTimeUnchanged
       && next.evidence.income === input.evidence.income
       && next.evidence.workHours === input.evidence.workHours
       && next.evidence.fixedExpenses === input.evidence.fixedExpenses
