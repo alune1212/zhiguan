@@ -10,9 +10,10 @@ ADR 只记录会改变长期系统边界、数据含义或公开格式的决定�
 | ADR-0002 | Accepted | CNY 精确分、确定性计算、证据状态与不足降级 |
 | ADR-0003 | Accepted | 购买决策当前快照的一次性 JSON 导出 |
 | ADR-0005 | Accepted | 明确作息估算、证据状态与增量导出依据 |
-| [ADR-0006](ADR-0006-jev-integration.md) | Accepted | 本机服务承接主动提交的三字段 Jev 辅助填写，用户核对后只填空白字段 |
+| [ADR-0006](ADR-0006-jev-integration.md) | Superseded | 保留首版三字段 Jev 辅助填写决定及实验记录；当前范围由 ADR-0007 替代 |
+| [ADR-0007](ADR-0007-conversational-input.md) | Accepted | 一句话对话优先、按需追问、最少上下文及一次整体确认；实现和验证进行中 |
 
-讨论中的 [ADR-0007：对话优先输入与最少上下文](ADR-0007-conversational-input.md) 已记录两轮七项用户选择，待整体确认与实施授权，不替代当前交付规则。
+ADR-0007 已替代 ADR-0006 的首版范围。旧实验仍按历史结果保留，不作为新增识别能力已验证的证据。
 
 ## 退役记录
 

@@ -1,0 +1,167 @@
+[
+  {
+    "id": "conversation-all-fields",
+    "turns": [
+      {
+        "text": "我税后月入大约8000元，准备买个3000元的相机，平时每周上5天、每天7.5小时。",
+        "questionId": null,
+        "context": {},
+        "expected": {
+          "income": {"value": "8000.00", "span": "8000", "status": "estimated"},
+          "taxBasis": {"value": "after-tax", "span": "税后", "status": "present"},
+          "purchaseAmount": {"value": "3000.00", "span": "3000", "status": "present"},
+          "workTimeMode": {"value": "custom", "span": "每周", "status": "present"},
+          "workDaysPerWeek": {"value": "5", "span": "5", "status": "present"},
+          "workHoursPerDay": {"value": "7.5", "span": "7.5", "status": "present"}
+        }
+      }
+    ]
+  },
+  {
+    "id": "double-rest-then-unknown-hours",
+    "turns": [
+      {
+        "text": "我现在是双休。",
+        "questionId": null,
+        "context": {},
+        "expected": {
+          "workTimeMode": {"value": "custom", "span": "双休", "status": "present"},
+          "workDaysPerWeek": {"value": "5", "span": "双休", "status": "present"}
+        }
+      },
+      {
+        "text": "不知道。",
+        "questionId": "workHoursPerDay",
+        "context": {
+          "workTimeMode": {"value": "custom", "span": "双休"},
+          "workDaysPerWeek": {"value": "5", "span": "双休"}
+        },
+        "expected": {
+          "workHoursPerDay": {"value": null, "span": null, "status": "unknown"}
+        }
+      }
+    ]
+  },
+  {
+    "id": "monthly-hours-and-inclusion",
+    "turns": [
+      {
+        "text": "月工时大约166.5小时，月入税前12000元，电脑售价9000元，这个月付款。",
+        "questionId": null,
+        "context": {},
+        "expected": {
+          "income": {"value": "12000.00", "span": "12000", "status": "present"},
+          "taxBasis": {"value": "before-tax", "span": "税前", "status": "present"},
+          "purchaseAmount": {"value": "9000.00", "span": "9000", "status": "present"},
+          "workTimeMode": {"value": "monthly", "span": "月工时", "status": "present"},
+          "workHours": {"value": "166.5", "span": "166.5", "status": "estimated"},
+          "purchaseIncluded": {"value": "included", "span": "这个月付款", "status": "present"}
+        }
+      }
+    ]
+  },
+  {
+    "id": "aggregate-fixed-costs",
+    "turns": [
+      {
+        "text": "每月固定支出合计大约六千元，所有固定开销都算上了；这次相机本月付款。",
+        "questionId": null,
+        "context": {},
+        "expected": {
+          "fixedExpenses": {"value": "6000.00", "span": "六千", "status": "estimated"},
+          "fixedCostCoverage": {"value": "complete", "span": ["所有固定开销都算上了", "所有固定开销都算上"], "status": "present"},
+          "purchaseIncluded": {"value": "included", "span": "本月付款", "status": "present"}
+        }
+      }
+    ]
+  },
+  {
+    "id": "coverage-short-yes",
+    "turns": [
+      {
+        "text": "都算上了",
+        "questionId": "fixedCostCoverage",
+        "context": {"fixedExpenses": {"value": "6000.00", "span": "6000"}},
+        "expected": {
+          "fixedCostCoverage": {"value": "complete", "span": "都算上了", "status": "present"}
+        }
+      }
+    ]
+  },
+  {
+    "id": "purchase-included-short-answer",
+    "turns": [
+      {
+        "text": "算这个月",
+        "questionId": "purchaseIncluded",
+        "context": {"purchaseAmount": {"value": "3000.00", "span": "3000"}},
+        "expected": {
+          "purchaseIncluded": {"value": "included", "span": "算这个月", "status": "present"}
+        }
+      }
+    ]
+  },
+  {
+    "id": "correct-current-income",
+    "turns": [
+      {
+        "text": "更正为每月税后九千元。",
+        "questionId": null,
+        "context": {
+          "income": {"value": "8000.00", "span": "8000"},
+          "taxBasis": {"value": "before-tax", "span": "税前"},
+          "purchaseAmount": {"value": "3000.00", "span": "3000"}
+        },
+        "expected": {
+          "income": {"value": "9000.00", "span": "九千", "status": "present"},
+          "taxBasis": {"value": "after-tax", "span": "税后", "status": "present"}
+        }
+      }
+    ]
+  },
+  {
+    "id": "ambiguous-context-reference",
+    "turns": [
+      {
+        "text": "那个金额改成2000。",
+        "questionId": null,
+        "context": {
+          "income": {"value": "8000.00", "span": "8000"},
+          "purchaseAmount": {"value": "3000.00", "span": "3000"}
+        },
+        "expected": {
+          "income": {"value": null, "span": null, "status": "ambiguous"},
+          "purchaseAmount": {"value": null, "span": null, "status": "ambiguous"}
+        }
+      }
+    ]
+  },
+  {
+    "id": "individual-rent-not-total",
+    "turns": [
+      {
+        "text": "房租三千元。",
+        "questionId": null,
+        "context": {},
+        "expected": {
+          "fixedExpenses": {"value": null, "span": null, "status": ["missing", "unsupported"]},
+          "fixedCostCoverage": {"value": null, "span": null, "status": "missing"}
+        }
+      }
+    ]
+  },
+  {
+    "id": "unsupported-foreign-currency-income",
+    "turns": [
+      {
+        "text": "月收入6000美元。",
+        "questionId": null,
+        "context": {},
+        "expected": {
+          "income": {"value": null, "span": null, "status": "unsupported"},
+          "taxBasis": {"value": null, "span": null, "status": "missing"}
+        }
+      }
+    ]
+  }
+]

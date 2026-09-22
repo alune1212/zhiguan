@@ -40,29 +40,19 @@ function resultFor(output: CalculationOutput, id: CalculationResult["id"]): Calc
 }
 
 describe("App", () => {
-  it("renders the smaller purchase flow and its trust boundaries", () => {
+  it("renders the default conversational flow and keeps the manual form secondary", () => {
     const html = renderToStaticMarkup(<App />);
     expect(html).toContain("这次购买要花多少工作时间？");
     expect(html).toContain("清空重填");
-    expect(html).toContain("先填收入和价格，再选作息");
-    expect(html).toContain("金额都填人民币。收入和固定支出填每月的数；购买价格填这一次要付的金额。");
-    expect(html).toContain("这个收入是税前还是到手？");
-    expect(html).toContain("每月收入（元）");
-    expect(html).toContain("你平时怎么上班？");
-    expect(html).toContain("每周 5 天，每天 8 小时");
-    expect(html).toContain("每周 6 天，每天 8 小时");
-    expect(html).toContain("自己调整");
-    expect(html).toContain("直接填写每月工作小时数");
-    expect(html).not.toContain('name="workHours"');
-    const workModes = html.match(/<input\b[^>]*name="work-time-mode"[^>]*>/gu) ?? [];
-    expect(workModes).toHaveLength(4);
-    expect(workModes.every((control) => !/\bchecked\b/u.test(control))).toBe(true);
-    expect(html).toContain("这笔购买要花多少（元）");
-    expect(html).toContain("我填写的数字里有大概数");
-    expect(html).toContain("还想看买完后，这个月剩多少？（可选）");
-    expect(html).toContain("没有固定支出可以填 0。");
-    expect(html).toContain("确认并查看结果");
-    expect(html).toContain("表单内容只在当前页面使用；只有你主动点击辅助整理时，输入的描述才会发送给 TypeSafe/Jev，不会发送表单其他内容。第三方服务是否留存描述以其服务说明为准。");
+    expect(html).toContain("先用一句话说说这次购买");
+    expect(html).toContain("用一句话描述你的收入和想买的东西");
+    expect(html).toContain("整理这句话");
+    expect(html).toContain("手动填写");
+    expect(html).toContain("点击发送后，当前回答、问题，以及理解回答所需的少量相关字段会发送给 TypeSafe/Jev。");
+    expect(html).not.toContain("每月收入（元）");
+    expect(html).not.toContain('name="work-time-mode"');
+    expect(html).not.toContain("确认并查看结果");
+    expect(html).toContain("只有点击发送后，当前回答、问题和理解回答所需的相关字段才会发送给 TypeSafe/Jev；价值期待和决定理由不在发送范围内。");
     expect(html).not.toContain("Goal");
     expect(html).not.toContain("目标进度");
     expect(html).not.toContain("购买前算一算");

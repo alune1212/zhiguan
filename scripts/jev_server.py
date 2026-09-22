@@ -1,104 +1,20 @@
 """Local-only same-origin Jev assistance and dist server; no request-body logs."""
-from decimal import Decimal, InvalidOperation
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
 import logging
 import os
 from pathlib import Path
-import re
 from threading import Lock
 from urllib.parse import urlsplit
 
-from typesafe_sdk import RetryPolicy, TypeSafeClient
-from jev_experiment import prepare, decode
+from jev_conversation import amount, assist as assist_conversation, validate_request
 
 ROOT = Path(__file__).resolve().parents[1] / "dist"
 HOSTS = {"127.0.0.1:4173", "localhost:4173", "127.0.0.1:4174", "localhost:4174"}
 BUSY = Lock()
-DIGITS = {c: i for i, c in enumerate("零一二三四五六七八九") } | {"两": 2, "〇": 0}
-UNITS = {"十": 10, "百": 100, "千": 1000, "万": 10000}
-
-
-def amount(span):
-    """Exact conversion of supported spans; shorthand or malformed input stays empty."""
-    if not isinstance(span, str) or len(span) > 50:
-        return None
-    try:
-        if re.fullmatch(r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?[万千百]?", span):
-            multiplier = {"万": 10000, "千": 1000, "百": 100}.get(span[-1], 1)
-            number = span[:-1] if multiplier != 1 else span
-            value = Decimal(number.replace(",", "")) * multiplier
-        elif re.fullmatch(r"(?:\d+[万千百])+", span):
-            parts = re.findall(r"(\d+)([万千百])", span)
-            powers = [UNITS[unit] for _, unit in parts]
-            if any(a <= b for a, b in zip(powers, powers[1:])):
-                return None
-            value = Decimal(sum(int(n) * UNITS[u] for n, u in parts))
-        elif re.fullmatch(r"[零〇一二两三四五六七八九十百千万]+", span):
-            total = section = digit = 0
-            last_unit = 100000
-            prev_digit = False
-            zero = False
-            for char in span:
-                if char in DIGITS:
-                    if prev_digit and not zero:
-                        return None
-                    digit = DIGITS[char]
-                    zero = digit == 0
-                    prev_digit = True
-                else:
-                    unit = UNITS[char]
-                    if unit == 10000:
-                        if total or not section and not digit:
-                            return None
-                        total = (section + digit) * unit
-                        section = 0
-                        last_unit = 10000
-                    else:
-                        if unit >= last_unit or not digit and not (char == "十" and not section and not total):
-                            return None
-                        section += (digit or 1) * unit
-                        last_unit = unit
-                    digit = 0
-                    prev_digit = False
-                    zero = False
-            # 一千五/一万二 can mean multiple values; require explicit units or 零.
-            if digit and last_unit > 10 and any(c in UNITS for c in span) and "零" not in span[-2:] and "〇" not in span[-2:]:
-                return None
-            value = Decimal(total + section + digit)
-        else:
-            return None
-        cents = value * 100
-        if not value.is_finite() or cents != cents.to_integral_value() or not 0 < cents <= 99999999999999999:
-            return None
-        return format(value.quantize(Decimal("0.01")), "f")
-    except (InvalidOperation, ValueError):
-        return None
-
-
-def fields_from_answers(actual):
-    fields = {}
-    for key, source in (("income", "monthly_income"), ("taxBasis", "income_basis"), ("purchaseAmount", "purchase_price")):
-        item = actual[source]
-        status = item["status"]
-        span = item.get("span")
-        value = None
-        if status in ("present", "estimated"):
-            value = {"pre-tax": "before-tax", "post-tax": "after-tax"}.get(item.get("value")) if key == "taxBasis" else amount(span)
-            if value is None:
-                status = "unsupported"
-        fields[key] = dict(value=value, span=span, status=status)
-    return {"fields": fields}
-
-
-def assist(text):
-    state, maps, questions = prepare(text)
-    with TypeSafeClient(api_key=os.environ["TYPESAFE_API_KEY"], model="jev-1.13.0",
-                        base_url="https://api.typesafe.ai/", timeout=30,
-                        retry=RetryPolicy(max_retries=0)) as client:
-        response = client.system_one(state=state, questions=questions)
-    return fields_from_answers(decode(response.choices, maps))
+def assist(text, question_id=None, context=None):
+    return assist_conversation(text, question_id, context)
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -151,9 +67,9 @@ class Handler(SimpleHTTPRequestHandler):
                 raise ValueError()
             self.connection.settimeout(5)
             payload = json.loads(self.rfile.read(length))
-            if not isinstance(payload, dict) or set(payload) != {"text"} or not isinstance(payload["text"], str):
+            if not isinstance(payload, dict) or set(payload) != {"text", "questionId", "context"}:
                 raise ValueError()
-            prepare(payload["text"])
+            context = validate_request(payload["text"], payload["questionId"], payload["context"])
         except (ValueError, UnicodeError, TimeoutError, RecursionError):
             self.reply(400, {"error": "invalid_input"})
             return
@@ -165,7 +81,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.reply(429, {"error": "busy"})
             return
         try:
-            self.reply(200, assist(payload["text"]))
+            self.reply(200, assist(payload["text"], payload["questionId"], context))
         except Exception:
             self.reply(502, {"error": "service_failed"})
         finally:

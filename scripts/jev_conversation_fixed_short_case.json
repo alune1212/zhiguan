@@ -1,0 +1,15 @@
+[
+  {
+    "id": "fixed-expense-short-answer-after-reprompt",
+    "turns": [
+      {
+        "text": "5300元",
+        "questionId": "fixedExpenses",
+        "context": {"fixedExpenses": {"value": "4000.00", "span": "4000"}},
+        "expected": {
+          "fixedExpenses": {"value": "5300.00", "span": "5300", "status": "present"}
+        }
+      }
+    ]
+  }
+]

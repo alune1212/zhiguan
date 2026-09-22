@@ -1,217 +1,133 @@
 import { useEffect, useRef, useState } from "react";
 
+import type { DecisionInput, NumericField, WorkTimeInput } from "../domain/calculation";
 import {
-  parseAmount,
-  type DecisionInput,
-  type TaxBasis,
-} from "../domain/calculation";
+  ASSIST_FIELD_NAMES,
+  areNumericValuesEquivalent,
+  advanceAssistQuestion,
+  applyAssistPatch,
+  applyQuickAssistAnswer,
+  assistContextFor,
+  assistValue,
+  finalizeAssistInput,
+  isValidAssistValue,
+  noteForDraftField,
+  parseAssistResponse,
+  type AssistContext,
+  type AssistEstimatedValues,
+  type AssistField,
+  type AssistFieldName,
+  type AssistFields,
+  type AssistStatus,
+} from "./assist-flow";
 
-export const ASSIST_STATUSES = ["present", "estimated", "missing", "ambiguous", "unsupported"] as const;
-export type AssistStatus = (typeof ASSIST_STATUSES)[number];
-
-export interface AssistField<T extends string | null = string | null> {
-  readonly value: T;
-  readonly span: string | null;
-  readonly status: AssistStatus;
-}
-
-export interface AssistFields {
-  readonly income: AssistField;
-  readonly purchaseAmount: AssistField;
-  readonly taxBasis: AssistField<TaxBasis | null>;
-}
-
-export interface AssistResponse {
-  readonly fields: AssistFields;
-}
-
-type UnknownRecord = Record<string, unknown>;
-
-function isRecord(value: unknown): value is UnknownRecord {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isAssistStatus(value: unknown): value is AssistStatus {
-  return typeof value === "string" && (ASSIST_STATUSES as readonly string[]).includes(value);
-}
-
-function parseCommonField(value: unknown): { value: string | null; span: string | null; status: AssistStatus } | null {
-  if (!isRecord(value) || !isAssistStatus(value.status)) return null;
-  if (typeof value.span !== "string" && value.span !== null) return null;
-  if (typeof value.value !== "string" && value.value !== null) return null;
-  const span = typeof value.span === "string" ? value.span.trim() || null : null;
-  const fieldValue = typeof value.value === "string" ? value.value.trim() || null : null;
-  const requiresCandidate = value.status === "present" || value.status === "estimated";
-  if (requiresCandidate && (!fieldValue || !span)) return null;
-  if (!requiresCandidate && fieldValue !== null) return null;
-  return {
-    value: fieldValue,
-    span,
-    status: value.status,
-  };
-}
-
-function parseAmountField(value: unknown): AssistField | null {
-  const field = parseCommonField(value);
-  if (!field || (field.value !== null && !parseAmount(field.value, false).ok)) return null;
-  return field;
-}
-
-function parseTaxBasisField(value: unknown): AssistField<TaxBasis | null> | null {
-  const field = parseCommonField(value);
-  if (!field) return null;
-  if (field.value !== null && field.value !== "before-tax" && field.value !== "after-tax") return null;
-  return field as AssistField<TaxBasis | null>;
-}
-
-/** Return null for any response that does not match the backend contract. */
-export function parseAssistResponse(value: unknown): AssistResponse | null {
-  if (!isRecord(value) || !isRecord(value.fields)) return null;
-  const income = parseAmountField(value.fields.income);
-  const purchaseAmount = parseAmountField(value.fields.purchaseAmount);
-  const taxBasis = parseTaxBasisField(value.fields.taxBasis);
-  if (!income || !purchaseAmount || !taxBasis) return null;
-  return { fields: { income, purchaseAmount, taxBasis } };
-}
-
-function canApply(field: AssistField): field is AssistField<string> {
-  return field.value !== null && (field.status === "present" || field.status === "estimated") && parseAmount(field.value, false).ok;
-}
-
-function canApplyTaxBasis(field: AssistField<TaxBasis | null>): field is AssistField<TaxBasis> {
-  return field.value !== null && (field.status === "present" || field.status === "estimated");
-}
-
-function responseSpansAppearInText(response: AssistResponse, text: string): boolean {
-  return Object.values(response.fields).every((field) => (
-    (field.status !== "present" && field.status !== "estimated")
-      || (field.span !== null && text.includes(field.span))
-  ));
-}
-
-/** Fill only blank fields; a tax basis is tied to the income filled in this action. */
-export function applyAssistFields(input: DecisionInput, fields: AssistFields): DecisionInput {
-  let income = input.income;
-  let purchaseAmount = input.purchaseAmount;
-  let taxBasis = input.taxBasis;
-  let evidence = { ...input.evidence };
-  let incomeFilled = false;
-
-  if (!input.income.trim() && canApply(fields.income)) {
-    income = fields.income.value;
-    evidence = {
-      ...evidence,
-      income: fields.income.status === "estimated" || input.evidence.income === "estimated" ? "estimated" : "user-confirmed",
-    };
-    incomeFilled = true;
-  }
-
-  if (!input.purchaseAmount.trim() && canApply(fields.purchaseAmount)) {
-    purchaseAmount = fields.purchaseAmount.value;
-    evidence = {
-      ...evidence,
-      purchaseAmount: fields.purchaseAmount.status === "estimated" || input.evidence.purchaseAmount === "estimated" ? "estimated" : "user-confirmed",
-    };
-  }
-
-  if (!input.taxBasis.trim() && incomeFilled && canApplyTaxBasis(fields.taxBasis)) {
-    taxBasis = fields.taxBasis.value;
-  }
-
-  return { ...input, income, purchaseAmount, taxBasis, evidence };
-}
+export { parseAssistResponse } from "./assist-flow";
+export type { AssistFields } from "./assist-flow";
 
 const ASSIST_TIMEOUT_MS = 40_000;
 
-const ASSIST_FIELD_LABELS = {
-  income: "每月收入",
-  purchaseAmount: "购买价格",
-  taxBasis: "收入口径",
-} as const;
-
-const ASSIST_STATUS_LABELS: Record<AssistStatus, string> = {
-  present: "已识别，待确认",
-  estimated: "大概数",
-  missing: "描述中未提到",
-  ambiguous: "描述不明确",
-  unsupported: "暂不支持",
+const QUESTION_LABELS: Readonly<Record<AssistFieldName, string>> = {
+  income: "你每月大约有多少收入？",
+  taxBasis: "你说的收入是税前，还是扣税后实际到手？",
+  purchaseAmount: "这次准备花多少钱？",
+  workTimeMode: "你更方便按平时每周作息，还是直接说每月工作小时数？",
+  workDaysPerWeek: "平均每周上班几天？",
+  workHoursPerDay: "每个上班日大约工作几小时？",
+  workHours: "你每月大约工作多少小时？",
+  fixedExpenses: "每月固定支出大约多少？没有可以选“没有”。",
+  fixedCostCoverage: "这个数包含了本月全部固定支出吗？",
+  purchaseIncluded: "这笔购买会在本月付款吗？",
 };
 
-function statusHint(status: AssistStatus): string | null {
-  switch (status) {
-    case "estimated":
-      return "确认后仍会保留为大概数，你可以继续修改。";
-    case "missing":
-      return "这段描述没有提到，可以留空并手动填写。";
-    case "ambiguous":
-      return "有多个可能含义，请手动选择或修改后再确认。";
-    case "unsupported":
-      return "这类内容暂时不能安全整理，请手动填写。";
-    case "present":
-      return null;
-  }
+const QUESTION_HINTS: Partial<Record<AssistFieldName, string>> = {
+  workHoursPerDay: "包含经常性加班，不含通勤和休息时间。",
+};
+
+const QUESTION_OPTIONS: Partial<Record<AssistFieldName, readonly { label: string; value: string }[]>> = {
+  taxBasis: [
+    { label: "税后到手", value: "after-tax" },
+    { label: "税前", value: "before-tax" },
+  ],
+  workTimeMode: [
+    { label: "按每周作息估算", value: "custom" },
+    { label: "直接填每月工时", value: "monthly" },
+  ],
+  workDaysPerWeek: [
+    { label: "每周 5 天", value: "5" },
+    { label: "每周 6 天", value: "6" },
+  ],
+  workHoursPerDay: [{ label: "每天约 8 小时", value: "8" }],
+  fixedExpenses: [{ label: "没有固定支出", value: "0" }],
+  fixedCostCoverage: [
+    { label: "包含全部", value: "complete" },
+    { label: "只包含一部分", value: "partial" },
+    { label: "不确定", value: "unknown" },
+  ],
+  purchaseIncluded: [
+    { label: "本月付款", value: "included" },
+    { label: "不在本月付款", value: "excluded" },
+  ],
+};
+
+const FIELD_LABELS: Readonly<Record<AssistFieldName, string>> = {
+  income: "每月收入",
+  taxBasis: "收入口径",
+  purchaseAmount: "购买价格",
+  workTimeMode: "工作时间口径",
+  workDaysPerWeek: "每周上班天数",
+  workHoursPerDay: "每天工作小时数",
+  workHours: "每月工作小时数",
+  fixedExpenses: "每月固定支出",
+  fixedCostCoverage: "固定支出范围",
+  purchaseIncluded: "本月是否付款",
+};
+
+const STATUS_LABELS: Readonly<Record<AssistStatus, string>> = {
+  present: "已识别，待确认",
+  estimated: "大概数，待确认",
+  missing: "还没有提供",
+  ambiguous: "需要你再说明",
+  unsupported: "暂不支持整理",
+  unknown: "你选择暂不确定",
+};
+
+const NUMERIC_ASSIST_FIELDS: readonly NumericField[] = ["income", "workHours", "fixedExpenses", "purchaseAmount"];
+
+function inputHasAssistData(input: DecisionInput): boolean {
+  return ASSIST_FIELD_NAMES.some((field) => Boolean(assistValue(input, field).trim()));
 }
 
-function AssistFieldEditor({
-  fieldKey,
-  field,
-  existingIncome,
-  onAmountChange,
-  onTaxBasisChange,
-}: {
-  readonly fieldKey: "income" | "purchaseAmount" | "taxBasis";
-  readonly field: AssistField | AssistField<TaxBasis | null>;
-  readonly existingIncome: boolean;
-  readonly onAmountChange: (fieldKey: "income" | "purchaseAmount", value: string) => void;
-  readonly onTaxBasisChange: (value: string) => void;
-}) {
-  const inputId = `assist-${fieldKey}`;
-  const amountInvalid = fieldKey !== "taxBasis" && field.value !== null && !parseAmount(field.value, false).ok;
-  return (
-    <div className="assist-field-row">
-      <div className="assist-field-heading">
-        <label htmlFor={inputId}>{ASSIST_FIELD_LABELS[fieldKey]}</label>
-        <span className={`assist-status assist-status-${field.status}`}>{ASSIST_STATUS_LABELS[field.status]}</span>
-      </div>
-      {fieldKey === "taxBasis" ? (
-        <select id={inputId} value={field.value ?? ""} onChange={(event) => onTaxBasisChange(event.currentTarget.value)}>
-          <option value="">请选择</option>
-          <option value="after-tax">税后（到手）</option>
-          <option value="before-tax">税前（还没扣税）</option>
-        </select>
-      ) : (
-        <input
-          id={inputId}
-          type="text"
-          inputMode="decimal"
-          value={field.value ?? ""}
-          onChange={(event) => onAmountChange(fieldKey, event.currentTarget.value)}
-        />
-      )}
-      {field.span ? <p className="assist-source">原文候选：“{field.span}”</p> : field.value ? <p className="assist-source">你补充或修改的内容。</p> : null}
-      {amountInvalid ? <p className="error" role="alert">金额需为大于 0、最多两位小数的数字。</p> : null}
-      {statusHint(field.status) ? <p className="assist-hint">{statusHint(field.status)}</p> : null}
-      {fieldKey === "taxBasis" && existingIncome ? <p className="assist-hint">当前已有收入，这个口径需要你手动选择，避免和另一笔收入混淆。</p> : null}
-    </div>
-  );
+function modeOf(input: DecisionInput): WorkTimeInput["mode"] {
+  return input.workTime?.mode ?? "unselected";
 }
 
-export function AssistInput({
-  currentInput,
-  onApply,
-}: {
-  readonly currentInput: DecisionInput;
-  readonly onApply: (fields: AssistFields) => void;
-}) {
-  const [text, setText] = useState("");
-  const [response, setResponse] = useState<AssistResponse | null>(null);
-  const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+function scheduleOf(input: DecisionInput): { days: string; hours: string } {
+  const mode = modeOf(input);
+  if (input.workTime?.mode === "custom") return { days: input.workTime.daysPerWeek, hours: input.workTime.hoursPerDay };
+  if (mode === "five-day") return { days: "5", hours: "8" };
+  if (mode === "six-day") return { days: "6", hours: "8" };
+  return { days: "", hours: "" };
+}
+
+function valueOf(input: DecisionInput, field: AssistFieldName): string {
+  if (field === "workDaysPerWeek") return scheduleOf(input).days;
+  if (field === "workHoursPerDay") return scheduleOf(input).hours;
+  return assistValue(input, field);
+}
+
+function statusForField(field: AssistField | undefined, value: string): AssistStatus {
+  if (field && field.value === (value || null)) return field.status;
+  return value ? "present" : "missing";
+}
+
+function questionContext(input: DecisionInput, questionId: AssistFieldName | null, notes: Partial<Record<AssistFieldName, AssistField>>): AssistContext {
+  return assistContextFor(input, questionId, inputHasAssistData(input), notes);
+}
+
+function useStopPendingRequest() {
   const generationRef = useRef(0);
   const controllerRef = useRef<AbortController | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const stopPendingRequest = () => {
     generationRef.current += 1;
     controllerRef.current?.abort();
@@ -219,61 +135,145 @@ export function AssistInput({
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = null;
   };
+  return { generationRef, controllerRef, timeoutRef, stopPendingRequest };
+}
 
-  useEffect(() => () => {
-    stopPendingRequest();
-  }, []);
+export interface AssistInputProps {
+  readonly currentInput: DecisionInput;
+  readonly estimatedValues: AssistEstimatedValues;
+  readonly draftRevision: number;
+  readonly manualMode: boolean;
+  readonly marginRequested: boolean;
+  readonly approximateInput: boolean;
+  readonly onDraftChange: (input: DecisionInput, estimates: AssistEstimatedValues) => void;
+  readonly onApproximateInputChange: (value: boolean) => void;
+  readonly onMarginRequest: () => void;
+  readonly onConfirm: (input: DecisionInput, estimates: AssistEstimatedValues) => void;
+  readonly onSwitchManual: () => void;
+  readonly onSwitchChat: () => void;
+}
 
-  const updateText = (value: string) => {
+export function AssistInput({
+  currentInput,
+  estimatedValues,
+  draftRevision,
+  manualMode,
+  marginRequested,
+  approximateInput,
+  onDraftChange,
+  onApproximateInputChange,
+  onMarginRequest,
+  onConfirm,
+  onSwitchManual,
+  onSwitchChat,
+}: AssistInputProps) {
+  const [text, setText] = useState("");
+  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [currentQuestion, setCurrentQuestion] = useState<AssistFieldName | null>(null);
+  const [skipped, setSkipped] = useState<ReadonlySet<AssistFieldName>>(() => new Set());
+  const [asked, setAsked] = useState<Readonly<Partial<Record<AssistFieldName, number>>>>({});
+  const [freeTextAmbiguities, setFreeTextAmbiguities] = useState<ReadonlySet<AssistFieldName>>(() => new Set());
+  const [notes, setNotes] = useState<Partial<Record<AssistFieldName, AssistField>>>({});
+  const [lastTurn, setLastTurn] = useState<string | null>(null);
+  const [lastChangedFields, setLastChangedFields] = useState<readonly AssistFieldName[]>([]);
+  const [started, setStarted] = useState(false);
+  const revisionRef = useRef(draftRevision);
+  const previousRevisionRef = useRef(draftRevision);
+  const manualModeRef = useRef(manualMode);
+  revisionRef.current = draftRevision;
+  manualModeRef.current = manualMode;
+  const { generationRef, controllerRef, timeoutRef, stopPendingRequest } = useStopPendingRequest();
+
+  useEffect(() => {
+    const changedDraft = draftRevision !== previousRevisionRef.current;
+    if (changedDraft || manualMode) {
+      stopPendingRequest();
+      setStatus((current) => current === "loading" ? "idle" : current);
+      setError(null);
+    }
+    previousRevisionRef.current = draftRevision;
+  }, [draftRevision, manualMode]);
+
+  useEffect(() => () => stopPendingRequest(), []);
+
+  const setNextQuestion = (
+    input: DecisionInput,
+    nextSkipped: ReadonlySet<AssistFieldName> = skipped,
+    nextAsked: Readonly<Partial<Record<AssistFieldName, number>>> = asked,
+    includeMargin = marginRequested,
+    firstClarifications: ReadonlySet<AssistFieldName> = freeTextAmbiguities,
+  ) => {
+    const transition = advanceAssistQuestion(
+      input,
+      { skipped: nextSkipped, clarifications: nextAsked },
+      includeMargin,
+      firstClarifications,
+    );
+    setAsked(transition.state.clarifications);
+    setFreeTextAmbiguities(transition.firstClarifications);
+    setCurrentQuestion(transition.questionId);
+    return transition.questionId;
+  };
+
+  const updateDraftField = (field: AssistFieldName, value: string) => {
+    setLastChangedFields([]);
+    let next = currentInput;
+    let nextEstimates = { ...estimatedValues };
+    if (NUMERIC_ASSIST_FIELDS.includes(field as NumericField)) {
+      const numericField = field as NumericField;
+      const estimate = nextEstimates[numericField];
+      next = {
+        ...next,
+        [numericField]: value,
+        evidence: { ...next.evidence, [numericField]: "" },
+      };
+      nextEstimates[numericField] = estimate === currentInput[numericField]
+        && areNumericValuesEquivalent(numericField, currentInput[numericField], value)
+        ? value
+        : null;
+    } else if (field === "workDaysPerWeek" || field === "workHoursPerDay") {
+      next = applyQuickAssistAnswer(next, field, value);
+    } else if (value && isValidAssistValue(field, value)) {
+      next = applyQuickAssistAnswer(next, field, value);
+    } else if (field === "taxBasis") {
+      next = { ...next, taxBasis: "" };
+    } else if (field === "workTimeMode") {
+      next = { ...next, workHours: "", workTime: { mode: "unselected" }, evidence: { ...next.evidence, workHours: "" } };
+    } else if (field === "fixedCostCoverage") {
+      next = { ...next, fixedCostCoverage: "" };
+    } else if (field === "purchaseIncluded") {
+      next = { ...next, purchaseIncluded: "" };
+    }
+    onDraftChange(next, nextEstimates);
+    setNotes((current) => ({ ...current, [field]: noteForDraftField(field, value, value ? "present" : "missing") }));
+  };
+
+  const updateTurnText = (value: string) => {
     stopPendingRequest();
     setText(value);
-    setResponse(null);
     setStatus("idle");
     setError(null);
     setNotice(null);
   };
 
-  const updateAmountField = (fieldKey: "income" | "purchaseAmount", value: string) => {
-    setResponse((current) => {
-      if (!current) return current;
-      const field = current.fields[fieldKey];
-      const nextValue = value.trim() || null;
-      const nextStatus: AssistStatus = field.status === "estimated" ? "estimated" : nextValue ? "present" : "missing";
-      return {
-        ...current,
-        fields: { ...current.fields, [fieldKey]: { ...field, value: nextValue, span: null, status: nextStatus } },
-      };
-    });
-    setNotice(null);
-  };
-
-  const updateTaxBasis = (value: string) => {
-    setResponse((current) => {
-      if (!current) return current;
-      const field = current.fields.taxBasis;
-      const nextValue = value === "before-tax" || value === "after-tax" ? value : null;
-      const nextStatus: AssistStatus = field.status === "estimated" ? "estimated" : nextValue ? "present" : "missing";
-      return {
-        ...current,
-        fields: { ...current.fields, taxBasis: { ...field, value: nextValue, span: null, status: nextStatus } },
-      };
-    });
-    setNotice(null);
-  };
-
   const request = async () => {
     const trimmedText = text.trim();
-    if (!trimmedText || status === "loading") return;
-
+    if (!trimmedText || status === "loading" || manualMode) return;
     stopPendingRequest();
     const controller = new AbortController();
     const generation = generationRef.current;
+    const requestRevision = draftRevision;
+    const questionId = currentQuestion;
+    const context = questionContext(currentInput, questionId, notes);
     let timedOut = false;
     controllerRef.current = controller;
+    setStarted(true);
     setStatus("loading");
-    setResponse(null);
     setError(null);
     setNotice(null);
+    setLastChangedFields([]);
     timeoutRef.current = setTimeout(() => {
       timedOut = true;
       controller.abort();
@@ -283,24 +283,49 @@ export function AssistInput({
       const result = await fetch("/api/assist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: trimmedText }),
+        body: JSON.stringify({ text: trimmedText, questionId, context }),
         signal: controller.signal,
       });
       if (!result.ok) throw new Error("request-failed");
       const payload: unknown = await result.json();
-      const parsed = parseAssistResponse(payload);
-      if (!parsed || !responseSpansAppearInText(parsed, trimmedText)) throw new Error("invalid-response");
-      if (generationRef.current !== generation || controller.signal.aborted) return;
-      setResponse(parsed);
-      setStatus("ready");
+      const parsed = parseAssistResponse(payload, trimmedText);
+      if (!parsed) throw new Error("invalid-response");
+      if (generationRef.current !== generation || controller.signal.aborted
+        || revisionRef.current !== requestRevision || manualModeRef.current) return;
+
+      const applied = applyAssistPatch(currentInput, estimatedValues, parsed.fields);
+      const nextNotes: Partial<Record<AssistFieldName, AssistField>> = { ...notes };
+      const nextSkipped = new Set(skipped);
+      const nextFreeTextAmbiguities = new Set(freeTextAmbiguities);
+      for (const [field, answer] of Object.entries(parsed.fields) as [AssistFieldName, AssistField][]) {
+        nextNotes[field] = answer;
+        if (answer.status === "unknown" || answer.status === "unsupported") nextSkipped.add(field);
+        if (answer.status === "ambiguous" && (asked[field] ?? 0) >= 2) nextSkipped.add(field);
+        if (questionId === null && answer.status === "ambiguous") nextFreeTextAmbiguities.add(field);
+      }
+      if (questionId && !parsed.fields[questionId]) {
+        nextNotes[questionId] = { value: null, span: null, status: "missing" };
+      }
+      setNotes(nextNotes);
+      setSkipped(nextSkipped);
+      setFreeTextAmbiguities(nextFreeTextAmbiguities);
+      onDraftChange(applied.input, applied.estimatedValues);
+      setLastChangedFields(applied.changedFields);
+      setLastTurn(trimmedText);
+      setText("");
+      setStatus("idle");
+      const nextQuestion = setNextQuestion(applied.input, nextSkipped, asked, marginRequested, nextFreeTextAmbiguities);
+      setNotice(nextQuestion
+        ? "已整理这段补充，下面只继续问一个必要问题；确认前都可以修改。"
+        : "已整理这段补充，请核对摘要；确认前都可以修改。" );
     } catch (reason) {
-      if (generationRef.current !== generation) return;
+      if (generationRef.current !== generation || revisionRef.current !== requestRevision || manualModeRef.current) return;
       if (reason instanceof Error && reason.name === "AbortError") {
-        setError(timedOut ? "整理超时，请手动填写或稍后重试。" : "整理已取消，你可以继续手动填写。");
+        setError(timedOut ? "整理超时了。回答和已有内容仍保留，你可以重试或手动填写。" : "整理已取消。回答和已有内容仍保留。 ");
       } else if (reason instanceof Error && reason.message === "invalid-response") {
-        setError("服务返回的内容无法识别，你可以继续手动填写。");
+        setError("服务返回的内容无法安全识别。你的回答和已有内容仍保留，可以重试或手动填写。");
       } else {
-        setError("暂时无法完成整理，你可以继续手动填写或稍后重试。");
+        setError("暂时无法连接本机整理服务。你的回答和已有内容仍保留，可以重试或手动填写。");
       }
       setStatus("error");
     } finally {
@@ -312,63 +337,234 @@ export function AssistInput({
     }
   };
 
-  const cancel = () => {
-    if (status !== "loading") return;
+  const answerQuickly = (field: AssistFieldName, value: string) => {
+    stopPendingRequest();
+    const next = applyQuickAssistAnswer(currentInput, field, value);
+    const nextEstimates = { ...estimatedValues };
+    if (NUMERIC_ASSIST_FIELDS.includes(field as NumericField)) {
+      const numericField = field as NumericField;
+      if (!areNumericValuesEquivalent(numericField, currentInput[numericField], next[numericField])) nextEstimates[numericField] = null;
+      else if (nextEstimates[numericField] === currentInput[numericField]) nextEstimates[numericField] = next[numericField];
+    }
+    onDraftChange(next, nextEstimates);
+    setNotes((current) => ({ ...current, [field]: noteForDraftField(field, value) }));
+    setLastTurn(null);
+    setLastChangedFields([field]);
+    setNotice("已按你的选择更新草稿，没有发送 Jev 请求。");
+    setText("");
+    setStatus("idle");
+    setError(null);
+    setNextQuestion(next);
+  };
+
+  const skipQuestion = (markUnknown: boolean) => {
+    if (!currentQuestion) return;
+    stopPendingRequest();
+    let nextInput = currentInput;
+    let nextEstimates = estimatedValues;
+    const field = currentQuestion;
+    if (markUnknown) {
+      const unresolved: AssistFields = { [field]: { value: null, span: null, status: "unknown" } };
+      const applied = applyAssistPatch(currentInput, estimatedValues, unresolved);
+      nextInput = applied.input;
+      nextEstimates = applied.estimatedValues;
+      onDraftChange(nextInput, nextEstimates);
+      setNotes((current) => ({ ...current, [field]: unresolved[field] }));
+    }
+    const nextSkipped = new Set(skipped).add(field);
+    setSkipped(nextSkipped);
+    setText("");
+    setStatus("idle");
+    setError(null);
+    setNotice(markUnknown ? "已保留为暂不确定，不再追问这一项。" : "已跳过这一项，可以在摘要或手动填写中补充。");
+    setNextQuestion(nextInput, nextSkipped);
+  };
+
+  const requestMargin = () => {
+    if (!marginRequested) onMarginRequest();
+    const next = setNextQuestion(currentInput, skipped, asked, true);
+    if (!next) setNotice("现有信息已足够或该项已跳过，可以直接确认摘要。");
+  };
+
+  const changeModeAndResume = () => {
     stopPendingRequest();
     setStatus("idle");
     setError(null);
+    setCurrentQuestion(null);
+    onSwitchChat();
+    setNextQuestion(currentInput);
   };
 
-  const incomeCandidate = Boolean(response && !currentInput.income.trim() && canApply(response.fields.income));
-  const purchaseCandidate = Boolean(response && !currentInput.purchaseAmount.trim() && canApply(response.fields.purchaseAmount));
-  const taxBasisCandidate = Boolean(response && !currentInput.taxBasis.trim() && !currentInput.income.trim() && incomeCandidate && canApplyTaxBasis(response.fields.taxBasis));
-  const hasCandidate = incomeCandidate || purchaseCandidate || taxBasisCandidate;
-  const hasInvalidCandidate = Boolean(response && [response.fields.income, response.fields.purchaseAmount].some((field) => field.value !== null && !parseAmount(field.value, false).ok));
+  const toggleApproximate = (checked: boolean) => onApproximateInputChange(checked);
+
+  if (manualMode) {
+    return (
+      <section className="assist-return" aria-label="对话输入">
+        <p>已保留这份草稿。手动填写后，仍可回到对话继续改口或补充。</p>
+        <button className="secondary-button" type="button" onClick={changeModeAndResume}>返回一句话对话</button>
+      </section>
+    );
+  }
+
+  const currentOptions = currentQuestion ? QUESTION_OPTIONS[currentQuestion] ?? [] : [];
+  const showSummary = status !== "loading" && (started || inputHasAssistData(currentInput) || Boolean(lastTurn));
+  const optionalValuesExist = Boolean(currentInput.fixedExpenses || currentInput.fixedCostCoverage || currentInput.purchaseIncluded);
+  const summaryFields = ASSIST_FIELD_NAMES.filter((field) => {
+    const optional = field === "fixedExpenses" || field === "fixedCostCoverage" || field === "purchaseIncluded";
+    return !optional || marginRequested || optionalValuesExist;
+  });
 
   return (
-    <details className="assist-input">
-      <summary>不想逐项填写？让 Jev 帮你整理（可选）</summary>
-      <div className="assist-content">
-        <p className="assist-disclosure">
-          只有你在这里输入的这段描述会在点击后发送给 TypeSafe/Jev；不会发送表单里的其他内容。第三方服务是否留存这段描述，以其服务说明为准。
-        </p>
-        <label className="field" htmlFor="assist-text">
-          <span>用一句话描述收入和想买的东西</span>
-          <textarea
-            id="assist-text"
-            rows={3}
-            maxLength={2000}
-            value={text}
-            aria-describedby="assist-text-hint"
-            onChange={(event) => updateText(event.currentTarget.value)}
-          />
-        </label>
-        <p className="field-hint" id="assist-text-hint">例如：“税后每月八千，想买三千元的相机。”最多 2000 字。</p>
-        <div className="assist-actions">
-          <button className="secondary-button" type="button" disabled={!text.trim() || status === "loading"} onClick={() => void request()}>
-            {status === "loading" ? "整理中…" : "帮我整理"}
-          </button>
-          {status === "loading" ? <button className="quiet-button" type="button" onClick={cancel}>取消</button> : null}
-          <span className="assist-count" aria-live="polite">{text.length}/2000</span>
+    <section className="assist-input card" aria-labelledby="assist-title">
+      <div className="assist-header">
+        <div>
+          <p className="eyebrow">少填一点</p>
+          <h2 id="assist-title">先用一句话说说这次购买</h2>
+          <p className="assist-lead">Jev 会帮你整理收入、价格和工作时间；你可以继续补充，也可以直接改摘要。</p>
         </div>
-        {error ? <p className="error" role="alert">{error}</p> : null}
-        {response ? (
-          <div className="assist-review" aria-live="polite">
-            <div className="assist-review-heading">
-              <h3>请核对这些候选内容</h3>
-              <p>确认后只会填入当前表单的空白项，已有内容不会被覆盖。</p>
-            </div>
-            <AssistFieldEditor fieldKey="income" field={response.fields.income} existingIncome={Boolean(currentInput.income.trim() && !currentInput.taxBasis)} onAmountChange={updateAmountField} onTaxBasisChange={updateTaxBasis} />
-            <AssistFieldEditor fieldKey="taxBasis" field={response.fields.taxBasis} existingIncome={Boolean(currentInput.income.trim() && !currentInput.taxBasis)} onAmountChange={updateAmountField} onTaxBasisChange={updateTaxBasis} />
-            <AssistFieldEditor fieldKey="purchaseAmount" field={response.fields.purchaseAmount} existingIncome={Boolean(currentInput.income.trim() && !currentInput.taxBasis)} onAmountChange={updateAmountField} onTaxBasisChange={updateTaxBasis} />
-            {hasInvalidCandidate ? <p className="error" role="alert">请先改正候选金额，再确认填入。</p> : null}
-            <button className="primary-button" type="button" disabled={!hasCandidate || hasInvalidCandidate} onClick={() => { onApply(response.fields); setNotice("已填入可用的空白项，其余请手动核对。"); }}>
-              确认填入空白字段
-            </button>
-          </div>
-        ) : null}
-        {notice ? <p className="assist-notice" role="status">{notice}</p> : null}
+        <button className="quiet-button" type="button" onClick={onSwitchManual}>手动填写</button>
       </div>
-    </details>
+
+      <p className="assist-disclosure">点击发送后，当前回答、问题，以及理解回答所需的少量相关字段会发送给 TypeSafe/Jev。不会自动发送整份草稿或决定理由。</p>
+      {currentQuestion ? (
+        <div className="assist-question" aria-live="polite">
+          <span>接下来只确认一项</span>
+          <h3>{QUESTION_LABELS[currentQuestion]}</h3>
+          {QUESTION_HINTS[currentQuestion] ? <p>{QUESTION_HINTS[currentQuestion]}</p> : null}
+        </div>
+      ) : null}
+      {lastTurn ? <p className="assist-last-turn">刚刚补充：{lastTurn}</p> : null}
+
+      <label className="field field-wide" htmlFor="assist-text">
+        <span>{currentQuestion ? "补充这一项，也可以顺便改口其他内容" : "用一句话描述你的收入和想买的东西"}</span>
+        <textarea
+          id="assist-text"
+          rows={3}
+          maxLength={2000}
+          value={text}
+          aria-describedby="assist-text-hint"
+          onChange={(event) => updateTurnText(event.currentTarget.value)}
+          placeholder={currentQuestion ? "写下你的回答，例如：税后到手，或每周上五天、每天九小时。" : "例如：税后每月到手八千，想买三千元的相机，平时每周上五天、每天八小时。"}
+        />
+      </label>
+      <p className="field-hint" id="assist-text-hint">只会在点击发送后整理这段内容。最多 2000 字。</p>
+      <div className="assist-actions">
+        <button className="primary-button" type="button" disabled={!text.trim() || status === "loading"} onClick={() => void request()}>
+          {status === "loading" ? "整理中…" : currentQuestion ? "发送回答" : "整理这句话"}
+        </button>
+        {status === "loading" ? <button className="quiet-button" type="button" onClick={() => { stopPendingRequest(); setStatus("idle"); setError(null); }}>取消</button> : null}
+        <span className="assist-count" aria-live="polite">{text.length}/2000</span>
+      </div>
+      {status === "error" ? (
+        <div className="assist-error" role="alert">
+          <p>{error}</p>
+          <div className="assist-actions">
+            <button className="secondary-button" type="button" disabled={!text.trim()} onClick={() => void request()}>重试这一句</button>
+            <button className="quiet-button" type="button" onClick={onSwitchManual}>改用手动填写</button>
+          </div>
+        </div>
+      ) : null}
+      {status !== "loading" && currentQuestion ? (
+        <div className="assist-answer-options" aria-label="快捷回答">
+          {currentOptions.map((option) => (
+            <button key={option.value} className="quick-answer" type="button" onClick={() => answerQuickly(currentQuestion, option.value)}>{option.label}</button>
+          ))}
+          <button className="quick-answer quick-answer-quiet" type="button" onClick={() => skipQuestion(false)}>先跳过</button>
+          <button className="quick-answer quick-answer-quiet" type="button" onClick={() => skipQuestion(true)}>我不确定</button>
+        </div>
+      ) : null}
+      {lastChangedFields.length > 0 && status !== "loading" ? (
+        <p className="assist-changed-fields" role="status">本轮更新：{lastChangedFields.map((field) => FIELD_LABELS[field]).join("、")}</p>
+      ) : null}
+      {notice ? <p className="assist-notice" role="status">{notice}</p> : null}
+
+      {!marginRequested && showSummary ? (
+        <div className="assist-margin-invite">
+          <div>
+            <h3>还想看买完后本月剩多少吗？</h3>
+            <p>这部分是可选的。只有你主动开启后，才会追问固定支出和付款月份。</p>
+          </div>
+          <button className="secondary-button" type="button" onClick={requestMargin}>开启余量计算</button>
+        </div>
+      ) : null}
+
+      {showSummary && currentQuestion === null ? (
+        <section className="assist-review" aria-labelledby="assist-review-title">
+          <div className="assist-review-heading">
+            <div>
+              <p className="eyebrow">一份草稿，一次确认</p>
+              <h3 id="assist-review-title">核对并修改摘要</h3>
+            </div>
+            <button className="quiet-button" type="button" onClick={onSwitchManual}>更多手动选项</button>
+          </div>
+          <p className="assist-review-copy">识别结果还不是已确认事实。缺少的信息可以留空，之后仍能看已有结果。</p>
+          <div className="assist-summary-grid">
+            {summaryFields.map((field) => {
+              const currentValue = valueOf(currentInput, field);
+              const note = notes[field];
+              const fieldStatus = statusForField(note, currentValue);
+              const id = `assist-summary-${field}`;
+              const scheduleMode = assistValue(currentInput, "workTimeMode");
+              const showField = (field !== "workDaysPerWeek" && field !== "workHoursPerDay" || scheduleMode === "custom")
+                && (field !== "workHours" || scheduleMode === "monthly");
+              if (!showField) return null;
+              return (
+                <div className="assist-field-row" key={field}>
+                  <div className="assist-field-heading">
+                    <label htmlFor={id}>{FIELD_LABELS[field]}</label>
+                    <span className={`assist-status assist-status-${fieldStatus}`}>{STATUS_LABELS[fieldStatus]}</span>
+                  </div>
+                  {field === "taxBasis" ? (
+                    <select id={id} value={currentValue} onChange={(event) => updateDraftField(field, event.currentTarget.value)}>
+                      <option value="">尚未提供</option><option value="after-tax">税后（到手）</option><option value="before-tax">税前</option>
+                    </select>
+                  ) : field === "workTimeMode" ? (
+                    <select id={id} value={currentValue} onChange={(event) => updateDraftField(field, event.currentTarget.value)}>
+                      <option value="">尚未提供</option><option value="custom">按每周作息估算</option><option value="monthly">直接填每月工时</option>
+                    </select>
+                  ) : field === "fixedCostCoverage" ? (
+                    <select id={id} value={currentValue} onChange={(event) => updateDraftField(field, event.currentTarget.value)}>
+                      <option value="">尚未提供</option><option value="complete">包含全部</option><option value="partial">只包含一部分</option><option value="unknown">不确定</option>
+                    </select>
+                  ) : field === "purchaseIncluded" ? (
+                    <select id={id} value={currentValue} onChange={(event) => updateDraftField(field, event.currentTarget.value)}>
+                      <option value="">尚未提供</option><option value="included">本月付款</option><option value="excluded">不在本月付款</option>
+                    </select>
+                  ) : (
+                    <input
+                      id={id}
+                      type="text"
+                      inputMode="decimal"
+                      value={currentValue}
+                      onChange={(event) => updateDraftField(field, event.currentTarget.value)}
+                    />
+                  )}
+                  {note?.span && currentValue === note.value ? <p className="assist-source">对应原话：“{note.span}”</p> : null}
+                </div>
+              );
+            })}
+          </div>
+          {assistValue(currentInput, "workTimeMode") === "custom" ? (
+            <p className="assist-hint">每周 {scheduleOf(currentInput).days || "—"} 天 × 每天 {scheduleOf(currentInput).hours || "—"} 小时；完整后按平时作息估算月工时。</p>
+          ) : null}
+          <label className="check-row assist-estimate-toggle">
+            <input type="checkbox" checked={approximateInput} onChange={(event) => toggleApproximate(event.currentTarget.checked)} />
+            我填的数字里有大概数
+          </label>
+          <p className="field-hint">逐项识别为大概数的字段会一直保留估算标记，不会因取消这个统一选项变成精确数字。</p>
+          {marginRequested ? <p className="assist-hint">余量计算已开启；固定支出不完整、未知或本月不付款时，会显示对应的不足说明。</p> : null}
+          <button className="primary-button" type="button" disabled={status !== "idle"} onClick={() => onConfirm(finalizeAssistInput(currentInput, estimatedValues, approximateInput), estimatedValues)}>
+            确认摘要并查看结果
+          </button>
+        </section>
+      ) : null}
+
+      {showSummary && currentQuestion !== null ? (
+        <section className="assist-progress" aria-label="当前草稿进度">
+          <p>已整理的内容会保留在草稿里；每次只追问一个必要信息。你也可以跳过、手动补充或随时核对摘要。</p>
+          <button className="quiet-button" type="button" onClick={onSwitchManual}>现在手动填写</button>
+        </section>
+      ) : null}
+    </section>
   );
 }

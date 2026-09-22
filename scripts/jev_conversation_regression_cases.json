@@ -1,0 +1,46 @@
+[
+  {
+    "id": "fixed-expense-total-followup-amount-only",
+    "turns": [
+      {
+        "text": "4200元",
+        "questionId": "fixedExpenses",
+        "context": {},
+        "expected": {
+          "fixedExpenses": {"value": "4200.00", "span": "4200", "status": "present"}
+        }
+      }
+    ]
+  },
+  {
+    "id": "unknown-price-does-not-clear-income",
+    "turns": [
+      {
+        "text": "月薪9600元，购买价格暂时不知道。",
+        "questionId": null,
+        "context": {},
+        "expected": {
+          "income": {"value": "9600.00", "span": "9600", "status": "present"},
+          "purchaseAmount": {"value": null, "span": null, "status": "unknown"}
+        }
+      }
+    ]
+  },
+  {
+    "id": "spec-generic-pronoun-chinese-correction",
+    "turns": [
+      {
+        "text": "那个改成两千。",
+        "questionId": null,
+        "context": {
+          "income": {"value": "8000.00", "span": "8000"},
+          "purchaseAmount": {"value": "3000.00", "span": "3000"}
+        },
+        "expected": {
+          "income": {"value": null, "span": null, "status": "ambiguous"},
+          "purchaseAmount": {"value": null, "span": null, "status": "ambiguous"}
+        }
+      }
+    ]
+  }
+]

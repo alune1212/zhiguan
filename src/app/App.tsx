@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
-import { AssistInput, applyAssistFields, type AssistFields } from "./AssistInput";
+import { AssistInput } from "./AssistInput";
+import {
+  EMPTY_ASSIST_ESTIMATES,
+  areNumericValuesEquivalent,
+  finalizeAssistInput,
+  type AssistEstimatedValues as AssistEstimateMap,
+} from "./assist-flow";
 import {
   CURRENCY,
   PERIOD,
@@ -126,8 +132,10 @@ export function updateAllEvidence(input: DecisionInput, value: EvidenceStatus): 
 }
 
 export interface AssistEstimatedValues {
-  readonly income: string | null;
-  readonly purchaseAmount: string | null;
+  readonly income?: string | null;
+  readonly workHours?: string | null;
+  readonly fixedExpenses?: string | null;
+  readonly purchaseAmount?: string | null;
 }
 
 export function updateEvidencePreservingAssistEstimates(
@@ -141,8 +149,10 @@ export function updateEvidencePreservingAssistEstimates(
     ...next,
     evidence: {
       ...next.evidence,
-      income: estimatedValues.income !== null && input.income === estimatedValues.income ? "estimated" : next.evidence.income,
-      purchaseAmount: estimatedValues.purchaseAmount !== null && input.purchaseAmount === estimatedValues.purchaseAmount ? "estimated" : next.evidence.purchaseAmount,
+      income: estimatedValues.income != null && input.income === estimatedValues.income ? "estimated" : next.evidence.income,
+      workHours: estimatedValues.workHours != null && input.workHours === estimatedValues.workHours ? "estimated" : next.evidence.workHours,
+      fixedExpenses: estimatedValues.fixedExpenses != null && input.fixedExpenses === estimatedValues.fixedExpenses ? "estimated" : next.evidence.fixedExpenses,
+      purchaseAmount: estimatedValues.purchaseAmount != null && input.purchaseAmount === estimatedValues.purchaseAmount ? "estimated" : next.evidence.purchaseAmount,
     },
   };
 }
@@ -452,11 +462,15 @@ export function App() {
   const [submittedInput, setSubmittedInput] = useState<DecisionInput | null>(null);
   const [decision, setDecision] = useState<DecisionForm>({ code: "", rationale: "", reviewCondition: "" });
   const [assistResetKey, setAssistResetKey] = useState(0);
-  const [assistEstimatedValues, setAssistEstimatedValues] = useState<AssistEstimatedValues>({ income: null, purchaseAmount: null });
+  const [assistEstimatedValues, setAssistEstimatedValues] = useState<AssistEstimateMap>({ ...EMPTY_ASSIST_ESTIMATES });
+  const [manualMode, setManualMode] = useState(false);
+  const [marginRequested, setMarginRequested] = useState(false);
+  const [approximateInput, setApproximateInput] = useState(false);
+  const [draftRevision, setDraftRevision] = useState(0);
+  const [draftNotice, setDraftNotice] = useState<string | null>(null);
   const calculated = submittedInput === input;
   const output = calculateDecision(input);
-  const optionalStarted = Boolean(input.fixedExpenses.trim() || input.fixedCostCoverage || input.purchaseIncluded);
-  const visibleResults = visibleResultsFor(output, optionalStarted);
+  const visibleResults = visibleResultsFor(output, marginRequested);
   const hasAvailableResult = visibleResults.some((result) => result.availability === "available");
   const resultHeadingRef = useRef<HTMLHeadingElement>(null);
 
@@ -469,40 +483,66 @@ export function App() {
     setSubmittedInput(null);
     setDecision({ code: "", rationale: "", reviewCondition: "" });
     setAssistResetKey((current) => current + 1);
-    setAssistEstimatedValues({ income: null, purchaseAmount: null });
+    setAssistEstimatedValues({ ...EMPTY_ASSIST_ESTIMATES });
+    setManualMode(false);
+    setMarginRequested(false);
+    setApproximateInput(false);
+    setDraftNotice(null);
+    setDraftRevision((current) => current + 1);
+  };
+
+  const updateDraft = (next: DecisionInput, nextEstimates: AssistEstimateMap = assistEstimatedValues) => {
+    const changed = JSON.stringify(next) !== JSON.stringify(input)
+      || JSON.stringify(nextEstimates) !== JSON.stringify(assistEstimatedValues);
+    if (!changed) return;
+    const hadResultOrDecision = calculated || Boolean(decision.code || decision.rationale || decision.reviewCondition);
+    setInput(next);
+    setAssistEstimatedValues(nextEstimates);
+    setSubmittedInput(null);
+    setDecision({ code: "", rationale: "", reviewCondition: "" });
+    setDraftRevision((current) => current + 1);
+    setDraftNotice(hadResultOrDecision ? "输入已更改，旧结果和决定理由已清除；重新确认后请再选择决定。" : null);
+  };
+
+  const manualUpdate = (next: DecisionInput, changedNumeric?: NumericField) => {
+    const nextEstimates = { ...assistEstimatedValues };
+    if (changedNumeric) {
+      const existingEstimate = nextEstimates[changedNumeric];
+      nextEstimates[changedNumeric] = existingEstimate === input[changedNumeric]
+        && areNumericValuesEquivalent(changedNumeric, input[changedNumeric], next[changedNumeric])
+        ? next[changedNumeric]
+        : null;
+    }
+    updateDraft(next, nextEstimates);
+  };
+
+  const changeApproximatePreference = (value: boolean) => {
+    if (value === approximateInput) return;
+    setApproximateInput(value);
+    if (calculated) updateDraft(finalizeAssistInput(input, assistEstimatedValues, value), assistEstimatedValues);
   };
 
   const updateNumericField = (field: NumericInputField, value: string) => {
     const next = updateNumeric(input, field, value);
-    setInput(next);
-    if (field === "income" || field === "purchaseAmount") {
-      setAssistEstimatedValues((current) => ({
-        ...current,
-        [field]: current[field] !== null && next[field] !== current[field] ? null : current[field],
-      }));
-    }
+    manualUpdate(next, field === "workDaysPerWeek" || field === "workHoursPerDay" ? undefined : field);
   };
 
-  const applyAssist = (fields: AssistFields) => {
-    const next = applyAssistFields(input, fields);
-    setInput(next);
-    setAssistEstimatedValues((current) => ({
-      income: fields.income.status === "estimated" && !input.income.trim() && next.income ? next.income : current.income,
-      purchaseAmount: fields.purchaseAmount.status === "estimated" && !input.purchaseAmount.trim() && next.purchaseAmount ? next.purchaseAmount : current.purchaseAmount,
-    }));
-  };
-
-  const updateEvidence = (value: EvidenceStatus) => {
-    setInput(updateEvidencePreservingAssistEstimates(input, value, assistEstimatedValues));
+  const confirmInput = (draft: DecisionInput = input, estimates: AssistEstimateMap = assistEstimatedValues) => {
+    const confirmed = finalizeAssistInput(draft, estimates, approximateInput);
+    setInput(confirmed);
+    setAssistEstimatedValues(estimates);
+    setSubmittedInput(confirmed);
+    setDraftNotice(null);
   };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setSubmittedInput(input);
+    confirmInput();
   };
 
   const visibleErrors = calculated ? output.inputErrors : {};
   const hasEstimatedValues = Object.values(input.evidence).some((status) => status === "estimated");
+  const hasAssistEstimates = Object.values(assistEstimatedValues).some((value) => value !== null);
   const workTimeMode = input.workTime?.mode ?? "monthly";
   const hasScheduleFieldError = Boolean(visibleErrors.workDaysPerWeek || visibleErrors.workHoursPerDay);
 
@@ -515,12 +555,28 @@ export function App() {
 
       <section className="intro" aria-labelledby="page-title">
         <h1 id="page-title">这次购买要花多少工作时间？</h1>
-        <p>填月收入和购买价格，再选平时作息，看看它相当于多少工作时间。想算买完后这个月还剩多少，再补每月固定支出。</p>
+        <p>先用一句话说说收入、想买的东西和平时作息；也可以切换到手动填写。想看本月剩余金额时，再主动补充余量信息。</p>
       </section>
 
-      <form className="card form" onSubmit={submit} noValidate autoComplete="off">
+      <AssistInput
+        key={assistResetKey}
+        currentInput={input}
+        estimatedValues={assistEstimatedValues}
+        draftRevision={draftRevision}
+        manualMode={manualMode}
+        marginRequested={marginRequested}
+        approximateInput={approximateInput}
+        onDraftChange={updateDraft}
+        onApproximateInputChange={changeApproximatePreference}
+        onMarginRequest={() => setMarginRequested(true)}
+        onConfirm={(draft, estimates) => confirmInput(draft, estimates)}
+        onSwitchManual={() => setManualMode(true)}
+        onSwitchChat={() => setManualMode(false)}
+      />
+
+      {manualMode ? <form className="card form" onSubmit={submit} noValidate autoComplete="off">
         <div className="section-heading">
-          <h2>先填收入和价格，再选作息</h2>
+          <h2>手动填写这份草稿</h2>
           <p>金额都填人民币。收入和固定支出填每月的数；购买价格填这一次要付的金额。</p>
         </div>
         <div className="field-grid">
@@ -532,7 +588,7 @@ export function App() {
               value={input.taxBasis}
               aria-invalid={visibleErrors.taxBasis ? "true" : undefined}
               aria-describedby={visibleErrors.taxBasis ? "tax-basis-error" : undefined}
-              onChange={({ currentTarget: { value } }) => setInput((current) => ({ ...current, taxBasis: value as TaxBasis | "" }))}
+              onChange={({ currentTarget: { value } }) => manualUpdate({ ...input, taxBasis: value as TaxBasis | "" })}
             >
               <option value="">选一种</option>
               <option value="after-tax">税后（到手）</option>
@@ -544,12 +600,6 @@ export function App() {
           <NumericFieldControl field="purchaseAmount" input={input} error={visibleErrors.purchaseAmount} onChange={(value) => updateNumericField("purchaseAmount", value)} />
         </div>
 
-        <AssistInput
-          key={assistResetKey}
-          currentInput={input}
-          onApply={applyAssist}
-        />
-
         <fieldset className="work-time-inputs" aria-invalid={visibleErrors.workHours ? "true" : undefined} aria-describedby={visibleErrors.workHours && workTimeMode === "unselected" ? "work-time-hint work-time-error" : "work-time-hint"}>
           <legend>你平时怎么上班？</legend>
           <p className="field-hint" id="work-time-hint">选平时作息即可，不用统计这个月实际上了多少小时。</p>
@@ -560,24 +610,24 @@ export function App() {
               ["custom", "自己调整"],
             ] as const).map(([mode, label]) => (
               <label key={mode}>
-                <input type="radio" name="work-time-mode" value={mode} checked={workTimeMode === mode} onChange={() => setInput((current) => updateWorkTimeMode(current, mode))} />
+                <input type="radio" name="work-time-mode" value={mode} checked={workTimeMode === mode} onChange={() => manualUpdate(updateWorkTimeMode(input, mode), "workHours")} />
                 {label}
               </label>
             ))}
           </div>
           <label className="work-time-manual">
-            <input type="radio" name="work-time-mode" value="monthly" checked={workTimeMode === "monthly"} onChange={() => setInput((current) => updateWorkTimeMode(current, "monthly"))} />
+            <input type="radio" name="work-time-mode" value="monthly" checked={workTimeMode === "monthly"} onChange={() => manualUpdate(updateWorkTimeMode(input, "monthly"), "workHours")} />
             直接填写每月工作小时数
           </label>
           {workTimeMode === "custom" ? (
             <div className="field-grid work-time-custom">
-              <NumericFieldControl field="workDaysPerWeek" input={input} error={visibleErrors.workDaysPerWeek} hint="可以填小数，例如大小周填 5.5。" onChange={(value) => setInput((current) => updateNumeric(current, "workDaysPerWeek", value))} />
-              <NumericFieldControl field="workHoursPerDay" input={input} error={visibleErrors.workHoursPerDay} hint="包含经常性加班，不含通勤和休息。" onChange={(value) => setInput((current) => updateNumeric(current, "workHoursPerDay", value))} />
+              <NumericFieldControl field="workDaysPerWeek" input={input} error={visibleErrors.workDaysPerWeek} hint="可以填小数，例如大小周填 5.5。" onChange={(value) => manualUpdate(updateNumeric(input, "workDaysPerWeek", value))} />
+              <NumericFieldControl field="workHoursPerDay" input={input} error={visibleErrors.workHoursPerDay} hint="包含经常性加班，不含通勤和休息。" onChange={(value) => manualUpdate(updateNumeric(input, "workHoursPerDay", value))} />
             </div>
           ) : null}
           {workTimeMode === "monthly" ? (
             <div className="work-time-custom">
-              <NumericFieldControl field="workHours" input={input} error={visibleErrors.workHours} onChange={(value) => setInput((current) => updateNumeric(current, "workHours", value))} />
+              <NumericFieldControl field="workHours" input={input} error={visibleErrors.workHours} onChange={(value) => manualUpdate(updateNumeric(input, "workHours", value), "workHours")} />
             </div>
           ) : null}
           {workTimeMode !== "monthly" && visibleErrors.workHours && !hasScheduleFieldError ? (
@@ -589,50 +639,61 @@ export function App() {
         <label className="check-row">
           <input
             type="checkbox"
-            checked={hasEstimatedValues}
-            aria-describedby={assistEstimatedValues.income !== null || assistEstimatedValues.purchaseAmount !== null ? "assist-estimate-hint" : undefined}
-            onChange={({ currentTarget: { checked } }) => updateEvidence(checked ? "estimated" : "user-confirmed")}
+            checked={approximateInput}
+            aria-describedby={hasAssistEstimates ? "assist-estimate-hint" : undefined}
+            onChange={({ currentTarget: { checked } }) => changeApproximatePreference(checked)}
           />
           我填写的数字里有大概数
         </label>
-        {assistEstimatedValues.income !== null || assistEstimatedValues.purchaseAmount !== null ? <p className="field-hint" id="assist-estimate-hint">辅助整理识别的大概金额仍按估算；填写更准确的金额后可重新确认。</p> : null}
+        {hasAssistEstimates ? <p className="field-hint" id="assist-estimate-hint">辅助整理逐项识别的大概数仍按估算；填写更准确的数值后可重新确认。</p> : null}
 
-        <details className="optional-inputs" open={optionalStarted || undefined}>
+        <details className="optional-inputs" open={marginRequested} onToggle={(event) => setMarginRequested(event.currentTarget.open)}>
           <summary>还想看买完后，这个月剩多少？（可选）</summary>
           <div className="optional-content">
-            <NumericFieldControl field="fixedExpenses" input={input} error={visibleErrors.fixedExpenses} hint="没有固定支出可以填 0。" onChange={(value) => setInput((current) => updateNumeric(current, "fixedExpenses", value))} />
-            <label className="check-row">
-              <input
-                type="checkbox"
-                checked={input.fixedCostCoverage === "complete"}
+            <NumericFieldControl field="fixedExpenses" input={input} error={visibleErrors.fixedExpenses} hint="没有固定支出可以填 0。" onChange={(value) => updateNumericField("fixedExpenses", value)} />
+            <div className="field">
+              <label htmlFor="fixed-cost-coverage">固定支出范围</label>
+              <select
+                id="fixed-cost-coverage"
+                value={input.fixedCostCoverage}
                 aria-invalid={visibleErrors.fixedCostCoverage ? "true" : undefined}
                 aria-describedby={visibleErrors.fixedCostCoverage ? "fixed-cost-coverage-error" : undefined}
-                onChange={({ currentTarget: { checked } }) => setInput((current) => ({ ...current, fixedCostCoverage: checked ? "complete" : "" }))}
-              />
-              我已经把本月所有固定支出都算进去了
-            </label>
+                onChange={({ currentTarget: { value } }) => manualUpdate({ ...input, fixedCostCoverage: value as DecisionInput["fixedCostCoverage"] })}
+              >
+                <option value="">尚未确认</option>
+                <option value="complete">包含本月全部固定支出</option>
+                <option value="partial">只包含一部分</option>
+                <option value="unknown">不确定</option>
+              </select>
+            </div>
             <FieldError field="fixedCostCoverage" code={visibleErrors.fixedCostCoverage} id="fixed-cost-coverage-error" />
-            <label className="check-row">
-              <input
-                type="checkbox"
-                checked={input.purchaseIncluded === "included"}
+            <div className="field">
+              <label htmlFor="purchase-included">本月是否付款</label>
+              <select
+                id="purchase-included"
+                value={input.purchaseIncluded}
                 aria-invalid={visibleErrors.purchaseIncluded ? "true" : undefined}
                 aria-describedby={visibleErrors.purchaseIncluded ? "purchase-included-error" : undefined}
-                onChange={({ currentTarget: { checked } }) => setInput((current) => ({ ...current, purchaseIncluded: checked ? "included" : "" }))}
-              />
-              按本月付款来算
-            </label>
+                onChange={({ currentTarget: { value } }) => manualUpdate({ ...input, purchaseIncluded: value as DecisionInput["purchaseIncluded"] })}
+              >
+                <option value="">尚未确认</option>
+                <option value="included">本月付款</option>
+                <option value="excluded">不在本月付款</option>
+              </select>
+            </div>
             <FieldError field="purchaseIncluded" code={visibleErrors.purchaseIncluded} id="purchase-included-error" />
             <div className="field field-wide">
               <label htmlFor="value-expectation">你希望它带来什么？（可选）</label>
-              <textarea id="value-expectation" rows={2} value={input.valueExpectation} aria-describedby="value-expectation-hint" onChange={({ currentTarget: { value } }) => setInput((current) => ({ ...current, valueExpectation: value }))} />
+              <textarea id="value-expectation" rows={2} value={input.valueExpectation} aria-describedby="value-expectation-hint" onChange={({ currentTarget: { value } }) => manualUpdate({ ...input, valueExpectation: value })} />
               <span className="field-hint" id="value-expectation-hint">不参与计算，只帮你记住当时的期待。</span>
             </div>
           </div>
         </details>
 
         <button className="primary-button" type="submit">确认并查看结果</button>
-      </form>
+      </form> : null}
+
+      {draftNotice ? <p className="draft-notice" role="status">{draftNotice}</p> : null}
 
       {calculated ? (
         <section className="results-section" aria-labelledby="results-title">
@@ -671,7 +732,7 @@ export function App() {
         </section>
       ) : null}
 
-      <footer className="footer">表单内容只在当前页面使用；只有你主动点击辅助整理时，输入的描述才会发送给 TypeSafe/Jev，不会发送表单其他内容。第三方服务是否留存描述以其服务说明为准。刷新或关闭后页面内容会清空，不会保存在浏览器里。</footer>
+      <footer className="footer">只有点击发送后，当前回答、问题和理解回答所需的相关字段才会发送给 TypeSafe/Jev；价值期待和决定理由不在发送范围内。第三方服务是否留存描述以其服务说明为准。刷新或关闭后页面内容会清空，不会保存在浏览器里。</footer>
     </main>
   );
 }

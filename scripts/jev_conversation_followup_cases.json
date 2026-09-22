@@ -1,0 +1,32 @@
+[
+  {
+    "id": "followup-ambiguous-prior-reference",
+    "turns": [
+      {
+        "text": "把之前那个金额调整为2500元。",
+        "questionId": null,
+        "context": {
+          "income": {"value": "8000.00", "span": "8000"},
+          "purchaseAmount": {"value": "3000.00", "span": "3000"}
+        },
+        "expected": {
+          "income": {"value": null, "span": null, "status": "ambiguous"},
+          "purchaseAmount": {"value": null, "span": null, "status": "ambiguous"}
+        }
+      }
+    ]
+  },
+  {
+    "id": "followup-full-coverage-phrase",
+    "turns": [
+      {
+        "text": "全部固定支出都包括了。",
+        "questionId": null,
+        "context": {},
+        "expected": {
+          "fixedCostCoverage": {"value": "complete", "span": "全部固定支出都包括了", "status": "present"}
+        }
+      }
+    ]
+  }
+]
