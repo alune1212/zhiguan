@@ -1,3 +1,5 @@
+import type { IncomePeriod, IncomeProfileScheduleSource } from "./income";
+
 /**
  * The small calculation kernel used by the page.  Inputs stay as strings at
  * the UI boundary; money and ratios are calculated with BigInt so cents are
@@ -27,13 +29,24 @@ export const NUMERIC_FIELDS = ["income", "workHours", "fixedExpenses", "purchase
 export type NumericField = (typeof NUMERIC_FIELDS)[number];
 export type TaxBasis = "before-tax" | "after-tax";
 export type EvidenceStatus = "user-confirmed" | "estimated";
-export type WorkTimeMode = "unselected" | "five-day" | "six-day" | "custom" | "monthly";
+export type WorkTimeMode = "unselected" | "five-day" | "six-day" | "custom" | "monthly" | "calendar";
+export interface CalendarWorkTimeInput {
+  readonly mode: "calendar";
+  readonly comparisonMonth: string;
+  readonly timeZone: string;
+  readonly totalWorkSeconds: string;
+  readonly workDays: readonly number[];
+  readonly periods: readonly IncomePeriod[];
+  readonly exceptions: Readonly<Record<string, "work" | "rest">>;
+  readonly scheduleSource: IncomeProfileScheduleSource;
+}
 export type WorkTimeInput =
   | { readonly mode: "unselected" }
   | { readonly mode: "five-day" }
   | { readonly mode: "six-day" }
   | { readonly mode: "custom"; readonly daysPerWeek: string; readonly hoursPerDay: string }
-  | { readonly mode: "monthly" };
+  | { readonly mode: "monthly" }
+  | CalendarWorkTimeInput;
 export type InputErrorCode =
   | "missing-input"
   | "invalid-input"
@@ -65,13 +78,21 @@ export interface WorkTimeBasis {
   readonly days_per_week: string | null;
   readonly hours_per_day: string | null;
   readonly conversion: typeof WORK_TIME_ESTIMATE_RULE | null;
+  readonly comparison_month?: string;
+  readonly time_zone?: string;
+  readonly total_work_seconds?: string;
+  readonly work_days?: readonly number[];
+  readonly periods?: readonly IncomePeriod[];
+  readonly exceptions?: Readonly<Record<string, "work" | "rest">>;
+  readonly schedule_source?: IncomeProfileScheduleSource;
 }
 
 export interface ResolvedWorkTime {
   readonly workHours: string;
+  readonly workSeconds: string | null;
   readonly evidence: EvidenceStatus | "";
   readonly basis: WorkTimeBasis;
-  readonly inputErrors: Readonly<Partial<Record<"workDaysPerWeek" | "workHoursPerDay", InputErrorCode>>>;
+  readonly inputErrors: Readonly<Partial<Record<NumericField | "workDaysPerWeek" | "workHoursPerDay", InputErrorCode>>>;
 }
 
 export interface ExactValue {
@@ -107,16 +128,16 @@ export interface CalculationOutput {
   readonly inputErrors: Readonly<Partial<Record<NumericField | "workDaysPerWeek" | "workHoursPerDay" | "taxBasis" | "fixedCostCoverage" | "purchaseIncluded", InputErrorCode>>>;
 }
 
-interface Money {
+export interface Money {
   readonly cents: bigint;
 }
 
-interface Rational {
+export interface Rational {
   readonly numerator: bigint;
   readonly denominator: bigint;
 }
 
-type ParseResult<T> =
+export type ParseResult<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly reasonCode: InputErrorCode };
 
@@ -131,7 +152,7 @@ function gcd(left: bigint, right: bigint): bigint {
   return a === 0n ? 1n : a;
 }
 
-function rational(numerator: bigint, denominator: bigint): Rational {
+export function rational(numerator: bigint, denominator: bigint): Rational {
   if (denominator === 0n) throw new Error("division-by-zero");
   const sign = denominator < 0n ? -1n : 1n;
   const divisor = gcd(numerator, denominator);
@@ -145,7 +166,7 @@ function powerOfTen(digits: number): bigint {
   return 10n ** BigInt(digits);
 }
 
-function formatRational(value: Rational, digits = 2): string {
+export function formatRational(value: Rational, digits = 2): string {
   const sign = value.numerator < 0n ? "-" : "";
   const numerator = value.numerator < 0n ? -value.numerator : value.numerator;
   const scale = powerOfTen(digits);
@@ -157,21 +178,21 @@ function formatRational(value: Rational, digits = 2): string {
   return `${sign}${whole.toString()}.${fraction}`;
 }
 
-function moneyExact(cents: bigint): ExactValue {
-  const value = rational(cents, 100n);
+export function exactValueFromRatio(numerator: bigint, denominator: bigint, digits = 2): ExactValue {
+  const value = rational(numerator, denominator);
   return {
     numerator: value.numerator.toString(),
     denominator: value.denominator.toString(),
-    decimal: formatRational(value),
+    decimal: formatRational(value, digits),
   };
 }
 
+function moneyExact(cents: bigint): ExactValue {
+  return exactValueFromRatio(cents, 100n);
+}
+
 function ratioExact(value: Rational): ExactValue {
-  return {
-    numerator: value.numerator.toString(),
-    denominator: value.denominator.toString(),
-    decimal: formatRational(value),
-  };
+  return exactValueFromRatio(value.numerator, value.denominator);
 }
 
 function parseDigits(raw: string, maxIntegerDigits: number, maxFractionDigits: number): ParseResult<{ whole: string; fraction: string }> {
@@ -232,7 +253,7 @@ function resolveEstimatedWorkTime(mode: WorkTimeMode, daysPerWeek: string, hours
   if (!parsedDays.ok) inputErrors.workDaysPerWeek = parsedDays.reasonCode;
   if (!parsedHours.ok) inputErrors.workHoursPerDay = parsedHours.reasonCode;
   if (Object.keys(inputErrors).length > 0 || !parsedDays.ok || !parsedHours.ok) {
-    return { workHours: "", evidence: "", basis, inputErrors };
+    return { workHours: "", workSeconds: null, evidence: "", basis, inputErrors };
   }
 
   const monthly = rational(
@@ -245,13 +266,83 @@ function resolveEstimatedWorkTime(mode: WorkTimeMode, daysPerWeek: string, hours
     const reasonCode = parsedRounded.reasonCode === "zero-not-allowed" ? "number-too-small" : parsedRounded.reasonCode;
     return {
       workHours: "",
+      workSeconds: null,
       evidence: "",
       basis,
       inputErrors: { workDaysPerWeek: reasonCode, workHoursPerDay: reasonCode },
     };
   }
 
-  return { workHours: rounded, evidence: "estimated", basis, inputErrors };
+  return { workHours: rounded, workSeconds: null, evidence: "estimated", basis, inputErrors };
+}
+
+function resolveCalendarWorkTime(input: CalendarWorkTimeInput): ResolvedWorkTime {
+  const raw = input as unknown as Record<string, unknown>;
+  const comparisonMonth = raw.comparisonMonth;
+  const timeZone = raw.timeZone;
+  const totalWorkSeconds = raw.totalWorkSeconds;
+  const workDays = raw.workDays;
+  const periods = raw.periods;
+  const exceptions = raw.exceptions;
+  const scheduleSource = raw.scheduleSource;
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === "object" && !Array.isArray(value);
+  const validPeriods = Array.isArray(periods) && periods.every((period) => isRecord(period)
+    && typeof period.start === "string" && typeof period.end === "string"
+    && (period.endDayOffset === 0 || period.endDayOffset === 1));
+  const basis: WorkTimeBasis = {
+    ...workTimeBasis("calendar", null, null, null),
+    ...(typeof comparisonMonth === "string" ? { comparison_month: comparisonMonth } : {}),
+    ...(typeof timeZone === "string" ? { time_zone: timeZone } : {}),
+    ...(typeof totalWorkSeconds === "string" ? { total_work_seconds: totalWorkSeconds } : {}),
+    ...(Array.isArray(workDays) && workDays.every((day) => Number.isInteger(day)) ? { work_days: [...workDays] as number[] } : {}),
+    ...(validPeriods ? { periods: periods.map((period) => ({
+      start: period.start as string,
+      end: period.end as string,
+      endDayOffset: period.endDayOffset as 0 | 1,
+    })) } : {}),
+    ...(isRecord(exceptions) ? { exceptions: { ...exceptions } as Readonly<Record<string, "work" | "rest">> } : {}),
+    ...(scheduleSource === "default" || scheduleSource === "user-confirmed" ? { schedule_source: scheduleSource } : {}),
+  };
+  let reason: InputErrorCode | undefined;
+  if (typeof comparisonMonth !== "string" || !/^\d{4}-(?:0[1-9]|1[0-2])$/u.test(comparisonMonth)) reason = "invalid-input";
+  if (!reason) {
+    try {
+      if (typeof timeZone !== "string") throw new RangeError("invalid-time-zone");
+      new Intl.DateTimeFormat("en-US", { timeZone }).format(new Date(0));
+    } catch {
+      reason = "invalid-input";
+    }
+  }
+  if (!reason && (typeof totalWorkSeconds !== "string" || !/^(?:0|[1-9]\d*)$/u.test(totalWorkSeconds))) reason = "invalid-input";
+  if (!reason) {
+    const seconds = BigInt(totalWorkSeconds as string);
+    if (seconds === 0n) reason = "zero-not-allowed";
+    else if (seconds > 32n * 24n * 60n * 60n) reason = "out-of-range";
+  }
+  if (!reason && (!Array.isArray(workDays)
+    || workDays.some((day) => !Number.isInteger(day) || (day as number) < 1 || (day as number) > 7)
+    || new Set(workDays).size !== workDays.length)) reason = "invalid-input";
+  if (!reason && !validPeriods) reason = "invalid-input";
+  if (!reason && (periods as CalendarWorkTimeInput["periods"]).some((period) => !/^([01]\d|2[0-3]):[0-5]\d$/u.test(period.start)
+    || !/^([01]\d|2[0-3]):[0-5]\d$/u.test(period.end)
+    || (period.endDayOffset !== 0 && period.endDayOffset !== 1))) reason = "invalid-input";
+  if (!reason && (!isRecord(exceptions) || Object.values(exceptions).some((value) => value !== "work" && value !== "rest"))) reason = "invalid-input";
+  if (!reason && scheduleSource !== "default" && scheduleSource !== "user-confirmed") reason = "invalid-input";
+
+  if (reason) {
+    return { workHours: "", workSeconds: null, evidence: "", basis, inputErrors: { workHours: reason } };
+  }
+
+  const seconds = BigInt(totalWorkSeconds as string);
+  const hours = rational(seconds, 3600n);
+  return {
+    workHours: formatRational(hours, 3),
+    workSeconds: totalWorkSeconds as string,
+    evidence: "estimated",
+    basis,
+    inputErrors: {},
+  };
 }
 
 export function resolveWorkTime(input: DecisionInput): ResolvedWorkTime {
@@ -259,6 +350,7 @@ export function resolveWorkTime(input: DecisionInput): ResolvedWorkTime {
   if (mode === "monthly") {
     return {
       workHours: input.workHours,
+      workSeconds: null,
       evidence: input.evidence.workHours,
       basis: workTimeBasis(mode, null, null, null),
       inputErrors: {},
@@ -267,6 +359,7 @@ export function resolveWorkTime(input: DecisionInput): ResolvedWorkTime {
   if (mode === "unselected") {
     return {
       workHours: "",
+      workSeconds: null,
       evidence: "",
       basis: workTimeBasis(mode, null, null, null),
       inputErrors: {},
@@ -274,11 +367,13 @@ export function resolveWorkTime(input: DecisionInput): ResolvedWorkTime {
   }
   if (mode === "five-day") return resolveEstimatedWorkTime(mode, "5", "8");
   if (mode === "six-day") return resolveEstimatedWorkTime(mode, "6", "8");
+  if (input.workTime?.mode === "calendar") return resolveCalendarWorkTime(input.workTime);
   if (input.workTime?.mode === "custom") {
     return resolveEstimatedWorkTime(mode, input.workTime.daysPerWeek, input.workTime.hoursPerDay);
   }
   return {
     workHours: "",
+    workSeconds: null,
     evidence: "",
     basis: workTimeBasis("unselected", null, null, null),
     inputErrors: {},
@@ -356,7 +451,9 @@ export function calculateDecision(input: DecisionInput): CalculationOutput {
   if (input.purchaseIncluded === "") inputErrors.purchaseIncluded = "purchase-period-required";
 
   const income = parsedIncome.ok ? parsedIncome.value : null;
-  const hours = parsedHours.ok ? parsedHours.value : null;
+  const hours = resolvedWorkTime.workSeconds !== null
+    ? rational(BigInt(resolvedWorkTime.workSeconds), 3600n)
+    : parsedHours.ok ? parsedHours.value : null;
   const fixed = parsedFixed.ok ? parsedFixed.value : null;
   const purchase = parsedPurchase.ok ? parsedPurchase.value : null;
   const rateReasons = [...incomeReasons, ...hoursReasons, ...taxReason];

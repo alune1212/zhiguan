@@ -400,8 +400,8 @@ export function AssistInput({
   if (manualMode) {
     return (
       <section className="assist-return" aria-label="对话输入">
-        <p>已保留这份草稿。手动填写后，仍可回到对话继续改口或补充。</p>
-        <button className="secondary-button" type="button" onClick={changeModeAndResume}>返回一句话对话</button>
+        <p>价格可以直接填写；想用一句话补充时再打开对话。不会自动发送内容。</p>
+        <button className="secondary-button" type="button" onClick={changeModeAndResume}>用一句话补充</button>
       </section>
     );
   }
@@ -505,7 +505,10 @@ export function AssistInput({
               const fieldStatus = statusForField(note, currentValue);
               const id = `assist-summary-${field}`;
               const scheduleMode = assistValue(currentInput, "workTimeMode");
-              const showField = (field !== "workDaysPerWeek" && field !== "workHoursPerDay" || scheduleMode === "custom")
+              const isCalendarWorkTime = modeOf(currentInput) === "calendar";
+              const calendarDetail = field === "workTimeMode" || field === "workDaysPerWeek" || field === "workHoursPerDay" || field === "workHours";
+              const showField = !(isCalendarWorkTime && calendarDetail)
+                && (field !== "workDaysPerWeek" && field !== "workHoursPerDay" || scheduleMode === "custom")
                 && (field !== "workHours" || scheduleMode === "monthly");
               if (!showField) return null;
               return (

@@ -388,7 +388,9 @@ export function assistContextFor(
   notes: Partial<Record<AssistFieldName, AssistField>>,
 ): AssistContext {
   if (questionId === null && !hasStarted) return {};
-  const fields = questionId === null ? ASSIST_FIELD_NAMES : QUESTION_CONTEXT[questionId];
+  const fields = questionId === null
+    ? ["income", "taxBasis", "purchaseAmount", "fixedExpenses", "fixedCostCoverage", "purchaseIncluded"] as const
+    : QUESTION_CONTEXT[questionId];
   const context: AssistContext = {};
   for (const field of fields) {
     const value = assistValue(input, field);
@@ -413,6 +415,7 @@ function mayAsk(field: AssistFieldName, state: AssistQuestionState): boolean {
 
 function hasWorkTime(input: DecisionInput): boolean {
   const mode = currentMode(input);
+  if (mode === "calendar") return true;
   if (mode === "five-day" || mode === "six-day") return true;
   if (mode === "custom") {
     const workTime = input.workTime;

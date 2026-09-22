@@ -1,6 +1,6 @@
 # 收入动态展示与资料复用：需求讨论
 
-状态：需求访谈完成；Q1–Q13 已确认。最终方案见 [PRD-0003](../product/prd/PRD-0003-income-dashboard.md)，宪法修订稿见 [RFC-0001](../product/rfc/RFC-0001-income-understanding.md)。文档修订稿待整体审阅，尚未实施。
+状态：需求访谈完成；Q1–Q13 已确认。方案与 RFC-0001、ADR-0008 已获批准并进入实施；具体代码、保存恢复、浏览器验收与用户体验仍待验证。最终方案见 [PRD-0003](../product/prd/PRD-0003-income-dashboard.md)。
 
 ## 来源与问题
 

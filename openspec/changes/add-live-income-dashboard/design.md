@@ -4,7 +4,7 @@
 
 动机见 proposal.md。当前 `App.tsx` 用 React 状态保存表单/确认/决定并提供 `createExportJson`；`calculation.ts` 用 BigInt、有理数和 `resolveWorkTime` 的 52/12 平均月工时；`assist-flow.ts` 控制有界字段与追问。现有测试主要为纯函数及服务端静态渲染，不能证明浏览器持久化或动态行为。依赖只有 React 与开发工具，没有日期、状态或存储框架。
 
-RFC-0001、PRD-0003、ADR-0008 已记录 Q1–Q13，但仍是 Review；本次只创建 OpenSpec 规划。开始 apply 时先使已确认产品决定在上层文档生效，再改运行时代码；规划完成不能被写成产品验收或 RFC Implemented。
+RFC-0001、PRD-0003、ADR-0008 记录 Q1–Q13。用户于 2026-09-22 明确启动 apply 后，PRODUCT 0.2.0 与 RFC/ADR 批准范围已生效，实施进行中；规划或批准不等于产品验收，也不能据此标记 RFC Implemented。
 
 ## Goals / Non-Goals
 

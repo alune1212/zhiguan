@@ -182,6 +182,44 @@ describe("conversation assist flow", () => {
     expect(assistContextFor(input, null, true, {})).toHaveProperty("fixedExpenses", { value: "2000", span: null });
   });
 
+  it("does not ask for or send saved calendar work-time details", () => {
+    const calendarInput: DecisionInput = {
+      ...blankInput,
+      income: "8000",
+      taxBasis: "after-tax",
+      workTime: {
+        mode: "calendar",
+        comparisonMonth: "2026-09",
+        timeZone: "Asia/Shanghai",
+        totalWorkSeconds: "576000",
+        workDays: [1, 2, 3, 4, 5],
+        periods: [
+          { start: "09:00", end: "12:00", endDayOffset: 0 },
+          { start: "13:00", end: "18:00", endDayOffset: 0 },
+        ],
+        exceptions: { "2026-09-05": "work" },
+        scheduleSource: "default",
+      },
+    };
+    const state: AssistQuestionState = { skipped: new Set(), clarifications: {} };
+    expect(nextAssistQuestion(calendarInput, state, false)).toBe("purchaseAmount");
+
+    const completedInput = {
+      ...calendarInput,
+      purchaseAmount: "3000",
+      fixedExpenses: "2000",
+      fixedCostCoverage: "complete" as const,
+    };
+    const context = assistContextFor(completedInput, null, true, {});
+    for (const field of ["workTimeMode", "workDaysPerWeek", "workHoursPerDay", "workHours"] as const) {
+      expect(context).not.toHaveProperty(field);
+    }
+    expect(JSON.stringify(context)).not.toContain("Asia/Shanghai");
+    expect(JSON.stringify(context)).not.toContain("2026-09-05");
+    expect(JSON.stringify(context)).not.toContain("576000");
+    expect(assistContextFor(completedInput, "purchaseAmount", true, {})).not.toHaveProperty("workDaysPerWeek");
+  });
+
   it("uses local quick answers without promoting estimates and keeps per-field estimates after confirmation", () => {
     const current: DecisionInput = { ...blankInput, income: "8000", taxBasis: "after-tax", evidence: { ...blankInput.evidence, income: "estimated" } };
     const quick = applyQuickAssistAnswer(current, "fixedCostCoverage", "partial");

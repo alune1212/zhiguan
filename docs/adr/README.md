@@ -11,13 +11,14 @@ ADR 只记录会改变长期系统边界、数据含义或公开格式的决定�
 | ADR-0003 | Accepted | 购买决策当前快照的一次性 JSON 导出 |
 | ADR-0005 | Accepted | 明确作息估算、证据状态与增量导出依据 |
 | [ADR-0006](ADR-0006-jev-integration.md) | Superseded | 保留首版三字段 Jev 辅助填写决定及实验记录；当前范围由 ADR-0007 替代 |
-| [ADR-0007](ADR-0007-conversational-input.md) | Accepted | 一句话对话优先、按需追问、最少上下文及一次整体确认；实现和验证进行中 |
+| [ADR-0007](ADR-0007-conversational-input.md) | Accepted | 一句话对话优先、按需追问、最少上下文及一次整体确认；本机实现已完成并归档验证 |
+| [ADR-0008](ADR-0008-local-profile-and-purchase-favorites.md) | Accepted；实施中 | 收入看板、同浏览器基础资料与主动收藏、本地备份恢复、日历分摊及购买快照 @2 |
 
-ADR-0007 已替代 ADR-0006 的首版范围。旧实验仍按历史结果保留，不作为新增识别能力已验证的证据。
+ADR-0007 已替代 ADR-0006 的首版范围。ADR-0008 在新收入看板及由其进入的购买流程中，限定替代 ADR-0001 的纯内存要求、ADR-0002/0005 的默认平均月工时口径和 ADR-0003 的 @1 / 不持久化约束；旧流程、旧快照及其验证历史仍按各 ADR 原文保留。旧实验仍按历史结果保留，不作为新增识别能力已验证的证据。
 
-## 待审阅的新方案
+## 实施状态
 
-[ADR-0008](ADR-0008-local-profile-and-purchase-favorites.md) 与 [PRD-0003](../product/prd/PRD-0003-income-dashboard.md)、[RFC-0001](../product/rfc/RFC-0001-income-understanding.md) 记录已确认的收入看板与资料复用方向。具体修订稿为 Review，尚未替代上表中的当前规则，也未实施。
+[ADR-0008](ADR-0008-local-profile-and-purchase-favorites.md)、[PRD-0003](../product/prd/PRD-0003-income-dashboard.md) 与 [RFC-0001](../product/rfc/RFC-0001-income-understanding.md) 的范围已获批准，代码实施中。新流程整体尚未交付；存储、备份恢复、自动检查与浏览器验收仍待完成。新流程完成前，用户工作流仍遵循当前已交付行为。
 
 ## 退役记录
 

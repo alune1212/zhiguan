@@ -157,6 +157,72 @@ describe("purchase decision calculation", () => {
     expect(upperBound.inputErrors).toEqual({});
   });
 
+  it("uses exact calendar seconds in decision math and retains the schedule basis", () => {
+    const input: DecisionInput = {
+      ...baseInput,
+      workTime: {
+        mode: "calendar",
+        comparisonMonth: "2026-02",
+        timeZone: "Asia/Shanghai",
+        totalWorkSeconds: "57601",
+        workDays: [1, 2, 3, 4, 5],
+        periods: [
+          { start: "09:00", end: "12:00", endDayOffset: 0 },
+          { start: "13:00", end: "18:00", endDayOffset: 0 },
+        ],
+        exceptions: {},
+        scheduleSource: "default",
+      },
+    };
+
+    const resolved = resolveWorkTime(input);
+    expect(resolved).toMatchObject({
+      workHours: "16.000",
+      workSeconds: "57601",
+      evidence: "estimated",
+      basis: {
+        mode: "calendar",
+        comparison_month: "2026-02",
+        time_zone: "Asia/Shanghai",
+        total_work_seconds: "57601",
+        work_days: [1, 2, 3, 4, 5],
+        schedule_source: "default",
+      },
+      inputErrors: {},
+    });
+    expect(result(input, "income-rate")).toMatchObject({
+      availability: "available",
+      display: "624.99 元/小时",
+      evidenceStatus: "estimated",
+      exact: { numerator: "36000000", denominator: "57601" },
+    });
+  });
+
+  it("rejects malformed calendar snapshots without throwing or falling back", () => {
+    const input = {
+      ...baseInput,
+      workTime: {
+        mode: "calendar",
+        comparisonMonth: "2026-02",
+        timeZone: "UTC",
+        totalWorkSeconds: "57600",
+        workDays: null,
+        periods: null,
+        exceptions: null,
+        scheduleSource: "default",
+      },
+    } as unknown as DecisionInput;
+
+    expect(() => resolveWorkTime(input)).not.toThrow();
+    expect(resolveWorkTime(input)).toMatchObject({
+      workHours: "",
+      evidence: "",
+      workSeconds: null,
+      inputErrors: { workHours: "invalid-input" },
+    });
+    expect(result(input, "income-rate").availability).toBe("insufficient-data");
+  });
+
   it.each([
     {
       name: "missing days",

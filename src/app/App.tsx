@@ -22,6 +22,11 @@ import {
   type WorkTimeBasis,
   type WorkTimeInput,
 } from "../domain/calculation";
+import {
+  createPurchaseSnapshot,
+  serializePurchaseSnapshot,
+  type PurchaseSnapshotV2,
+} from "../domain/purchase-snapshot";
 
 const EMPTY_INPUT: DecisionInput = {
   income: "",
@@ -111,7 +116,7 @@ export function updateNumeric(input: DecisionInput, field: NumericInputField, va
   return { ...input, [field]: value };
 }
 
-export function updateWorkTimeMode(input: DecisionInput, mode: WorkTimeInput["mode"]): DecisionInput {
+export function updateWorkTimeMode(input: DecisionInput, mode: Exclude<WorkTimeInput["mode"], "calendar">): DecisionInput {
   return {
     ...input,
     workHours: "",
@@ -224,8 +229,25 @@ function downloadJson(text: string, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-function exportJson(input: DecisionInput, output: CalculationOutput, decision: DecisionForm): void {
-  downloadJson(createExportJson(input, output, decision), "zhiguan-purchase-decision.json");
+export interface AppProps {
+  readonly initialInput?: DecisionInput;
+  readonly comparisonMonth?: string;
+  readonly timeZone?: string;
+  readonly onBack?: () => void;
+  readonly onFavorite?: (snapshot: PurchaseSnapshotV2) => Promise<void>;
+  readonly onAdoptMonth?: (month: string, draft: DecisionInput) => void;
+}
+
+function monthInTimeZone(date: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en", { timeZone, year: "numeric", month: "2-digit" }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  if (!year || !month) throw new RangeError("invalid-time-zone-month");
+  return `${year}-${month}`;
+}
+
+function localTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 }
 
 function FieldError({ field, code, id }: { readonly field: InputErrorField; readonly code?: InputErrorCode; readonly id: string }) {
@@ -457,37 +479,53 @@ function ResultCard({
   );
 }
 
-export function App() {
-  const [input, setInput] = useState<DecisionInput>(EMPTY_INPUT);
+export function App({
+  initialInput,
+  comparisonMonth,
+  timeZone,
+  onBack,
+  onFavorite,
+  onAdoptMonth,
+}: AppProps) {
+  const initialCalendar = initialInput?.workTime?.mode === "calendar" ? initialInput.workTime : undefined;
+  const selectedTimeZone = timeZone ?? initialCalendar?.timeZone ?? localTimeZone();
+  const selectedMonth = comparisonMonth ?? initialCalendar?.comparisonMonth ?? monthInTimeZone(new Date(), selectedTimeZone);
+  const [input, setInput] = useState<DecisionInput>(() => initialInput ?? EMPTY_INPUT);
   const [submittedInput, setSubmittedInput] = useState<DecisionInput | null>(null);
   const [decision, setDecision] = useState<DecisionForm>({ code: "", rationale: "", reviewCondition: "" });
   const [assistResetKey, setAssistResetKey] = useState(0);
   const [assistEstimatedValues, setAssistEstimatedValues] = useState<AssistEstimateMap>({ ...EMPTY_ASSIST_ESTIMATES });
-  const [manualMode, setManualMode] = useState(false);
+  const [manualMode, setManualMode] = useState(true);
   const [marginRequested, setMarginRequested] = useState(false);
   const [approximateInput, setApproximateInput] = useState(false);
   const [draftRevision, setDraftRevision] = useState(0);
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
+  const [monthChanged, setMonthChanged] = useState(false);
+  const [favoriteState, setFavoriteState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const calculated = submittedInput === input;
   const output = calculateDecision(input);
   const visibleResults = visibleResultsFor(output, marginRequested);
   const hasAvailableResult = visibleResults.some((result) => result.availability === "available");
   const resultHeadingRef = useRef<HTMLHeadingElement>(null);
+  const favoriteRequestId = useRef(0);
 
   useEffect(() => {
     if (calculated) resultHeadingRef.current?.focus();
   }, [calculated]);
 
   const clear = () => {
-    setInput(EMPTY_INPUT);
+    favoriteRequestId.current += 1;
+    setInput(initialInput ?? EMPTY_INPUT);
     setSubmittedInput(null);
     setDecision({ code: "", rationale: "", reviewCondition: "" });
     setAssistResetKey((current) => current + 1);
     setAssistEstimatedValues({ ...EMPTY_ASSIST_ESTIMATES });
-    setManualMode(false);
+    setManualMode(true);
     setMarginRequested(false);
     setApproximateInput(false);
     setDraftNotice(null);
+    setMonthChanged(false);
+    setFavoriteState("idle");
     setDraftRevision((current) => current + 1);
   };
 
@@ -496,11 +534,13 @@ export function App() {
       || JSON.stringify(nextEstimates) !== JSON.stringify(assistEstimatedValues);
     if (!changed) return;
     const hadResultOrDecision = calculated || Boolean(decision.code || decision.rationale || decision.reviewCondition);
+    favoriteRequestId.current += 1;
     setInput(next);
     setAssistEstimatedValues(nextEstimates);
     setSubmittedInput(null);
     setDecision({ code: "", rationale: "", reviewCondition: "" });
     setDraftRevision((current) => current + 1);
+    setFavoriteState("idle");
     setDraftNotice(hadResultOrDecision ? "输入已更改，旧结果和决定理由已清除；重新确认后请再选择决定。" : null);
   };
 
@@ -528,11 +568,62 @@ export function App() {
   };
 
   const confirmInput = (draft: DecisionInput = input, estimates: AssistEstimateMap = assistEstimatedValues) => {
+    const calendar = draft.workTime?.mode === "calendar" ? draft.workTime : undefined;
+    if (monthInTimeZone(new Date(), selectedTimeZone) !== selectedMonth
+      || calendar && (calendar.comparisonMonth !== selectedMonth || calendar.timeZone !== selectedTimeZone)) {
+      setMonthChanged(true);
+      return;
+    }
     const confirmed = finalizeAssistInput(draft, estimates, approximateInput);
     setInput(confirmed);
     setAssistEstimatedValues(estimates);
     setSubmittedInput(confirmed);
     setDraftNotice(null);
+  };
+
+  const currentMonth = () => monthInTimeZone(new Date(), selectedTimeZone);
+
+  const adoptCurrentMonth = () => {
+    const month = currentMonth();
+    if (onAdoptMonth) onAdoptMonth(month, input);
+    else if (onBack) onBack();
+    else setDraftNotice("请返回收入看板并重新打开购买分析；新页面会按当前月份的作息重新计算。此草稿尚未保存。");
+  };
+
+  const favorite = async () => {
+    if (!onFavorite || !calculated) return;
+    const calendar = input.workTime?.mode === "calendar" ? input.workTime : undefined;
+    if (currentMonth() !== selectedMonth
+      || calendar && (calendar.comparisonMonth !== selectedMonth || calendar.timeZone !== selectedTimeZone)) {
+      setMonthChanged(true);
+      return;
+    }
+    const requestId = ++favoriteRequestId.current;
+    setFavoriteState("saving");
+    try {
+      const snapshot = createPurchaseSnapshot(input, output, decision, {
+        comparisonMonth: selectedMonth,
+        timeZone: selectedTimeZone,
+      });
+      await onFavorite(snapshot);
+      if (favoriteRequestId.current === requestId) setFavoriteState("saved");
+    } catch {
+      if (favoriteRequestId.current === requestId) setFavoriteState("error");
+    }
+  };
+
+  const downloadCurrentSnapshot = () => {
+    const calendar = input.workTime?.mode === "calendar" ? input.workTime : undefined;
+    if (currentMonth() !== selectedMonth
+      || calendar && (calendar.comparisonMonth !== selectedMonth || calendar.timeZone !== selectedTimeZone)) {
+      setMonthChanged(true);
+      return;
+    }
+    const snapshot = createPurchaseSnapshot(input, output, decision, {
+      comparisonMonth: selectedMonth,
+      timeZone: selectedTimeZone,
+    });
+    downloadJson(serializePurchaseSnapshot(snapshot), "zhiguan-purchase-decision-v2.json");
   };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -545,17 +636,20 @@ export function App() {
   const hasAssistEstimates = Object.values(assistEstimatedValues).some((value) => value !== null);
   const workTimeMode = input.workTime?.mode ?? "monthly";
   const hasScheduleFieldError = Boolean(visibleErrors.workDaysPerWeek || visibleErrors.workHoursPerDay);
+  const monthNoticeVisible = monthChanged || currentMonth() !== selectedMonth
+    || input.workTime?.mode === "calendar"
+      && (input.workTime.comparisonMonth !== selectedMonth || input.workTime.timeZone !== selectedTimeZone);
 
   return (
     <main className="app-shell">
       <header className="topbar">
-        <a className="brand" href="#page-title">值观</a>
-        <button className="quiet-button" type="button" onClick={clear}>清空重填</button>
+        {onBack ? <button className="quiet-button" type="button" onClick={onBack}>返回收入看板</button> : <a className="brand" href="#page-title">值观</a>}
+        <button className="quiet-button" type="button" onClick={clear}>清空购买草稿</button>
       </header>
 
       <section className="intro" aria-labelledby="page-title">
         <h1 id="page-title">这次购买要花多少工作时间？</h1>
-        <p>先用一句话说说收入、想买的东西和平时作息；也可以切换到手动填写。想看本月剩余金额时，再主动补充余量信息。</p>
+        <p>填入这次购买的价格即可。月收入和本月作息沿用已保存资料；对话与更多设置都可以按需打开。</p>
       </section>
 
       <AssistInput
@@ -576,76 +670,98 @@ export function App() {
 
       {manualMode ? <form className="card form" onSubmit={submit} noValidate autoComplete="off">
         <div className="section-heading">
-          <h2>手动填写这份草稿</h2>
-          <p>金额都填人民币。收入和固定支出填每月的数；购买价格填这一次要付的金额。</p>
+          <h2>算一笔购买</h2>
+          <p>收入和作息只用于这次计算，不会写回已保存资料；金额单位为人民币。</p>
         </div>
         <div className="field-grid">
-          <div className="field field-wide">
-            <label htmlFor="tax-basis">这个收入是税前还是到手？</label>
-            <select
-              id="tax-basis"
-              name="tax-basis"
-              value={input.taxBasis}
-              aria-invalid={visibleErrors.taxBasis ? "true" : undefined}
-              aria-describedby={visibleErrors.taxBasis ? "tax-basis-error" : undefined}
-              onChange={({ currentTarget: { value } }) => manualUpdate({ ...input, taxBasis: value as TaxBasis | "" })}
-            >
-              <option value="">选一种</option>
-              <option value="after-tax">税后（到手）</option>
-              <option value="before-tax">税前（还没扣税）</option>
-            </select>
-            <FieldError field="taxBasis" code={visibleErrors.taxBasis} id="tax-basis-error" />
-          </div>
-          <NumericFieldControl field="income" input={input} error={visibleErrors.income} onChange={(value) => updateNumericField("income", value)} />
+          {initialInput ? (
+            <p className="field-hint field-wide">沿用每月到手收入 {input.income || "—"} 元 · {selectedMonth} 作息估算 · {selectedTimeZone}</p>
+          ) : <NumericFieldControl field="income" input={input} error={visibleErrors.income} onChange={(value) => updateNumericField("income", value)} />}
           <NumericFieldControl field="purchaseAmount" input={input} error={visibleErrors.purchaseAmount} onChange={(value) => updateNumericField("purchaseAmount", value)} />
         </div>
 
-        <fieldset className="work-time-inputs" aria-invalid={visibleErrors.workHours ? "true" : undefined} aria-describedby={visibleErrors.workHours && workTimeMode === "unselected" ? "work-time-hint work-time-error" : "work-time-hint"}>
-          <legend>你平时怎么上班？</legend>
-          <p className="field-hint" id="work-time-hint">选平时作息即可，不用统计这个月实际上了多少小时。</p>
-          <div className="work-time-options">
-            {([
-              ["five-day", "每周 5 天，每天 8 小时"],
-              ["six-day", "每周 6 天，每天 8 小时"],
-              ["custom", "自己调整"],
-            ] as const).map(([mode, label]) => (
-              <label key={mode}>
-                <input type="radio" name="work-time-mode" value={mode} checked={workTimeMode === mode} onChange={() => manualUpdate(updateWorkTimeMode(input, mode), "workHours")} />
-                {label}
-              </label>
-            ))}
-          </div>
-          <label className="work-time-manual">
-            <input type="radio" name="work-time-mode" value="monthly" checked={workTimeMode === "monthly"} onChange={() => manualUpdate(updateWorkTimeMode(input, "monthly"), "workHours")} />
-            直接填写每月工作小时数
-          </label>
-          {workTimeMode === "custom" ? (
-            <div className="field-grid work-time-custom">
-              <NumericFieldControl field="workDaysPerWeek" input={input} error={visibleErrors.workDaysPerWeek} hint="可以填小数，例如大小周填 5.5。" onChange={(value) => manualUpdate(updateNumeric(input, "workDaysPerWeek", value))} />
-              <NumericFieldControl field="workHoursPerDay" input={input} error={visibleErrors.workHoursPerDay} hint="包含经常性加班，不含通勤和休息。" onChange={(value) => manualUpdate(updateNumeric(input, "workHoursPerDay", value))} />
+        <details className="optional-inputs">
+          <summary>详细修改这次的比较条件</summary>
+          <div className="optional-content">
+            {initialInput ? <NumericFieldControl field="income" input={input} error={visibleErrors.income} onChange={(value) => updateNumericField("income", value)} /> : null}
+            <div className="field">
+              <label htmlFor="tax-basis">收入类型</label>
+              <select
+                id="tax-basis"
+                name="tax-basis"
+                value={input.taxBasis}
+                aria-invalid={visibleErrors.taxBasis ? "true" : undefined}
+                aria-describedby={visibleErrors.taxBasis ? "tax-basis-error" : undefined}
+                onChange={({ currentTarget: { value } }) => manualUpdate({ ...input, taxBasis: value as TaxBasis | "" })}
+              >
+                <option value="">尚未确认</option>
+                <option value="after-tax">税后（到手）</option>
+                <option value="before-tax">税前（还没扣税）</option>
+              </select>
+              <FieldError field="taxBasis" code={visibleErrors.taxBasis} id="tax-basis-error" />
             </div>
-          ) : null}
-          {workTimeMode === "monthly" ? (
-            <div className="work-time-custom">
-              <NumericFieldControl field="workHours" input={input} error={visibleErrors.workHours} onChange={(value) => manualUpdate(updateNumeric(input, "workHours", value), "workHours")} />
-            </div>
-          ) : null}
-          {workTimeMode !== "monthly" && visibleErrors.workHours && !hasScheduleFieldError ? (
-            <span className="error" id="work-time-error" role="alert">{workTimeMode === "unselected" ? "选一下平时作息，或直接填写每月工作小时数。" : inputErrorText("workHours", visibleErrors.workHours)}</span>
-          ) : null}
-          {output.workTime.basis.conversion ? <p className="field-hint work-time-note">按平时作息估算，不是本月实际出勤。包含经常性加班，不含通勤和休息。</p> : null}
-        </fieldset>
 
-        <label className="check-row">
-          <input
-            type="checkbox"
-            checked={approximateInput}
-            aria-describedby={hasAssistEstimates ? "assist-estimate-hint" : undefined}
-            onChange={({ currentTarget: { checked } }) => changeApproximatePreference(checked)}
-          />
-          我填写的数字里有大概数
-        </label>
-        {hasAssistEstimates ? <p className="field-hint" id="assist-estimate-hint">辅助整理逐项识别的大概数仍按估算；填写更准确的数值后可重新确认。</p> : null}
+            <fieldset className="work-time-inputs" aria-invalid={visibleErrors.workHours ? "true" : undefined} aria-describedby="work-time-hint">
+              <legend>仅调整这次购买的工作时间</legend>
+              <p className="field-hint" id="work-time-hint">更改只影响这次试算，不会修改收入资料。按每周作息估算会用全年平均月工时。</p>
+              {initialCalendar ? (
+                <label className="work-time-manual">
+                  <input
+                    type="radio"
+                    name="work-time-mode"
+                    value="calendar"
+                    checked={workTimeMode === "calendar"}
+                    onChange={() => manualUpdate({ ...input, workHours: "", workTime: initialCalendar })}
+                  />
+                  沿用 {initialCalendar.comparisonMonth} 的已保存作息
+                </label>
+              ) : null}
+              <div className="work-time-options">
+                {([
+                  ["five-day", "每周 5 天，每天 8 小时"],
+                  ["six-day", "每周 6 天，每天 8 小时"],
+                  ["custom", "自定义每周作息"],
+                ] as const).map(([mode, label]) => (
+                  <label key={mode}>
+                    <input type="radio" name="work-time-mode" value={mode} checked={workTimeMode === mode} onChange={() => manualUpdate(updateWorkTimeMode(input, mode), "workHours")} />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              <label className="work-time-manual">
+                <input type="radio" name="work-time-mode" value="monthly" checked={workTimeMode === "monthly"} onChange={() => manualUpdate(updateWorkTimeMode(input, "monthly"), "workHours")} />
+                直接填写每月工作小时数
+              </label>
+              {workTimeMode === "custom" ? (
+                <div className="field-grid work-time-custom">
+                  <NumericFieldControl field="workDaysPerWeek" input={input} error={visibleErrors.workDaysPerWeek} hint="可以填小数，例如大小周填 5.5。" onChange={(value) => manualUpdate(updateNumeric(input, "workDaysPerWeek", value))} />
+                  <NumericFieldControl field="workHoursPerDay" input={input} error={visibleErrors.workHoursPerDay} hint="包含经常性加班，不含通勤和休息。" onChange={(value) => manualUpdate(updateNumeric(input, "workHoursPerDay", value))} />
+                </div>
+              ) : null}
+              {workTimeMode === "monthly" ? (
+                <div className="work-time-custom">
+                  <NumericFieldControl field="workHours" input={input} error={visibleErrors.workHours} onChange={(value) => manualUpdate(updateNumeric(input, "workHours", value), "workHours")} />
+                </div>
+              ) : null}
+              {workTimeMode !== "monthly" && visibleErrors.workHours && !hasScheduleFieldError ? (
+                <span className="error" id="work-time-error" role="alert">{workTimeMode === "unselected" ? "选一下平时作息，或直接填写每月工作小时数。" : inputErrorText("workHours", visibleErrors.workHours)}</span>
+              ) : null}
+              {workTimeMode === "calendar" ? <p className="field-hint">按已保存的当月日历工作秒数估算；系统不会把排班或例外发送给对话服务。</p> : null}
+              {output.workTime.basis.conversion ? <p className="field-hint work-time-note">按平均作息估算，不代表本月实际出勤。包含经常性加班，不含通勤和休息。</p> : null}
+            </fieldset>
+
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={approximateInput}
+                aria-describedby={hasAssistEstimates ? "assist-estimate-hint" : undefined}
+                onChange={({ currentTarget: { checked } }) => changeApproximatePreference(checked)}
+              />
+              我填写的数字里有大概数
+            </label>
+            {hasAssistEstimates ? <p className="field-hint" id="assist-estimate-hint">辅助整理逐项识别的大概数仍按估算；填写更准确的数值后可重新确认。</p> : null}
+          </div>
+        </details>
 
         <details className="optional-inputs" open={marginRequested} onToggle={(event) => setMarginRequested(event.currentTarget.open)}>
           <summary>还想看买完后，这个月剩多少？（可选）</summary>
@@ -705,7 +821,7 @@ export function App() {
           </div>
           <div className="result-notes">
             {hasAvailableResult ? (
-              <p>{hasEstimatedValues ? "你填写的数字里有大概数，相关结果也是大概值。" : output.workTime.basis.conversion && output.workTime.evidence === "estimated" ? "作息换算的工作时间和每小时收入都是估算，不代表本月实际出勤。" : "按你刚刚确认的数字计算。"}</p>
+            <p>{hasEstimatedValues ? "你填写的数字里有大概数，相关结果也是大概值。" : output.workTime.evidence === "estimated" ? "工作时间和每小时收入按计划作息估算，不代表本月实际出勤。" : "按你刚刚确认的数字计算。"}</p>
             ) : null}
             <p>这里只根据你这次填写的数字计算，不是完整账本，也不会替你决定要不要买。</p>
           </div>
@@ -718,21 +834,38 @@ export function App() {
           <fieldset className="decision-options" aria-labelledby="decision-title">
             {DECISION_OPTIONS.map((option) => (
               <label key={option.code}>
-                <input type="radio" name="decision" value={option.code} checked={decision.code === option.code} onChange={() => setDecision((current) => ({ ...current, code: option.code }))} />
+                <input type="radio" name="decision" value={option.code} checked={decision.code === option.code} onChange={() => { favoriteRequestId.current += 1; setFavoriteState("idle"); setDecision((current) => ({ ...current, code: option.code })); }} />
                 {option.label}
               </label>
             ))}
           </fieldset>
           <div className="field field-wide">
             <label htmlFor="decision-rationale">想记下原因吗？（可选）</label>
-            <textarea id="decision-rationale" rows={2} value={decision.rationale} aria-describedby="decision-rationale-hint" onChange={({ currentTarget: { value } }) => setDecision((current) => ({ ...current, rationale: value }))} />
+            <textarea id="decision-rationale" rows={2} value={decision.rationale} aria-describedby="decision-rationale-hint" onChange={({ currentTarget: { value } }) => { favoriteRequestId.current += 1; setFavoriteState("idle"); setDecision((current) => ({ ...current, rationale: value })); }} />
             <span className="field-hint" id="decision-rationale-hint">这段话不参与计算。</span>
           </div>
-          <button className="secondary-button" type="button" onClick={() => exportJson(input, output, decision)}>下载这次记录</button>
+          {onFavorite ? (
+            <>
+              <button className="secondary-button" type="button" disabled={favoriteState === "saving" || favoriteState === "saved"} onClick={() => void favorite()}>
+                {favoriteState === "saving" ? "正在收藏…" : favoriteState === "saved" ? "已加入收藏" : "收藏这次结果"}
+              </button>
+              {favoriteState === "error" ? <p className="error" role="alert">收藏没有保存成功，请检查后重试。</p> : null}
+            </>
+          ) : null}
+          <button className="secondary-button" type="button" onClick={downloadCurrentSnapshot}>下载这次记录（@2）</button>
         </section>
       ) : null}
 
-      <footer className="footer">只有点击发送后，当前回答、问题和理解回答所需的相关字段才会发送给 TypeSafe/Jev；价值期待和决定理由不在发送范围内。第三方服务是否留存描述以其服务说明为准。刷新或关闭后页面内容会清空，不会保存在浏览器里。</footer>
+      {monthNoticeVisible ? (
+        <section className="draft-notice" role="status">
+          <p>当前已进入 {currentMonth()}，这份草稿仍按 {selectedMonth} 计算。旧月结果不会标成新月结果。</p>
+          <button className="secondary-button" type="button" onClick={adoptCurrentMonth}>
+            {onAdoptMonth ? `采用 ${currentMonth()} 并重新计算` : "返回收入看板后用新月份重新打开"}
+          </button>
+        </section>
+      ) : null}
+
+      <footer className="footer">只有点击发送后，当前回答、问题和理解回答所需的少量相关字段才会发送给 TypeSafe/Jev；收入资料、日历排班、日期例外、价值期待和决定理由不会整体发送。对话服务是否留存内容以其服务说明为准。清空购买草稿不会删除已保存的收入资料。</footer>
     </main>
   );
 }
