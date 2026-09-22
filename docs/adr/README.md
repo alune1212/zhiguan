@@ -15,6 +15,10 @@ ADR 只记录会改变长期系统边界、数据含义或公开格式的决定�
 
 ADR-0007 已替代 ADR-0006 的首版范围。旧实验仍按历史结果保留，不作为新增识别能力已验证的证据。
 
+## 待审阅的新方案
+
+[ADR-0008](ADR-0008-local-profile-and-purchase-favorites.md) 与 [PRD-0003](../product/prd/PRD-0003-income-dashboard.md)、[RFC-0001](../product/rfc/RFC-0001-income-understanding.md) 记录已确认的收入看板与资料复用方向。具体修订稿为 Review，尚未替代上表中的当前规则，也未实施。
+
 ## 退役记录
 
 | ADR | 状态 | 原因 |
