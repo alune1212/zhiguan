@@ -137,6 +137,8 @@ function currentMode(input: DecisionInput): WorkTimeInput["mode"] {
   return input.workTime?.mode ?? "monthly";
 }
 
+export { currentMode };
+
 function scheduleValues(input: DecisionInput): { daysPerWeek: string; hoursPerDay: string } {
   const mode = currentMode(input);
   if (input.workTime?.mode === "custom") return { daysPerWeek: input.workTime.daysPerWeek, hoursPerDay: input.workTime.hoursPerDay };
@@ -144,6 +146,8 @@ function scheduleValues(input: DecisionInput): { daysPerWeek: string; hoursPerDa
   if (mode === "six-day") return { daysPerWeek: "6", hoursPerDay: "8" };
   return { daysPerWeek: "", hoursPerDay: "" };
 }
+
+export { scheduleValues };
 
 function clearWorkTime(input: DecisionInput): DecisionInput {
   return {
@@ -485,10 +489,8 @@ export function advanceAssistQuestion(
 }
 
 export function noteForDraftField(
-  field: AssistFieldName,
   value: string,
   status: AssistStatus = "present",
 ): AssistField {
-  void field;
   return { value: value || null, span: null, status };
 }

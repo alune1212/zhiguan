@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import { AssistInput } from "./AssistInput";
@@ -8,6 +8,7 @@ import {
   finalizeAssistInput,
   type AssistEstimatedValues as AssistEstimateMap,
 } from "./assist-flow";
+import { downloadJson } from "./download";
 import {
   CURRENCY,
   PERIOD,
@@ -25,6 +26,7 @@ import {
 import {
   createPurchaseSnapshot,
   serializePurchaseSnapshot,
+  type PurchaseDecisionCode,
   type PurchaseSnapshotV2,
 } from "../domain/purchase-snapshot";
 
@@ -164,7 +166,7 @@ export function updateEvidencePreservingAssistEstimates(
 
 type DecisionCode = "buy" | "wait" | "adjust-conditions" | "do-not-buy" | "undecided";
 export interface DecisionForm {
-  readonly code: DecisionCode | "";
+  readonly code: PurchaseDecisionCode | "";
   readonly rationale: string;
   readonly reviewCondition: string;
 }
@@ -217,18 +219,6 @@ export function createExportJson(input: DecisionInput, output: CalculationOutput
   return `${JSON.stringify(payload, null, 2)}\n`;
 }
 
-function downloadJson(text: string, filename: string): void {
-  const blob = new Blob([text], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-}
-
 export interface AppProps {
   readonly initialInput?: DecisionInput;
   readonly comparisonMonth?: string;
@@ -244,6 +234,13 @@ function monthInTimeZone(date: Date, timeZone: string): string {
   const month = parts.find((part) => part.type === "month")?.value;
   if (!year || !month) throw new RangeError("invalid-time-zone-month");
   return `${year}-${month}`;
+}
+
+function isCalendarStale(input: DecisionInput, selectedMonth: string, selectedTimeZone: string): boolean {
+  if (monthInTimeZone(new Date(), selectedTimeZone) !== selectedMonth) return true;
+  const calendar = input.workTime?.mode === "calendar" ? input.workTime : undefined;
+  if (calendar && (calendar.comparisonMonth !== selectedMonth || calendar.timeZone !== selectedTimeZone)) return true;
+  return false;
 }
 
 function localTimeZone(): string {
@@ -500,11 +497,10 @@ export function App({
   const [approximateInput, setApproximateInput] = useState(false);
   const [draftRevision, setDraftRevision] = useState(0);
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
-  const [monthChanged, setMonthChanged] = useState(false);
   const [favoriteState, setFavoriteState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const calculated = submittedInput === input;
-  const output = calculateDecision(input);
-  const visibleResults = visibleResultsFor(output, marginRequested);
+  const output = useMemo(() => calculateDecision(input), [input]);
+  const visibleResults = useMemo(() => visibleResultsFor(output, marginRequested), [output, marginRequested]);
   const hasAvailableResult = visibleResults.some((result) => result.availability === "available");
   const resultHeadingRef = useRef<HTMLHeadingElement>(null);
   const favoriteRequestId = useRef(0);
@@ -524,15 +520,28 @@ export function App({
     setMarginRequested(false);
     setApproximateInput(false);
     setDraftNotice(null);
-    setMonthChanged(false);
     setFavoriteState("idle");
     setDraftRevision((current) => current + 1);
   };
 
   const updateDraft = (next: DecisionInput, nextEstimates: AssistEstimateMap = assistEstimatedValues) => {
-    const changed = JSON.stringify(next) !== JSON.stringify(input)
-      || JSON.stringify(nextEstimates) !== JSON.stringify(assistEstimatedValues);
-    if (!changed) return;
+    if (next.income === input.income
+      && next.workHours === input.workHours
+      && next.fixedExpenses === input.fixedExpenses
+      && next.purchaseAmount === input.purchaseAmount
+      && next.taxBasis === input.taxBasis
+      && next.fixedCostCoverage === input.fixedCostCoverage
+      && next.purchaseIncluded === input.purchaseIncluded
+      && next.valueExpectation === input.valueExpectation
+      && next.workTime === input.workTime
+      && next.evidence.income === input.evidence.income
+      && next.evidence.workHours === input.evidence.workHours
+      && next.evidence.fixedExpenses === input.evidence.fixedExpenses
+      && next.evidence.purchaseAmount === input.evidence.purchaseAmount
+      && nextEstimates.income === assistEstimatedValues.income
+      && nextEstimates.workHours === assistEstimatedValues.workHours
+      && nextEstimates.fixedExpenses === assistEstimatedValues.fixedExpenses
+      && nextEstimates.purchaseAmount === assistEstimatedValues.purchaseAmount) return;
     const hadResultOrDecision = calculated || Boolean(decision.code || decision.rationale || decision.reviewCondition);
     favoriteRequestId.current += 1;
     setInput(next);
@@ -568,12 +577,7 @@ export function App({
   };
 
   const confirmInput = (draft: DecisionInput = input, estimates: AssistEstimateMap = assistEstimatedValues) => {
-    const calendar = draft.workTime?.mode === "calendar" ? draft.workTime : undefined;
-    if (monthInTimeZone(new Date(), selectedTimeZone) !== selectedMonth
-      || calendar && (calendar.comparisonMonth !== selectedMonth || calendar.timeZone !== selectedTimeZone)) {
-      setMonthChanged(true);
-      return;
-    }
+    if (isCalendarStale(draft, selectedMonth, selectedTimeZone)) return;
     const confirmed = finalizeAssistInput(draft, estimates, approximateInput);
     setInput(confirmed);
     setAssistEstimatedValues(estimates);
@@ -592,12 +596,7 @@ export function App({
 
   const favorite = async () => {
     if (!onFavorite || !calculated) return;
-    const calendar = input.workTime?.mode === "calendar" ? input.workTime : undefined;
-    if (currentMonth() !== selectedMonth
-      || calendar && (calendar.comparisonMonth !== selectedMonth || calendar.timeZone !== selectedTimeZone)) {
-      setMonthChanged(true);
-      return;
-    }
+    if (isCalendarStale(input, selectedMonth, selectedTimeZone)) return;
     const requestId = ++favoriteRequestId.current;
     setFavoriteState("saving");
     try {
@@ -613,12 +612,7 @@ export function App({
   };
 
   const downloadCurrentSnapshot = () => {
-    const calendar = input.workTime?.mode === "calendar" ? input.workTime : undefined;
-    if (currentMonth() !== selectedMonth
-      || calendar && (calendar.comparisonMonth !== selectedMonth || calendar.timeZone !== selectedTimeZone)) {
-      setMonthChanged(true);
-      return;
-    }
+    if (isCalendarStale(input, selectedMonth, selectedTimeZone)) return;
     const snapshot = createPurchaseSnapshot(input, output, decision, {
       comparisonMonth: selectedMonth,
       timeZone: selectedTimeZone,
@@ -636,9 +630,7 @@ export function App({
   const hasAssistEstimates = Object.values(assistEstimatedValues).some((value) => value !== null);
   const workTimeMode = input.workTime?.mode ?? "monthly";
   const hasScheduleFieldError = Boolean(visibleErrors.workDaysPerWeek || visibleErrors.workHoursPerDay);
-  const monthNoticeVisible = monthChanged || currentMonth() !== selectedMonth
-    || input.workTime?.mode === "calendar"
-      && (input.workTime.comparisonMonth !== selectedMonth || input.workTime.timeZone !== selectedTimeZone);
+  const monthNoticeVisible = isCalendarStale(input, selectedMonth, selectedTimeZone);
 
   return (
     <main className="app-shell">

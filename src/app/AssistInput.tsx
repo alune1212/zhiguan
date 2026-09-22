@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { DecisionInput, NumericField, WorkTimeInput } from "../domain/calculation";
+import type { DecisionInput, NumericField } from "../domain/calculation";
 import {
   ASSIST_FIELD_NAMES,
   areNumericValuesEquivalent,
@@ -9,10 +9,12 @@ import {
   applyQuickAssistAnswer,
   assistContextFor,
   assistValue,
+  currentMode,
   finalizeAssistInput,
   isValidAssistValue,
   noteForDraftField,
   parseAssistResponse,
+  scheduleValues,
   type AssistContext,
   type AssistEstimatedValues,
   type AssistField,
@@ -97,21 +99,10 @@ function inputHasAssistData(input: DecisionInput): boolean {
   return ASSIST_FIELD_NAMES.some((field) => Boolean(assistValue(input, field).trim()));
 }
 
-function modeOf(input: DecisionInput): WorkTimeInput["mode"] {
-  return input.workTime?.mode ?? "unselected";
-}
-
-function scheduleOf(input: DecisionInput): { days: string; hours: string } {
-  const mode = modeOf(input);
-  if (input.workTime?.mode === "custom") return { days: input.workTime.daysPerWeek, hours: input.workTime.hoursPerDay };
-  if (mode === "five-day") return { days: "5", hours: "8" };
-  if (mode === "six-day") return { days: "6", hours: "8" };
-  return { days: "", hours: "" };
-}
-
 function valueOf(input: DecisionInput, field: AssistFieldName): string {
-  if (field === "workDaysPerWeek") return scheduleOf(input).days;
-  if (field === "workHoursPerDay") return scheduleOf(input).hours;
+  const schedule = scheduleValues(input);
+  if (field === "workDaysPerWeek") return schedule.daysPerWeek;
+  if (field === "workHoursPerDay") return schedule.hoursPerDay;
   return assistValue(input, field);
 }
 
@@ -247,7 +238,7 @@ export function AssistInput({
       next = { ...next, purchaseIncluded: "" };
     }
     onDraftChange(next, nextEstimates);
-    setNotes((current) => ({ ...current, [field]: noteForDraftField(field, value, value ? "present" : "missing") }));
+    setNotes((current) => ({ ...current, [field]: noteForDraftField(value, value ? "present" : "missing") }));
   };
 
   const updateTurnText = (value: string) => {
@@ -347,7 +338,7 @@ export function AssistInput({
       else if (nextEstimates[numericField] === currentInput[numericField]) nextEstimates[numericField] = next[numericField];
     }
     onDraftChange(next, nextEstimates);
-    setNotes((current) => ({ ...current, [field]: noteForDraftField(field, value) }));
+    setNotes((current) => ({ ...current, [field]: noteForDraftField(value) }));
     setLastTurn(null);
     setLastChangedFields([field]);
     setNotice("已按你的选择更新草稿，没有发送 Jev 请求。");
@@ -505,7 +496,7 @@ export function AssistInput({
               const fieldStatus = statusForField(note, currentValue);
               const id = `assist-summary-${field}`;
               const scheduleMode = assistValue(currentInput, "workTimeMode");
-              const isCalendarWorkTime = modeOf(currentInput) === "calendar";
+              const isCalendarWorkTime = currentMode(currentInput) === "calendar";
               const calendarDetail = field === "workTimeMode" || field === "workDaysPerWeek" || field === "workHoursPerDay" || field === "workHours";
               const showField = !(isCalendarWorkTime && calendarDetail)
                 && (field !== "workDaysPerWeek" && field !== "workHoursPerDay" || scheduleMode === "custom")
@@ -548,7 +539,7 @@ export function AssistInput({
             })}
           </div>
           {assistValue(currentInput, "workTimeMode") === "custom" ? (
-            <p className="assist-hint">每周 {scheduleOf(currentInput).days || "—"} 天 × 每天 {scheduleOf(currentInput).hours || "—"} 小时；完整后按平时作息估算月工时。</p>
+            <p className="assist-hint">每周 {scheduleValues(currentInput).daysPerWeek || "—"} 天 × 每天 {scheduleValues(currentInput).hoursPerDay || "—"} 小时；完整后按平时作息估算月工时。</p>
           ) : null}
           <label className="check-row assist-estimate-toggle">
             <input type="checkbox" checked={approximateInput} onChange={(event) => toggleApproximate(event.currentTarget.checked)} />

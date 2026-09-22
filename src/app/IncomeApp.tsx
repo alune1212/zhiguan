@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 
 import { App as PurchaseWorkbench } from "./App";
+import { downloadJson } from "./download";
 import {
   calculateIncome,
   defaultProfile,
@@ -472,18 +473,6 @@ function newPurchaseInput(profile: IncomeProfile, calculation: IncomeCalculation
   };
 }
 
-function downloadJson(text: string, filename: string): void {
-  const blob = new Blob([text], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-}
-
 function FavoriteCard({
   favorite,
   onRecalculate,
@@ -567,9 +556,24 @@ export function IncomeApp() {
     setLoaded(true);
 
     const updateNow = () => setNow(new Date());
-    const interval = window.setInterval(updateNow, 1000);
+    let interval: number | null = null;
+    const startInterval = () => {
+      if (interval !== null) return;
+      interval = window.setInterval(updateNow, 1000);
+    };
+    const stopInterval = () => {
+      if (interval === null) return;
+      window.clearInterval(interval);
+      interval = null;
+    };
+    if (document.visibilityState === "visible") startInterval();
     const onVisibility = () => {
-      if (document.visibilityState === "visible") updateNow();
+      if (document.visibilityState === "visible") {
+        updateNow();
+        startInterval();
+      } else {
+        stopInterval();
+      }
     };
     const onStorage = (event: StorageEvent) => {
       if (event.key !== LOCAL_DATA_STORAGE_KEY || event.newValue === lastRawRef.current) return;
@@ -583,7 +587,7 @@ export function IncomeApp() {
     return () => {
       mountedRef.current = false;
       operationGenerationRef.current += 1;
-      window.clearInterval(interval);
+      stopInterval();
       window.removeEventListener("focus", updateNow);
       window.removeEventListener("pageshow", updateNow);
       document.removeEventListener("visibilitychange", onVisibility);
@@ -593,6 +597,10 @@ export function IncomeApp() {
 
   const calculation = useMemo(() => profile ? calculateIncome(profile, now) : null, [profile, now]);
   const favorites = stored.status === "ready" ? stored.document.favorites : [];
+  const sortedFavorites = useMemo(
+    () => favorites.slice().sort((left, right) => right.savedAt.localeCompare(left.savedAt)),
+    [favorites],
+  );
   const expectedRevision = stored.status === "ready" ? stored.document.revision : null;
 
   const rememberWrite = (document: LocalDataDocument, raw: string) => {
@@ -952,7 +960,7 @@ export function IncomeApp() {
                 <h1>购买收藏</h1>
                 <p>这里展示当时保存的金额、依据和决定，不会随当前资料变化而重算。</p>
               </div>
-              {favorites.length > 0 ? favorites.slice().sort((left, right) => right.savedAt.localeCompare(left.savedAt)).map((favorite) => (
+              {favorites.length > 0 ? sortedFavorites.map((favorite) => (
                 <FavoriteCard
                   key={favorite.id}
                   favorite={favorite}
