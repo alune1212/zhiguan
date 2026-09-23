@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
-import { App } from "./app/App";
+import { IncomeApp } from "./app/IncomeApp";
 import "./styles/app.css";
 
 const rootElement = document.getElementById("root");
@@ -12,6 +12,6 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <App />
+    <IncomeApp />
   </StrictMode>,
 );

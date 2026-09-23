@@ -2,6 +2,6 @@ schema: spec-driven
 
 context: |
   执行入口为 AGENTS.md；产品边界以 PRODUCT.md 为准，当前范围见 PRODUCT_STRATEGY.md 和 ROADMAP.md。
-  当前实现是 React + TypeScript + Vite 浏览器内存态单页，使用 Bun 管理依赖并运行工具；版本与命令见 package.json、bunfig.toml 和 README.md。
-  购买工作台需求见 docs/product/prd/PRD-0001-single-purchase-decision-workbench.md；页面文案基线见 docs/design/purchase-page-copy.md。
+  当前实现是 React + TypeScript + Vite 单页：基础资料与主动收藏保存在当前浏览器，未收藏的购买草稿保持内存态。使用 Bun 管理依赖并运行工具；版本与命令见 package.json、bunfig.toml 和 README.md。
+  收入看板需求见 docs/product/prd/PRD-0003-income-dashboard.md，购买工作台需求见 docs/product/prd/PRD-0001-single-purchase-decision-workbench.md；页面文案基线见 docs/design/purchase-page-copy.md。
   openspec/specs 保存当前规格；openspec/changes/archive 保存当时的提案、设计与验证记录，不作为当前安装命令的来源。

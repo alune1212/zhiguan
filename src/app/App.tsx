@@ -225,9 +225,10 @@ export interface AppProps {
   readonly onBack?: () => void;
   readonly onFavorite?: (snapshot: PurchaseSnapshotV2) => Promise<void>;
   readonly onAdoptMonth?: (month: string, draft: DecisionInput) => void;
+  readonly fromSavedProfile?: boolean;
 }
 
-function monthInTimeZone(date: Date, timeZone: string): string {
+export function monthInTimeZone(date: Date, timeZone: string): string {
   const parts = new Intl.DateTimeFormat("en", { timeZone, year: "numeric", month: "2-digit" }).formatToParts(date);
   const year = parts.find((part) => part.type === "year")?.value;
   const month = parts.find((part) => part.type === "month")?.value;
@@ -394,10 +395,12 @@ export function resultText(result: CalculationResult, inputErrors: InputErrors, 
   const value = result.exact.decimal;
   switch (result.id) {
     case "work-time-equivalent":
+      if (basis?.mode === "calendar") return `按本月计划作息估算，这笔钱约相当于你工作 ${value} 小时的收入。`;
       if (basis?.conversion) return `按平时作息估算，这笔钱约相当于你工作 ${value} 小时的收入。`;
       if (result.evidenceStatus === "estimated") return `按你填的大概数，这笔钱约相当于你工作 ${value} 小时的收入。`;
       return `按这些数字，这笔钱相当于你工作 ${value} 小时的收入。`;
     case "income-rate":
+      if (basis?.mode === "calendar") return `按本月计划作息估算，每小时收入约为 ${value} 元。`;
       if (basis?.conversion) return `按平时作息估算，每小时收入约为 ${value} 元。`;
       if (result.evidenceStatus === "estimated") return `按你填的大概数，每小时收入约为 ${value} 元。`;
       return `按你填的月收入和工作时间，每小时收入约为 ${value} 元。`;
@@ -482,10 +485,11 @@ export function App({
   onBack,
   onFavorite,
   onAdoptMonth,
+  fromSavedProfile = true,
 }: AppProps) {
   const initialCalendar = initialInput?.workTime?.mode === "calendar" ? initialInput.workTime : undefined;
-  const selectedTimeZone = timeZone ?? initialCalendar?.timeZone ?? localTimeZone();
-  const selectedMonth = comparisonMonth ?? initialCalendar?.comparisonMonth ?? monthInTimeZone(new Date(), selectedTimeZone);
+  const [selectedTimeZone] = useState(() => timeZone ?? initialCalendar?.timeZone ?? localTimeZone());
+  const [selectedMonth] = useState(() => comparisonMonth ?? initialCalendar?.comparisonMonth ?? monthInTimeZone(new Date(), selectedTimeZone));
   const [input, setInput] = useState<DecisionInput>(() => initialInput ?? EMPTY_INPUT);
   const [submittedInput, setSubmittedInput] = useState<DecisionInput | null>(null);
   const [decision, setDecision] = useState<DecisionForm>({ code: "", rationale: "", reviewCondition: "" });
@@ -637,7 +641,10 @@ export function App({
   };
 
   const visibleErrors = calculated ? output.inputErrors : {};
-  const hasEstimatedValues = Object.values(input.evidence).some((status) => status === "estimated");
+  const hasEstimatedValues = input.evidence.income === "estimated"
+    || input.evidence.fixedExpenses === "estimated"
+    || input.evidence.purchaseAmount === "estimated"
+    || output.workTime.basis.mode === "monthly" && input.evidence.workHours === "estimated";
   const hasAssistEstimates = Object.values(assistEstimatedValues).some((value) => value !== null);
   const workTimeMode = input.workTime?.mode ?? "monthly";
   const hasScheduleFieldError = Boolean(visibleErrors.workDaysPerWeek || visibleErrors.workHoursPerDay);
@@ -646,13 +653,13 @@ export function App({
   return (
     <main className="app-shell">
       <header className="topbar">
-        {onBack ? <button className="quiet-button" type="button" onClick={onBack}>返回收入看板</button> : <a className="brand" href="#page-title">值观</a>}
+        {onBack ? <button className="quiet-button" type="button" onClick={onBack}>{fromSavedProfile ? "返回收入看板" : "返回收藏"}</button> : <a className="brand" href="#page-title">值观</a>}
         <button className="quiet-button" type="button" onClick={clear}>清空购买草稿</button>
       </header>
 
       <section className="intro" aria-labelledby="page-title">
         <h1 id="page-title">这次购买要花多少工作时间？</h1>
-        <p>填入这次购买的价格即可。月收入和本月作息沿用已保存资料；对话与更多设置都可以按需打开。</p>
+        <p>{fromSavedProfile ? "填入这次购买的价格即可。月收入和本月作息沿用已保存资料；对话与更多设置都可以按需打开。" : "已从旧收藏开启新草稿。请重新确认收入和工作时间；原收藏不会变化。"}</p>
       </section>
 
       <AssistInput
@@ -678,7 +685,7 @@ export function App({
         </div>
         <div className="field-grid">
           {initialInput ? (
-            <p className="field-hint field-wide">沿用每月到手收入 {input.income || "—"} 元 · {selectedMonth} 作息估算 · {selectedTimeZone}</p>
+            <p className="field-hint field-wide">{fromSavedProfile ? "沿用每月到手收入" : "旧收藏中的月收入"} {input.income || "—"} 元 · {selectedMonth} {input.workTime?.mode === "unselected" ? "工作时间待确认" : "作息估算"} · {selectedTimeZone}</p>
           ) : <NumericFieldControl field="income" input={input} error={visibleErrors.income} onChange={(value) => updateNumericField("income", value)} />}
           <NumericFieldControl field="purchaseAmount" input={input} error={visibleErrors.purchaseAmount} onChange={(value) => updateNumericField("purchaseAmount", value)} />
         </div>

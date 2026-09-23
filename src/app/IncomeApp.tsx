@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 
-import { App as PurchaseWorkbench } from "./App";
+import { App as PurchaseWorkbench, monthInTimeZone } from "./App";
 import { downloadJson } from "./download";
 import {
   calculateIncome,
@@ -531,6 +531,7 @@ export function IncomeApp() {
   const [busy, setBusy] = useState(false);
   const [settingsDrafting, setSettingsDrafting] = useState(false);
   const [purchaseInput, setPurchaseInput] = useState<DecisionInput | undefined>();
+  const [purchaseContext, setPurchaseContext] = useState<{ comparisonMonth: string; timeZone: string } | null>(null);
   const [purchaseKey, setPurchaseKey] = useState(0);
   const lastRawRef = useRef<string | null>(null);
   const operationGenerationRef = useRef(0);
@@ -704,12 +705,13 @@ export function IncomeApp() {
     }
   };
 
-  const startPurchase = (initialInput?: DecisionInput) => {
-    if (!profile) {
+  const startPurchase = (initialInput?: DecisionInput, context?: { comparisonMonth: string; timeZone: string }) => {
+    if (!profile && !context) {
       setNotice("当前还没有可用的基础资料，请先回到设置页填写收入与作息。");
       return;
     }
-    setPurchaseInput(initialInput ?? newPurchaseInput(profile, calculation));
+    setPurchaseInput(initialInput ?? (profile ? newPurchaseInput(profile, calculation) : undefined));
+    setPurchaseContext(context ?? null);
     setPurchaseKey((current) => current + 1);
     setView("purchase");
   };
@@ -765,7 +767,8 @@ export function IncomeApp() {
       setNotice("另一个页面保存了更新。先重新载入，再清空资料。");
       return;
     }
-    if (stored.status === "ready" && !window.confirm("将清空此浏览器中保存的基础资料和全部收藏。已下载的备份文件不会删除。确定清空吗？")) return;
+    if ((stored.status === "ready" || stored.status === "invalid")
+      && !window.confirm("将清空此浏览器中保存的基础资料和全部收藏。已下载的备份文件不会删除。确定清空吗？")) return;
     setBusy(true);
     const operation = ++operationGenerationRef.current;
     try {
@@ -867,23 +870,32 @@ export function IncomeApp() {
 
   const openFavorite = (snapshot: PurchaseSnapshotV2) => {
     const savedInput = inputFromSnapshot(snapshot);
-    const workTime = calculation?.workTimeInput ?? workTimeFromSnapshot(snapshot);
+    const savedWorkTime = workTimeFromSnapshot(snapshot);
+    const workTime = savedWorkTime.mode === "calendar"
+      ? calculation?.workTimeInput ?? savedWorkTime
+      : savedWorkTime;
     const nextIncome = profile?.income ?? savedInput.income;
+    const noProfile = profile === null;
     startPurchase({
       ...savedInput,
       income: nextIncome,
-      workHours: "",
-      workTime,
+      workHours: workTime.mode === "monthly" ? savedInput.workHours : "",
+      workTime: noProfile && workTime.mode === "calendar" ? { mode: "unselected" } : workTime,
       evidence: {
         ...savedInput.evidence,
         income: nextIncome ? "user-confirmed" : "",
-        workHours: "estimated",
+        workHours: noProfile && workTime.mode === "calendar" ? "" : workTime.mode === "monthly" ? savedInput.evidence.workHours : "estimated",
       },
-    });
+    }, noProfile ? { comparisonMonth: monthInTimeZone(new Date(), snapshot.time_zone), timeZone: snapshot.time_zone } : undefined);
   };
 
   const adoptMonth = (month: string, input: DecisionInput) => {
-    if (!profile) return;
+    if (!profile) {
+      if (purchaseContext) setPurchaseContext({ ...purchaseContext, comparisonMonth: month });
+      setPurchaseInput(input);
+      setPurchaseKey((current) => current + 1);
+      return;
+    }
     const inputWorkTime = input.workTime ?? { mode: "unselected" as const };
     if (inputWorkTime.mode !== "calendar") {
       setPurchaseInput(input);
@@ -903,23 +915,24 @@ export function IncomeApp() {
 
   return (
     <>
-      <header className="app-shell topbar income-topbar">
+      {view !== "purchase" ? <header className="app-shell topbar income-topbar">
         <a className="brand" href="/" onClick={(event) => { event.preventDefault(); setView(profile ? "dashboard" : "setup"); }}>值观</a>
         <nav aria-label="主导航" className="income-navigation">
           {profile && view !== "dashboard" ? <button className="quiet-button" type="button" onClick={() => setView("dashboard")}>返回收入看板</button> : null}
           {favorites.length > 0 && view !== "favorites" ? <button className="quiet-button" type="button" onClick={() => setView("favorites")}>查看收藏（{favorites.length}）</button> : null}
         </nav>
-      </header>
+      </header> : null}
 
-      {view === "purchase" && profile ? (
+      {view === "purchase" && (profile || purchaseContext) ? (
         <PurchaseWorkbench
           key={purchaseKey}
           initialInput={purchaseInput}
-          comparisonMonth={calculation?.comparisonMonth ?? undefined}
-          timeZone={profile.timeZone}
-          onBack={() => setView("dashboard")}
+          comparisonMonth={purchaseContext?.comparisonMonth ?? calculation?.comparisonMonth ?? undefined}
+          timeZone={purchaseContext?.timeZone ?? profile?.timeZone}
+          onBack={() => setView(profile ? "dashboard" : "favorites")}
           onFavorite={saveFavorite}
           onAdoptMonth={adoptMonth}
+          fromSavedProfile={Boolean(profile)}
         />
       ) : (
         <main className="app-shell income-main">
@@ -980,7 +993,7 @@ export function IncomeApp() {
                 />
               )) : <section className="card"><p>还没有收藏。完成一笔购买计算后，可以主动保存结果供以后查看。</p></section>}
             </section>
-          ) : (
+          ) : view === "dashboard" && profile ? (
             <>
               <section className="intro income-intro">
                 <p className="eyebrow">按设定作息估算 · 非实际到账</p>
@@ -1067,7 +1080,7 @@ export function IncomeApp() {
                 </section>
               </details> : <section className="card income-settings-unavailable"><p>收入资料当前不可用。</p><button className="secondary-button" type="button" onClick={() => { setView("setup"); setProfile(null); }}>返回基础设置</button></section>}
             </>
-          )}
+          ) : null}
 
           {notice && view !== "dashboard" ? <p className="income-notice" role="status">{notice}</p> : null}
           {conflict && view !== "dashboard" ? <section className="income-storage-warning" role="alert">
