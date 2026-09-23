@@ -133,21 +133,17 @@ export function parseAssistResponse(value: unknown, text: string): AssistRespons
   return { fields };
 }
 
-function currentMode(input: DecisionInput): WorkTimeInput["mode"] {
+export function currentMode(input: DecisionInput): WorkTimeInput["mode"] {
   return input.workTime?.mode ?? "monthly";
 }
 
-export { currentMode };
-
-function scheduleValues(input: DecisionInput): { daysPerWeek: string; hoursPerDay: string } {
+export function scheduleValues(input: DecisionInput): { daysPerWeek: string; hoursPerDay: string } {
   const mode = currentMode(input);
   if (input.workTime?.mode === "custom") return { daysPerWeek: input.workTime.daysPerWeek, hoursPerDay: input.workTime.hoursPerDay };
   if (mode === "five-day") return { daysPerWeek: "5", hoursPerDay: "8" };
   if (mode === "six-day") return { daysPerWeek: "6", hoursPerDay: "8" };
   return { daysPerWeek: "", hoursPerDay: "" };
 }
-
-export { scheduleValues };
 
 function clearWorkTime(input: DecisionInput): DecisionInput {
   return {
