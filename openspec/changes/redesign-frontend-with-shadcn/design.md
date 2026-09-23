@@ -4,7 +4,7 @@
 
 动机与范围见 [proposal.md](proposal.md)，页面顺序见[已确认页面方案](../../../docs/design/frontend-page-plan.md)，视觉值和控件约定以根 [DESIGN.md](../../../DESIGN.md) 为单一来源。
 
-当前应用由 `src/main.tsx` 加载 `src/app/IncomeApp.tsx` 和 `src/styles/app.css`，使用 `setup / dashboard / purchase / favorites` 内部页面状态。购买交互在 `src/app/App.tsx` 与 `src/app/AssistInput.tsx`；计算、本地资料和快照已有独立领域模块。现有依赖只有 React 与构建测试工具，尚未接入 Tailwind 或 shadcn/ui。
+变更前，应用由 `src/main.tsx` 加载 `src/app/IncomeApp.tsx` 和 `src/styles/app.css`，使用 `setup / dashboard / purchase / favorites` 内部页面状态。购买交互在 `src/app/App.tsx` 与 `src/app/AssistInput.tsx`；计算、本地资料和快照已有独立领域模块。当时的依赖只有 React 与构建测试工具，尚未接入 Tailwind 或 shadcn/ui。
 
 现有界面测试主要使用 `renderToStaticMarkup`；其中首次设置测试绑定旧 CSS class，购买测试明确断言「价格优先、对话折叠」。后者需随本次入口顺序变更更新，不能把旧断言失败误判为业务回归，也不能删除主动发送、证据与失败接续的保护。
 

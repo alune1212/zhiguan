@@ -375,7 +375,7 @@ function snapshotCurrencyDisplay(raw: string): string {
   return currencyDisplay(`${yuan}.${fen}`);
 }
 
-function rateDisplay(calculation: IncomeCalculation): string {
+export function rateDisplay(calculation: IncomeCalculation): string {
   const value = calculation.perSecondIncome;
   if (!value) return "暂无可用结果";
   return value.decimal === "0.00000000" ? "小于 0.00000001 元/秒" : `${value.decimal} 元/秒`;
@@ -524,7 +524,7 @@ export function favoriteRecalculationInput(
   const savedInput = inputFromSnapshot(snapshot);
   const savedWorkTime = workTimeFromSnapshot(snapshot);
   const workTime = savedWorkTime.mode === "calendar"
-    ? calculation?.workTimeInput ?? savedWorkTime
+    ? calculation?.workTimeInput ?? { mode: "unselected" as const }
     : savedWorkTime;
   const income = profile.income;
   return {
@@ -535,7 +535,7 @@ export function favoriteRecalculationInput(
     evidence: {
       ...savedInput.evidence,
       income: income ? "user-confirmed" : "",
-      workHours: workTime.mode === "monthly" ? savedInput.evidence.workHours : "estimated",
+      workHours: workTime.mode === "monthly" ? savedInput.evidence.workHours : workTime.mode === "unselected" ? "" : "estimated",
     },
   };
 }

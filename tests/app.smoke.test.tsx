@@ -49,6 +49,7 @@ describe("App", () => {
     expect(html).toContain('id="assist-text"');
     expect(html).toContain("发送并整理");
     expect(html).toContain("点击发送后");
+    expect(html).toContain("已发出的请求无法靠取消或清空撤回");
     expect(html).not.toContain('name="purchaseAmount"');
     expect(html).not.toContain("详细修改这次的比较条件");
     expect(html).toContain("收入资料、日历排班、日期例外、价值期待和决定理由不会整体发送");
@@ -286,6 +287,32 @@ describe("App", () => {
     });
     expect(exported.inputs.work_time_basis.conversion.assumptions).toHaveLength(2);
     expect(exported.results).toHaveLength(5);
+  });
+
+  it("uses this month's calendar plan for the default purchase result wording", () => {
+    const output = calculateDecision({
+      ...baseInput,
+      workTime: {
+        mode: "calendar",
+        comparisonMonth: "2026-09",
+        timeZone: "Asia/Shanghai",
+        totalWorkSeconds: "576000",
+        workDays: [1, 2, 3, 4, 5],
+        periods: [
+          { start: "09:00", end: "12:00", endDayOffset: 0 },
+          { start: "13:00", end: "18:00", endDayOffset: 0 },
+        ],
+        exceptions: {},
+        scheduleSource: "default",
+      },
+    });
+    expect(output.workTime.basis.conversion).toBeNull();
+    expect(resultText(resultFor(output, "work-time-equivalent"), output.inputErrors, output.workTime.basis)).toBe(
+      "按本月计划作息估算，这笔钱约相当于你工作 16.00 小时的收入。",
+    );
+    expect(resultText(resultFor(output, "income-rate"), output.inputErrors, output.workTime.basis)).toBe(
+      "按本月计划作息估算，每小时收入约为 62.50 元。",
+    );
   });
 
   it("clears obsolete hours on mode changes and exports invalid custom input without a fallback", () => {

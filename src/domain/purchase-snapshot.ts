@@ -2,6 +2,8 @@ import {
   CURRENCY,
   PERIOD,
   WORK_TIME_ESTIMATE_RULE,
+  parseAmount,
+  parseWorkHours,
   type CalculationOutput,
   type DecisionInput,
   type EvidenceStatus,
@@ -141,6 +143,23 @@ export function isPurchaseSnapshotV2(value: unknown): value is PurchaseSnapshotV
   if (!Array.isArray(value.results) || value.results.length !== 5 || !value.results.every(isResult)) return false;
   const resultIds = new Set<unknown>(value.results.map((result) => isRecord(result) ? result.id : null));
   if (resultIds.size !== 5 || !["income-rate", "work-time-equivalent", "available-margin", "purchase-after-margin", "purchase-impact"].every((id) => resultIds.has(id))) return false;
+  const incomeReady = parseAmount(value.inputs.income, false).ok && value.inputs.evidence.income !== "";
+  const hoursReady = value.inputs.work_time_basis.mode === "calendar"
+    ? value.inputs.evidence.workHours === "estimated" && value.inputs.work_time_basis.total_work_seconds !== "0"
+    : value.inputs.work_time_basis.mode !== "unselected" && value.inputs.evidence.workHours !== "" && parseWorkHours(value.inputs.work_hours).ok;
+  const fixedReady = parseAmount(value.inputs.fixed_expenses).ok && value.inputs.evidence.fixedExpenses !== "";
+  const purchaseReady = parseAmount(value.inputs.purchase_amount, false).ok && value.inputs.evidence.purchaseAmount !== "";
+  const rateReady = incomeReady && hoursReady && value.inputs.tax_basis !== null;
+  const marginReady = incomeReady && fixedReady && value.inputs.tax_basis === "after-tax" && value.inputs.fixed_cost_coverage === "complete";
+  const afterReady = marginReady && purchaseReady && value.inputs.purchase_included === "included";
+  const resultReady: Record<ResultId, boolean> = {
+    "income-rate": rateReady,
+    "work-time-equivalent": rateReady && purchaseReady,
+    "available-margin": marginReady,
+    "purchase-after-margin": afterReady,
+    "purchase-impact": afterReady,
+  };
+  if (!value.results.every((result) => result.availability === "insufficient-data" || resultReady[result.id])) return false;
   if (!hasExactKeys(value.decision, ["code", "rationale", "review_condition"])) return false;
   return isNullableEnum(value.decision.code, ["buy", "wait", "adjust-conditions", "do-not-buy", "undecided"])
     && isNullableString(value.decision.rationale)

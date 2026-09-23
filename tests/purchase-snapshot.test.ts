@@ -79,6 +79,41 @@ describe("purchase snapshot v2", () => {
     expect(isPurchaseSnapshotV2(snapshot)).toBe(true);
   });
 
+  it("accepts missing or invalid purchase amounts when dependent results are insufficient", () => {
+    for (const purchaseAmount of ["", "bad-money"]) {
+      const input: DecisionInput = {
+        ...baseInput,
+        purchaseAmount,
+        evidence: { ...baseInput.evidence, purchaseAmount: "" },
+      };
+      const snapshot = createPurchaseSnapshot(input, calculateDecision(input), decision, context);
+      expect(snapshot.results.filter((result) => result.availability === "available").map((result) => result.id)).toEqual([
+        "income-rate", "available-margin",
+      ]);
+      expect(isPurchaseSnapshotV2(snapshot)).toBe(true);
+    }
+  });
+
+  it.each([
+    ["income", "bad-money"],
+    ["fixed_expenses", "1.234"],
+    ["purchase_amount", "bad-money"],
+  ] as const)("rejects an available result backed by invalid %s", (field, raw) => {
+    const snapshot = createPurchaseSnapshot(baseInput, calculateDecision(baseInput), decision, context);
+    expect(isPurchaseSnapshotV2({ ...snapshot, inputs: { ...snapshot.inputs, [field]: raw } })).toBe(false);
+  });
+
+  it("rejects available work-time results with an unselected basis", () => {
+    const snapshot = createPurchaseSnapshot(baseInput, calculateDecision(baseInput), decision, context);
+    expect(isPurchaseSnapshotV2({
+      ...snapshot,
+      inputs: {
+        ...snapshot.inputs,
+        work_time_basis: { mode: "unselected", days_per_week: null, hours_per_day: null, conversion: null },
+      },
+    })).toBe(false);
+  });
+
   it("does not label planned work-time modes as calendar basis", () => {
     const input: DecisionInput = { ...baseInput, workTime: { mode: "five-day" } };
     const output = calculateDecision(input);
@@ -116,6 +151,14 @@ describe("purchase snapshot v2", () => {
       total_work_seconds: "288000",
     });
     expect(isPurchaseSnapshotV2(snapshot)).toBe(true);
+    expect(isPurchaseSnapshotV2({
+      ...snapshot,
+      inputs: {
+        ...snapshot.inputs,
+        work_hours: "160",
+        work_time_basis: { ...snapshot.inputs.work_time_basis, total_work_seconds: "0" },
+      },
+    })).toBe(false);
     expect(isPurchaseSnapshotV2({ ...snapshot, comparison_month: "2026-10" })).toBe(false);
     expect(isPurchaseSnapshotV2({
       ...snapshot,

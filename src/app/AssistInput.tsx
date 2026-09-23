@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useRef, useState } from "react";
 
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -199,6 +200,11 @@ export function AssistInput({
   const [lastTurn, setLastTurn] = useState<string | null>(null);
   const [lastChangedFields, setLastChangedFields] = useState<readonly AssistFieldName[]>([]);
   const [started, setStarted] = useState(false);
+  const [firstSendOpen, setFirstSendOpen] = useState(false);
+  const firstSendConfirmedRef = useRef(false);
+  const sendOriginRef = useRef<HTMLButtonElement | null>(null);
+  const cancelSendRef = useRef<HTMLButtonElement | null>(null);
+  const textRef = useRef<HTMLTextAreaElement | null>(null);
   const revisionRef = useRef(draftRevision);
   const previousRevisionRef = useRef(draftRevision);
   const manualModeRef = useRef(manualMode);
@@ -280,7 +286,7 @@ export function AssistInput({
 
   const request = async () => {
     const trimmedText = text.trim();
-    if (!trimmedText || status === "loading" || manualMode) return;
+    if (!trimmedText || status === "loading" || manualMode || controllerRef.current) return;
     stopPendingRequest();
     const controller = new AbortController();
     const generation = generationRef.current;
@@ -367,6 +373,23 @@ export function AssistInput({
     }
   };
 
+  const send = (event: MouseEvent<HTMLButtonElement>) => {
+    if (!text.trim() || status === "loading" || manualMode || controllerRef.current) return;
+    if (firstSendConfirmedRef.current) {
+      void request();
+      return;
+    }
+    sendOriginRef.current = event.currentTarget;
+    setFirstSendOpen(true);
+  };
+
+  const confirmFirstSend = () => {
+    if (!text.trim() || status === "loading" || manualMode || controllerRef.current) return;
+    firstSendConfirmedRef.current = true;
+    setFirstSendOpen(false);
+    void request();
+  };
+
   const answerQuickly = (field: AssistFieldName, value: string) => {
     stopPendingRequest();
     const next = applyQuickAssistAnswer(currentInput, field, value);
@@ -446,6 +469,7 @@ export function AssistInput({
   };
 
   const switchToManual = () => {
+    setFirstSendOpen(false);
     if (pendingMoneyTargetFields.length > 1) {
       restoreMoneyFields(pendingMoneyTargetFields);
       setPendingMoneyTargetFields([]);
@@ -501,7 +525,7 @@ export function AssistInput({
         <Button variant="ghost" type="button" onClick={switchToManual}>手动填写</Button>
       </div>
 
-      <p className="assist-disclosure">点击发送后，当前回答、问题，以及理解回答所需的少量相关字段会发送给 TypeSafe/Jev。不会自动发送整份草稿或决定理由。</p>
+      <p className="assist-disclosure">你主动发送时，当前回答、当前问题和理解所需的少量相关字段或原文片段会经本机服务交给 TypeSafe/Jev。不会整体发送草稿或全部对话；草稿里的价值期待和决定理由不作上下文发送。已发出的请求无法靠取消或清空撤回。</p>
       {pendingMoneyTargetFields.length > 1 ? (
         <div className="assist-question" aria-live="polite">
           <span>先确认修改目标</span>
@@ -522,6 +546,7 @@ export function AssistInput({
           <span>{currentQuestion ? "补充这一项，也可以顺便改口其他内容" : "说说这次购买"}</span>
           <Textarea
             id="assist-text"
+            ref={textRef}
             rows={3}
             maxLength={2000}
             value={text}
@@ -532,7 +557,7 @@ export function AssistInput({
         </label>
         <p className="field-hint" id="assist-text-hint">只会在点击发送后整理这段内容。最多 2000 字。</p>
         <div className="assist-actions">
-          <Button type="button" disabled={!text.trim() || status === "loading"} onClick={() => void request()}>
+          <Button type="button" disabled={!text.trim() || status === "loading"} onClick={send}>
             {status === "loading" ? "整理中…" : currentQuestion ? "发送回答" : "发送并整理"}
           </Button>
           {status === "loading" ? <Button variant="ghost" type="button" onClick={() => { stopPendingRequest(); setStatus("idle"); setError(null); }}>取消</Button> : null}
@@ -543,7 +568,7 @@ export function AssistInput({
         <div className="assist-error" role="alert">
           <p>{error}</p>
           <div className="assist-actions">
-            <Button variant="outline" type="button" disabled={!text.trim()} onClick={() => void request()}>重试这一句</Button>
+            <Button variant="outline" type="button" disabled={!text.trim()} onClick={send}>重试这一句</Button>
             <Button variant="ghost" type="button" onClick={switchToManual}>改用手动填写</Button>
           </div>
         </div>
@@ -652,6 +677,29 @@ export function AssistInput({
           <Button variant="ghost" type="button" onClick={switchToManual}>现在手动填写</Button>
         </section>
       ) : null}
+      <AlertDialog open={firstSendOpen} onOpenChange={setFirstSendOpen}>
+        <AlertDialogContent
+          onOpenAutoFocus={(event) => { event.preventDefault(); cancelSendRef.current?.focus(); }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            const origin = sendOriginRef.current;
+            sendOriginRef.current = null;
+            if (origin?.isConnected && !origin.disabled) origin.focus();
+            else textRef.current?.focus();
+          }}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>发送前确认</AlertDialogTitle>
+            <AlertDialogDescription>
+              当前回答、当前问题和理解所需的少量相关字段或原文片段会先发送到本机服务，再由 TypeSafe/Jev 处理。不会整体发送草稿、全部对话或收入资料；日历排班和日期例外不会作为上下文发送，草稿里的价值期待和决定理由也不会。发送后，即使取消整理或清空，也无法从本地撤回已发出的请求。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel ref={cancelSendRef}>暂不发送</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmFirstSend}>确认发送</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

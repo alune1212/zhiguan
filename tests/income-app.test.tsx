@@ -2,10 +2,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { calculateDecision, type DecisionInput } from "../src/domain/calculation";
-import { defaultProfile } from "../src/domain/income";
+import { calculateIncome, defaultProfile } from "../src/domain/income";
 import { LOCAL_DATA_FORMAT, type FavoriteSnapshot, type LocalDataReadResult } from "../src/domain/local-data";
 import { createPurchaseSnapshot } from "../src/domain/purchase-snapshot";
-import { FavoriteCard, favoriteRecalculationInput, IncomeApp, isSuccessfulLocalDataRead } from "../src/app/IncomeApp";
+import { FavoriteCard, favoriteRecalculationInput, IncomeApp, isSuccessfulLocalDataRead, rateDisplay } from "../src/app/IncomeApp";
 
 const favoriteInput: DecisionInput = {
   income: "8000",
@@ -57,6 +57,24 @@ describe("IncomeApp first use", () => {
     expect(html).not.toContain('name="fixedExpenses"');
     expect(html).not.toContain("整理这句话");
   });
+
+  it("keeps small positive per-second rates visible without implying zero", () => {
+    const now = new Date("2026-09-23T00:00:00.000Z");
+    const normal = calculateIncome({ ...defaultProfile(), income: "100", timeZone: "Asia/Shanghai" }, now);
+    expect(normal.status).toBe("available");
+    expect(rateDisplay(normal)).toBe("0.00015783 元/秒");
+
+    const tiny = calculateIncome({
+      ...defaultProfile(),
+      income: "0.01",
+      timeZone: "Asia/Shanghai",
+      workDays: [1, 2, 3, 4, 5, 6, 7],
+      periods: [{ start: "00:00", end: "23:59", endDayOffset: 0 }],
+    }, now);
+    expect(tiny.status).toBe("available");
+    expect(tiny.perSecondIncome?.numerator).not.toBe("0");
+    expect(rateDisplay(tiny)).toBe("小于 0.00000001 元/秒");
+  });
 });
 
 describe("IncomeApp favorites and reload guards", () => {
@@ -70,6 +88,52 @@ describe("IncomeApp favorites and reload guards", () => {
       purchaseAmount: "800",
       workHours: "160",
       evidence: { income: "user-confirmed", workHours: "user-confirmed" },
+    });
+  });
+
+  it("does not reuse a saved calendar when the current schedule has no working time", () => {
+    const now = new Date("2026-09-23T00:00:00.000Z");
+    const savedProfile = { ...defaultProfile(), income: "8000", timeZone: "Asia/Shanghai" };
+    const savedCalendar = calculateIncome(savedProfile, now).workTimeInput;
+    expect(savedCalendar?.totalWorkSeconds).toBe("633600");
+    const snapshot = favoriteSnapshot({
+      ...favoriteInput,
+      workHours: "",
+      workTime: savedCalendar ?? { mode: "unselected" },
+      evidence: { ...favoriteInput.evidence, workHours: "estimated" },
+    });
+    const currentProfile = { ...savedProfile, income: "9000", workDays: [] };
+    const currentCalculation = calculateIncome(currentProfile, now);
+    expect(currentCalculation).toMatchObject({ status: "insufficient-data", reason: { code: "no-working-time" }, workTimeInput: null });
+
+    const draft = favoriteRecalculationInput(snapshot, currentProfile, currentCalculation)!;
+    expect(snapshot.inputs.work_time_basis.total_work_seconds).toBe("633600");
+    expect(snapshot.results.find((result) => result.id === "work-time-equivalent")?.availability).toBe("available");
+    expect(draft).toMatchObject({
+      income: "9000",
+      purchaseAmount: "800",
+      workHours: "",
+      workTime: { mode: "unselected" },
+      evidence: { income: "user-confirmed", workHours: "" },
+    });
+    expect(calculateDecision(draft).results.find((result) => result.id === "work-time-equivalent")).toMatchObject({
+      availability: "insufficient-data",
+      evidenceStatus: "insufficient-data",
+      exact: null,
+    });
+    expect(calculateDecision({
+      ...draft,
+      workTime: { mode: "monthly" },
+      workHours: "160",
+      evidence: { ...draft.evidence, workHours: "user-confirmed" },
+    }).results.find((result) => result.id === "work-time-equivalent")?.availability).toBe("available");
+
+    const validCurrentProfile = { ...savedProfile, income: "9000", workDays: [1, 2, 3, 4] };
+    const validCurrentCalculation = calculateIncome(validCurrentProfile, now);
+    expect(validCurrentCalculation.workTimeInput?.totalWorkSeconds).toBe("518400");
+    expect(favoriteRecalculationInput(snapshot, validCurrentProfile, validCurrentCalculation)).toMatchObject({
+      workTime: { mode: "calendar", totalWorkSeconds: "518400" },
+      evidence: { workHours: "estimated" },
     });
   });
 

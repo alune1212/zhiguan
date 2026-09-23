@@ -223,7 +223,21 @@ describe("local data and backups", () => {
     expect(insufficient.results[0]?.availability).toBe("insufficient-data");
     const result = await addFavorite(insufficient, null);
     expect(result.status).toBe("saved");
-    if (result.status === "saved") expect(result.document.favorites[0]?.snapshot.inputs.income).toBe("bad-income");
+    if (result.status === "saved") {
+      expect(result.document.favorites[0]?.snapshot.inputs.income).toBe("bad-income");
+      expect(parseLocalBackup(createLocalBackup(result.document)).status).toBe("valid");
+    }
+  });
+
+  it("rejects a backup whose available result depends on an invalid purchase amount", () => {
+    const malformedSnapshot = { ...snapshot, inputs: { ...snapshot.inputs, purchase_amount: "bad-money" } };
+    const backup = {
+      format: LOCAL_DATA_FORMAT,
+      revision: "r1",
+      profile: null,
+      favorites: [{ id: "favorite", savedAt: "2026-09-22T10:00:00.000Z", snapshot: malformedSnapshot }],
+    };
+    expect(parseLocalBackup(JSON.stringify(backup))).toEqual({ status: "invalid", reason: "malformed" });
   });
 
   it("round-trips the versioned backup and rejects bad versions or extra fields", async () => {
