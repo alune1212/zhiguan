@@ -96,4 +96,4 @@ class Server(ThreadingHTTPServer):
 if __name__ == "__main__":
     logging.getLogger("typesafe_sdk").disabled = True
     print("Local Zhiguan: http://127.0.0.1:4174 (Ctrl-C to stop)", flush=True)
-    Server(("127.0.0.1", 4174), partial(Handler, directory=str(ROOT))).serve_forever()
+    Server((os.environ.get("ZHIGUAN_BIND_HOST", "127.0.0.1"), 4174), partial(Handler, directory=str(ROOT))).serve_forever()

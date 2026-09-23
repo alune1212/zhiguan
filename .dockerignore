@@ -1,0 +1,12 @@
+.git
+.env
+.env.*
+.venv
+node_modules
+dist
+tmp
+coverage
+.cache
+docs
+openspec
+tests

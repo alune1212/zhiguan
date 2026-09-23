@@ -26,6 +26,16 @@ bun run check
 
 `bun run build` 生成静态产物，`bun run preview` 在本机预览。`bun run test` 执行现有 Vitest 测试；`bun test` 是 Bun 自带的另一套测试运行器。
 
+### 本机 Docker
+
+按下文在根目录 `.env` 设置 `TYPESAFE_API_KEY` 后运行：
+
+```sh
+docker compose up -d --build --wait
+```
+
+打开 `http://127.0.0.1:4174`。容器入口只发布到本机回环地址；`.env` 不进入镜像。停止使用 `docker compose stop`。浏览器资料按访问地址隔离：此前存在 `127.0.0.1:4173` 的资料，需从旧页面导出备份后在 4174 页面主动恢复。
+
 ### 本机 Jev 对话输入
 
 项目根目录 `.env` 设置 `TYPESAFE_API_KEY=你的密钥`（已被 Git 忽略，不使用 `VITE_` 前缀）。Python 3.14+ 与 SDK 由 uv 管理：
