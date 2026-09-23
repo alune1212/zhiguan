@@ -2,7 +2,7 @@
 
 ## Why
 
-当前页面仍使用原有 CSS 与容器层级，尚未落实用户选定的 Apple 风格和 shadcn/ui。此次将已确认的 [DESIGN.md](../../../DESIGN.md) 与[页面方案](../../../docs/design/frontend-page-plan.md)落到现有功能上，使手机上短时查看收入估算更清楚，首次填写、设置、购买与收藏保持一致体验。
+当前页面仍使用原有 CSS 与容器层级，尚未落实用户选定的 Apple 风格和 shadcn/ui。此次将已确认的 [DESIGN.md](../../../../DESIGN.md) 与[页面方案](../../../../docs/design/frontend-page-plan.md)落到现有功能上，使手机上短时查看收入估算更清楚，首次填写、设置、购买与收藏保持一致体验。
 
 ## What Changes
 

@@ -68,7 +68,7 @@
 | Q2 | 操作入口按任务分布，还是全部集中在顶栏 | 顶栏放收藏与设置，数字下方放计算依据与购买入口 | 决定首屏轻重与操作的发现路径；两种方案均保留设置的折叠行为 |
 | Q3 | 优先以手机短时查看，还是电脑浏览为主要设计场景 | 手机短时查看优先，桌面同样完整适配 | 决定首先定稿的视口与细节密度，不取消任何宽度的可访问性要求 |
 
-本轮关键选择已达成共同理解，暂无阻塞页面方案的未决问题。实施规划见 [redesign-frontend-with-shadcn](../../openspec/changes/redesign-frontend-with-shadcn/proposal.md)。现有术语含义清楚，本轮没有新增业务术语或需要 ADR 的不可逆决定。
+本轮关键选择已达成共同理解，暂无阻塞页面方案的未决问题。实施规划见 [redesign-frontend-with-shadcn](../../openspec/changes/archive/2026-09-23-redesign-frontend-with-shadcn/proposal.md)。现有术语含义清楚，本轮没有新增业务术语或需要 ADR 的不可逆决定。
 
 ## 设计交付与验证
 

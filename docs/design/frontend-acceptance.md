@@ -22,7 +22,7 @@ CDP `Network.requestWillBeSent` 观察到：从看板进入购买页、再切换
 
 ## 结果与边界
 
-- **2.5：** 已观察五类确认的影响文案和默认取消焦点；设置保存、恢复与清空的取消及确认、删除最后一项、跨标签陈旧确认被拒绝且草稿保留，以及写入失败时原资料与草稿保留。代码中的操作代际与领域 Web Locks 修订号检查另覆盖异步失效路径。未穷举所有并发组合；OpenSpec 任务状态见 [`tasks.md`](../../openspec/changes/redesign-frontend-with-shadcn/tasks.md)。
+- **2.5：** 已观察五类确认的影响文案和默认取消焦点；设置保存、恢复与清空的取消及确认、删除最后一项、跨标签陈旧确认被拒绝且草稿保留，以及写入失败时原资料与草稿保留。代码中的操作代际与领域 Web Locks 修订号检查另覆盖异步失效路径。未穷举所有并发组合；OpenSpec 任务状态见 [`tasks.md`](../../openspec/changes/archive/2026-09-23-redesign-frontend-with-shadcn/tasks.md)。
 - **3.2：** 上述合成数据主路径、资料损坏后从有效备份恢复、存储读取失败提示和删除最后一项收藏均已观察。没有进行真实用户财务资料验证。
 - **3.3：** 所列宽度均无横向溢出。前景/背景取样对比度为 15.46:1，主色/背景为 5.11:1；这不是所有颜色组合的完整对比度审计。200% CSS 重排已在 384 CSS px 检查，原生浏览器缩放未验证。减少动态模式下按钮无动画或过渡。
 - preview 和临时 Docker 容器的浏览器控制台均无 error/warn。Docker 静态服务返回的 CSP 保持为 `default-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`，资源和核心控件操作通过。容器已删除，未更改现有 compose 服务。最终 `bun run check` 通过：依赖检查、类型检查、84 项测试和构建全部通过；`openspec validate redesign-frontend-with-shadcn --strict` 与 `git diff --check` 通过，最终源码已重新构建 Docker 镜像。
