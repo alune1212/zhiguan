@@ -4,6 +4,7 @@ import type { DecisionInput, NumericField } from "../domain/calculation";
 import {
   ASSIST_FIELD_NAMES,
   areNumericValuesEquivalent,
+  ambiguousMoneyTargetFields,
   advanceAssistQuestion,
   applyAssistPatch,
   applyQuickAssistAnswer,
@@ -14,12 +15,14 @@ import {
   isValidAssistValue,
   noteForDraftField,
   parseAssistResponse,
+  restoreAssistMoneyFields,
   scheduleValues,
   type AssistContext,
   type AssistEstimatedValues,
   type AssistField,
   type AssistFieldName,
   type AssistFields,
+  type AssistMoneyFieldName,
   type AssistStatus,
 } from "./assist-flow";
 
@@ -84,6 +87,11 @@ const FIELD_LABELS: Readonly<Record<AssistFieldName, string>> = {
   purchaseIncluded: "本月是否付款",
 };
 
+const MONEY_FIELD_LABELS: Readonly<Record<AssistMoneyFieldName, string>> = {
+  income: FIELD_LABELS.income,
+  purchaseAmount: FIELD_LABELS.purchaseAmount,
+};
+
 const STATUS_LABELS: Readonly<Record<AssistStatus, string>> = {
   present: "已识别，待确认",
   estimated: "大概数，待确认",
@@ -94,6 +102,12 @@ const STATUS_LABELS: Readonly<Record<AssistStatus, string>> = {
 };
 
 const NUMERIC_ASSIST_FIELDS: readonly NumericField[] = ["income", "workHours", "fixedExpenses", "purchaseAmount"];
+
+interface PendingMoneyTargetRestore {
+  readonly input: DecisionInput;
+  readonly estimates: AssistEstimatedValues;
+  readonly notes: Partial<Record<AssistFieldName, AssistField>>;
+}
 
 function inputHasAssistData(input: DecisionInput): boolean {
   return ASSIST_FIELD_NAMES.some((field) => Boolean(assistValue(input, field).trim()));
@@ -163,6 +177,8 @@ export function AssistInput({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<AssistFieldName | null>(null);
+  const [pendingMoneyTargetFields, setPendingMoneyTargetFields] = useState<readonly AssistMoneyFieldName[]>([]);
+  const [pendingMoneyTargetRestore, setPendingMoneyTargetRestore] = useState<PendingMoneyTargetRestore | null>(null);
   const [skipped, setSkipped] = useState<ReadonlySet<AssistFieldName>>(() => new Set());
   const [asked, setAsked] = useState<Readonly<Partial<Record<AssistFieldName, number>>>>({});
   const [freeTextAmbiguities, setFreeTextAmbiguities] = useState<ReadonlySet<AssistFieldName>>(() => new Set());
@@ -305,10 +321,20 @@ export function AssistInput({
       setLastTurn(trimmedText);
       setText("");
       setStatus("idle");
-      const nextQuestion = setNextQuestion(applied.input, nextSkipped, asked, marginRequested, nextFreeTextAmbiguities);
-      setNotice(nextQuestion
-        ? "已整理这段补充，下面只继续问一个必要问题；确认前都可以修改。"
-        : "已整理这段补充，请核对摘要；确认前都可以修改。" );
+      const moneyTargets = ambiguousMoneyTargetFields(currentInput, parsed.fields);
+      if (moneyTargets.length > 1) {
+        setPendingMoneyTargetFields(moneyTargets);
+        setPendingMoneyTargetRestore({ input: currentInput, estimates: estimatedValues, notes });
+        setCurrentQuestion(null);
+        setNotice("这次修改可能对应多个金额字段。请先选择字段；刚才含糊的金额不会自动套用。");
+      } else {
+        setPendingMoneyTargetFields([]);
+        setPendingMoneyTargetRestore(null);
+        const nextQuestion = setNextQuestion(applied.input, nextSkipped, asked, marginRequested, nextFreeTextAmbiguities);
+        setNotice(nextQuestion
+          ? "已整理这段补充，下面只继续问一个必要问题；确认前都可以修改。"
+          : "已整理这段补充，请核对摘要；确认前都可以修改。" );
+      }
     } catch (reason) {
       if (generationRef.current !== generation || revisionRef.current !== requestRevision || manualModeRef.current) return;
       if (reason instanceof Error && reason.name === "AbortError") {
@@ -371,6 +397,51 @@ export function AssistInput({
     setNextQuestion(nextInput, nextSkipped);
   };
 
+  const restoreMoneyFields = (fields: readonly AssistMoneyFieldName[]): DecisionInput => {
+    const previous = pendingMoneyTargetRestore;
+    if (!previous) return currentInput;
+    const restored = restoreAssistMoneyFields(currentInput, estimatedValues, previous.input, previous.estimates, fields);
+    const nextNotes = { ...notes };
+    for (const field of fields) {
+      const note = previous.notes[field];
+      if (note) nextNotes[field] = note;
+      else delete nextNotes[field];
+    }
+    onDraftChange(restored.input, restored.estimatedValues);
+    setNotes(nextNotes);
+    return restored.input;
+  };
+
+  const chooseMoneyTarget = (field: AssistMoneyFieldName) => {
+    const unchangedField = field === "income" ? "purchaseAmount" : "income";
+    restoreMoneyFields([unchangedField]);
+    setPendingMoneyTargetFields([]);
+    setPendingMoneyTargetRestore(null);
+    setAsked((current) => ({ ...current, [field]: 2 }));
+    setCurrentQuestion(field);
+    setText("");
+    setNotice(`已选${MONEY_FIELD_LABELS[field]}。请重新提供新金额，刚才含糊的金额不会自动套用。`);
+  };
+
+  const skipMoneyTarget = () => {
+    const restoredInput = restoreMoneyFields(pendingMoneyTargetFields);
+    setPendingMoneyTargetFields([]);
+    setPendingMoneyTargetRestore(null);
+    setLastChangedFields([]);
+    setNotice("已放弃这次修改，原有金额已恢复；请重新确认摘要。");
+    setNextQuestion(restoredInput);
+  };
+
+  const switchToManual = () => {
+    if (pendingMoneyTargetFields.length > 1) {
+      restoreMoneyFields(pendingMoneyTargetFields);
+      setPendingMoneyTargetFields([]);
+      setPendingMoneyTargetRestore(null);
+      setLastChangedFields([]);
+    }
+    onSwitchManual();
+  };
+
   const requestMargin = () => {
     if (!marginRequested) onMarginRequest();
     const next = setNextQuestion(currentInput, skipped, asked, true);
@@ -381,6 +452,7 @@ export function AssistInput({
     stopPendingRequest();
     setStatus("idle");
     setError(null);
+    setPendingMoneyTargetFields([]);
     setCurrentQuestion(null);
     onSwitchChat();
     setNextQuestion(currentInput);
@@ -413,11 +485,17 @@ export function AssistInput({
           <h2 id="assist-title">先用一句话说说这次购买</h2>
           <p className="assist-lead">Jev 会帮你整理收入、价格和工作时间；你可以继续补充，也可以直接改摘要。</p>
         </div>
-        <button className="quiet-button" type="button" onClick={onSwitchManual}>手动填写</button>
+        <button className="quiet-button" type="button" onClick={switchToManual}>手动填写</button>
       </div>
 
       <p className="assist-disclosure">点击发送后，当前回答、问题，以及理解回答所需的少量相关字段会发送给 TypeSafe/Jev。不会自动发送整份草稿或决定理由。</p>
-      {currentQuestion ? (
+      {pendingMoneyTargetFields.length > 1 ? (
+        <div className="assist-question" aria-live="polite">
+          <span>先确认修改目标</span>
+          <h3>你想修改哪个金额？</h3>
+          <p>请选择字段后重新提供金额；刚才没有明确归属的金额不会用于结果。</p>
+        </div>
+      ) : currentQuestion ? (
         <div className="assist-question" aria-live="polite">
           <span>接下来只确认一项</span>
           <h3>{QUESTION_LABELS[currentQuestion]}</h3>
@@ -426,36 +504,45 @@ export function AssistInput({
       ) : null}
       {lastTurn ? <p className="assist-last-turn">刚刚补充：{lastTurn}</p> : null}
 
-      <label className="field field-wide" htmlFor="assist-text">
-        <span>{currentQuestion ? "补充这一项，也可以顺便改口其他内容" : "用一句话描述你的收入和想买的东西"}</span>
-        <textarea
-          id="assist-text"
-          rows={3}
-          maxLength={2000}
-          value={text}
-          aria-describedby="assist-text-hint"
-          onChange={(event) => updateTurnText(event.currentTarget.value)}
-          placeholder={currentQuestion ? "写下你的回答，例如：税后到手，或每周上五天、每天九小时。" : "例如：税后每月到手八千，想买三千元的相机，平时每周上五天、每天八小时。"}
-        />
-      </label>
-      <p className="field-hint" id="assist-text-hint">只会在点击发送后整理这段内容。最多 2000 字。</p>
-      <div className="assist-actions">
-        <button className="primary-button" type="button" disabled={!text.trim() || status === "loading"} onClick={() => void request()}>
-          {status === "loading" ? "整理中…" : currentQuestion ? "发送回答" : "整理这句话"}
-        </button>
-        {status === "loading" ? <button className="quiet-button" type="button" onClick={() => { stopPendingRequest(); setStatus("idle"); setError(null); }}>取消</button> : null}
-        <span className="assist-count" aria-live="polite">{text.length}/2000</span>
-      </div>
+      {pendingMoneyTargetFields.length === 0 ? <>
+        <label className="field field-wide" htmlFor="assist-text">
+          <span>{currentQuestion ? "补充这一项，也可以顺便改口其他内容" : "用一句话描述你的收入和想买的东西"}</span>
+          <textarea
+            id="assist-text"
+            rows={3}
+            maxLength={2000}
+            value={text}
+            aria-describedby="assist-text-hint"
+            onChange={(event) => updateTurnText(event.currentTarget.value)}
+            placeholder={currentQuestion ? "写下你的回答，例如：税后到手，或每周上五天、每天九小时。" : "例如：税后每月到手八千，想买三千元的相机，平时每周上五天、每天八小时。"}
+          />
+        </label>
+        <p className="field-hint" id="assist-text-hint">只会在点击发送后整理这段内容。最多 2000 字。</p>
+        <div className="assist-actions">
+          <button className="primary-button" type="button" disabled={!text.trim() || status === "loading"} onClick={() => void request()}>
+            {status === "loading" ? "整理中…" : currentQuestion ? "发送回答" : "整理这句话"}
+          </button>
+          {status === "loading" ? <button className="quiet-button" type="button" onClick={() => { stopPendingRequest(); setStatus("idle"); setError(null); }}>取消</button> : null}
+          <span className="assist-count" aria-live="polite">{text.length}/2000</span>
+        </div>
+      </> : null}
       {status === "error" ? (
         <div className="assist-error" role="alert">
           <p>{error}</p>
           <div className="assist-actions">
             <button className="secondary-button" type="button" disabled={!text.trim()} onClick={() => void request()}>重试这一句</button>
-            <button className="quiet-button" type="button" onClick={onSwitchManual}>改用手动填写</button>
+            <button className="quiet-button" type="button" onClick={switchToManual}>改用手动填写</button>
           </div>
         </div>
       ) : null}
-      {status !== "loading" && currentQuestion ? (
+      {pendingMoneyTargetFields.length > 1 ? (
+        <div className="assist-answer-options" aria-label="金额修改目标">
+          {pendingMoneyTargetFields.map((field) => (
+            <button key={field} className="quick-answer" type="button" onClick={() => chooseMoneyTarget(field)}>{MONEY_FIELD_LABELS[field]}</button>
+          ))}
+          <button className="quick-answer quick-answer-quiet" type="button" onClick={skipMoneyTarget}>放弃这次修改</button>
+        </div>
+      ) : status !== "loading" && currentQuestion ? (
         <div className="assist-answer-options" aria-label="快捷回答">
           {currentOptions.map((option) => (
             <button key={option.value} className="quick-answer" type="button" onClick={() => answerQuickly(currentQuestion, option.value)}>{option.label}</button>
@@ -469,7 +556,7 @@ export function AssistInput({
       ) : null}
       {notice ? <p className="assist-notice" role="status">{notice}</p> : null}
 
-      {!marginRequested && showSummary ? (
+      {!marginRequested && showSummary && pendingMoneyTargetFields.length === 0 ? (
         <div className="assist-margin-invite">
           <div>
             <h3>还想看买完后本月剩多少吗？</h3>
@@ -479,14 +566,14 @@ export function AssistInput({
         </div>
       ) : null}
 
-      {showSummary && currentQuestion === null ? (
+      {showSummary && currentQuestion === null && pendingMoneyTargetFields.length === 0 ? (
         <section className="assist-review" aria-labelledby="assist-review-title">
           <div className="assist-review-heading">
             <div>
               <p className="eyebrow">一份草稿，一次确认</p>
               <h3 id="assist-review-title">核对并修改摘要</h3>
             </div>
-            <button className="quiet-button" type="button" onClick={onSwitchManual}>更多手动选项</button>
+            <button className="quiet-button" type="button" onClick={switchToManual}>更多手动选项</button>
           </div>
           <p className="assist-review-copy">识别结果还不是已确认事实。缺少的信息可以留空，之后仍能看已有结果。</p>
           <div className="assist-summary-grid">
@@ -553,10 +640,10 @@ export function AssistInput({
         </section>
       ) : null}
 
-      {showSummary && currentQuestion !== null ? (
+      {showSummary && (currentQuestion !== null || pendingMoneyTargetFields.length > 1) ? (
         <section className="assist-progress" aria-label="当前草稿进度">
           <p>已整理的内容会保留在草稿里；每次只追问一个必要信息。你也可以跳过、手动补充或随时核对摘要。</p>
-          <button className="quiet-button" type="button" onClick={onSwitchManual}>现在手动填写</button>
+          <button className="quiet-button" type="button" onClick={switchToManual}>现在手动填写</button>
         </section>
       ) : null}
     </section>

@@ -1092,7 +1092,10 @@ export function IncomeApp() {
             <button className="secondary-button" type="button" onClick={exportBackup} disabled={busy || stored.status !== "ready"}>导出备份</button>
             <label className="secondary-button income-file-button">导入备份<input type="file" accept="application/json,.json" onChange={importBackup} disabled={busy} /></label>
           </div> : null}
-          <footer className="footer">按当前设置估算，不代表工资单、实际到账或收入记录。</footer>
+          <footer className="footer">
+            <p>按当前设置估算，不代表工资单、实际到账或收入记录。</p>
+            <p>主动保存的收入资料与收藏只保存在此浏览器；清除浏览器数据可能丢失。导出、恢复或删除资料，请在看板展开“调整收入与作息”中的“备份与删除”；首次设置页也提供资料管理。未收藏的购买草稿与对话在离开或刷新后不保留；只有主动发送对话时，TypeSafe/Jev 才处理理解回答所需的内容。</p>
+          </footer>
         </main>
       )}
     </>

@@ -296,6 +296,33 @@ export interface AppliedAssistPatch {
   readonly changedFields: readonly AssistFieldName[];
 }
 
+export type AssistMoneyFieldName = "income" | "purchaseAmount";
+
+export function ambiguousMoneyTargetFields(
+  input: DecisionInput,
+  fields: AssistFields,
+): AssistMoneyFieldName[] {
+  return (["income", "purchaseAmount"] as const).filter((field) =>
+    Boolean(input[field].trim()) && fields[field]?.status === "ambiguous");
+}
+
+export function restoreAssistMoneyFields(
+  input: DecisionInput,
+  estimatedValues: AssistEstimatedValues,
+  previousInput: DecisionInput,
+  previousEstimates: AssistEstimatedValues,
+  fields: readonly AssistMoneyFieldName[],
+): { readonly input: DecisionInput; readonly estimatedValues: AssistEstimatedValues } {
+  const nextInput = { ...input, evidence: { ...input.evidence } };
+  const nextEstimates = { ...estimatedValues };
+  for (const field of fields) {
+    nextInput[field] = previousInput[field];
+    nextInput.evidence[field] = previousInput.evidence[field];
+    nextEstimates[field] = previousEstimates[field];
+  }
+  return { input: nextInput, estimatedValues: nextEstimates };
+}
+
 export function finalizeAssistInput(
   input: DecisionInput,
   estimatedValues: AssistEstimatedValues,

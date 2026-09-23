@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   EMPTY_ASSIST_ESTIMATES,
+  ambiguousMoneyTargetFields,
   advanceAssistQuestion,
   areNumericValuesEquivalent,
   applyAssistPatch,
@@ -10,6 +11,7 @@ import {
   finalizeAssistInput,
   nextAssistQuestion,
   parseAssistResponse,
+  restoreAssistMoneyFields,
   type AssistField,
   type AssistFields,
   type AssistQuestionState,
@@ -92,6 +94,52 @@ describe("conversation assist flow", () => {
     expect(unresolved.input.income).toBe("");
     expect(unresolved.input.workHours).toBe("");
     expect(unresolved.estimatedValues).toMatchObject({ income: null, workHours: null });
+  });
+
+  it("asks which existing money field an ambiguous correction targets and restores the unselected amount", () => {
+    const existing: DecisionInput = {
+      ...blankInput,
+      income: "8000",
+      purchaseAmount: "3000",
+      taxBasis: "after-tax",
+      evidence: { ...blankInput.evidence, income: "estimated", purchaseAmount: "estimated" },
+    };
+    const estimates = { ...EMPTY_ASSIST_ESTIMATES, income: "8000", purchaseAmount: "3000" };
+    const fields: AssistFields = {
+      income: answer(null, "那个改成两千", "ambiguous"),
+      purchaseAmount: answer(null, "那个改成两千", "ambiguous"),
+    };
+
+    expect(ambiguousMoneyTargetFields(existing, fields)).toEqual(["income", "purchaseAmount"]);
+    expect(ambiguousMoneyTargetFields({ ...existing, purchaseAmount: "" }, fields)).toEqual(["income"]);
+
+    const unresolved = applyAssistPatch(existing, estimates, fields);
+    expect(unresolved.input).toMatchObject({ income: "", purchaseAmount: "" });
+    expect(unresolved.estimatedValues).toMatchObject({ income: null, purchaseAmount: null });
+
+    const selectedIncome = restoreAssistMoneyFields(
+      unresolved.input,
+      unresolved.estimatedValues,
+      existing,
+      estimates,
+      ["purchaseAmount"],
+    );
+    expect(selectedIncome.input).toMatchObject({
+      income: "",
+      purchaseAmount: "3000",
+      evidence: { income: "", purchaseAmount: "estimated" },
+    });
+    expect(selectedIncome.estimatedValues).toMatchObject({ income: null, purchaseAmount: "3000" });
+
+    const skipped = restoreAssistMoneyFields(
+      unresolved.input,
+      unresolved.estimatedValues,
+      existing,
+      estimates,
+      ["income", "purchaseAmount"],
+    );
+    expect(skipped.input).toMatchObject({ income: "8000", purchaseAmount: "3000" });
+    expect(skipped.estimatedValues).toMatchObject({ income: "8000", purchaseAmount: "3000" });
   });
 
   it("does not infer a changed income's tax basis, but applies an explicit or unresolved basis response", () => {
