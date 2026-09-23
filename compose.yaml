@@ -1,10 +1,7 @@
 services:
   zhiguan:
     build: .
-    ports:
-      - "127.0.0.1:4174:4174"
+    network_mode: host
     env_file:
       - .env
-    environment:
-      ZHIGUAN_BIND_HOST: "0.0.0.0"
     restart: unless-stopped
