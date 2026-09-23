@@ -6,8 +6,7 @@ import { IncomeApp } from "../src/app/IncomeApp";
 describe("IncomeApp first use", () => {
   it("starts with only monthly take-home income and shows the folded, local estimate defaults", () => {
     const html = renderToStaticMarkup(<IncomeApp />);
-    const form = html.match(/<form class="card income-form"[\s\S]*?<\/form>/u)?.[0];
-    const details = form?.match(/<details class="income-advanced">[\s\S]*?<\/details>/u)?.[0];
+    const form = html.match(/<form class="income-form"[\s\S]*?<\/form>/u)?.[0];
     const deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     expect(form).toBeDefined();
@@ -17,10 +16,13 @@ describe("IncomeApp first use", () => {
     expect(form).toContain(`时区 ${deviceTimeZone} 估算`);
     expect(form).toContain("资料仅保存在此浏览器中；清除浏览器数据可能会丢失。");
 
-    expect(details).toBeDefined();
-    expect(details).not.toMatch(/^<details[^>]*\sopen(?:[=>\s])/u);
-    expect(details).toContain("每周工作日");
-    expect(details).toContain("特殊日期");
+    expect(form).toContain('data-slot="collapsible"');
+    expect(form).toContain('aria-expanded="false"');
+    expect(form).toContain("展开详细设置");
+    expect(form).not.toContain("每周工作日");
+    expect(form).not.toContain("特殊日期");
+    expect(form).toContain("保存并开始");
+    expect(html).toContain("导入备份");
     expect(html).toContain("没有购买计划也可以直接使用。");
     expect(html).not.toContain('name="purchaseAmount"');
     expect(html).not.toContain('name="fixedExpenses"');

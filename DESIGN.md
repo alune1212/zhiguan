@@ -1,9 +1,8 @@
-<!-- Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4 · 规范自评，非渲染验收 -->
 # 值观设计规范
 
 **版本：** 0.1.0 · **日期：** 2026-09-23
 
-**状态：** Apple 风格与 shadcn/ui 已由用户确认。本文是后续 UI 重设计的共同基线；概念稿、组件接入与浏览器视觉验收尚未完成。当前项目仍使用 React + TypeScript + Vite 与原有 CSS，尚未安装 shadcn/ui 或 Tailwind。
+**状态：** Apple-inspired 视觉方案、[概念稿](docs/design/frontend-concepts.html)和现有 React/Vite 应用中的 shadcn/ui + Tailwind CSS v4 界面均已交付。preview 与临时 Docker 容器的验收记录及边界见[前端验收记录](docs/design/frontend-acceptance.md)；真实用户验证与正式发布尚未完成。
 
 本规范服从 [PRODUCT.md](PRODUCT.md)、[产品策略](PRODUCT_STRATEGY.md)、[路线图](ROADMAP.md)、[架构约束](ARCHITECTURE.md) 与 [品牌指南](docs/design/brand.md)。页面视觉统一遵循本文件；后续调整集中更新规范，不逐页更换主题。设计调整不改变计算、证据状态、存储或外部服务边界。
 
@@ -21,7 +20,7 @@
 
 用户选择 [getdesign.md 的 Apple 方案](https://getdesign.md/apple/design-md) 作为值观的公开设计参考；[原始 DESIGN.md](https://github.com/VoltAgent/awesome-design-md/blob/main/design-md/apple/DESIGN.md) 是第三方对 Apple 网站的设计分析，不是 Apple 官方规范。参考日期为 2026-09-23。
 
-沿用浅灰与白色表面、深色文字、单一蓝色操作色及系统字体方向。本文的页面结构、中文排版、证据表达和控件规则为值观重新制定；不复制 Apple 品牌标识、图片、文案、摄影展陈或 10–12px 微小脚注。颜色锚点源于参考文件，其余值为项目适配值；尚未用实际渲染验证空间节奏。
+沿用浅灰与白色表面、深色文字、单一蓝色操作色及系统字体方向。本文的页面结构、中文排版、证据表达和控件规则为值观重新制定；不复制 Apple 品牌标识、图片、文案、摄影展陈或 10–12px 微小脚注。颜色锚点源于参考文件，其余值为项目适配值；实际渲染与对比度取样范围见[前端验收记录](docs/design/frontend-acceptance.md)。
 
 ## 页面与信息层级
 
@@ -39,7 +38,7 @@
 
 ## Tokens · 语义变量
 
-当前以本文为规范来源。实施时将下列变量集中接入现有样式入口，并让 shadcn/ui 与页面共用；不并存一套 Hallmark 配色和一套 shadcn 配色。本文不创建未接入页面的 `tokens.css` 或 token 导出流水线。
+当前以本文为规范来源。下列变量已接入 `src/styles/app.css`，由 shadcn/ui 与页面共用；不并存一套 Hallmark 配色和一套 shadcn 配色。本文不创建未接入页面的 `tokens.css` 或 token 导出流水线。
 
 以下是完整 CSS 颜色值，直接用 `var(--primary)` 消费，不再包裹 `hsl()` 或 `oklch()`。`primary` 表示主操作，`accent` 表示列表、菜单等轻量交互表面。主题映射参照 [shadcn/ui Theming](https://ui.shadcn.com/docs/theming)。
 
@@ -96,7 +95,7 @@
 
 ### Exports · Tailwind v4 / shadcn/ui 映射
 
-以下仅为后续接入的映射，尚未安装 Tailwind。实施时合并到 CLI 生成的主题块，保留其必要导入与实际使用的变量；不另建重复主题。官方接入方式见 [Vite 安装说明](https://ui.shadcn.com/docs/installation/vite)。
+以下映射已接入 `src/styles/app.css` 的 Tailwind v4 主题块，并保留实际需要的导入和变量；不另建重复主题。官方接入方式见 [Vite 安装说明](https://ui.shadcn.com/docs/installation/vite)。
 
 ```css
 @theme inline {
@@ -146,11 +145,11 @@
 
 | 需求 | 组件与约定 |
 | --- | --- |
-| 操作 | `Button` 的 default/outline/ghost/destructive；主按钮只对应当前任务，忙碌时保持宽度并用 `Spinner` 与动作文字反馈 |
+| 操作 | `Button` 的 default/outline/ghost/destructive；主按钮只对应当前任务，忙碌时保持宽度并用动作文字反馈 |
 | 表单 | `FieldGroup / Field / FieldLabel / FieldDescription / FieldError` 配 `Input / Textarea / Checkbox / RadioGroup / Select`；错误与字段关联，保留输入 |
 | 作息与备份输入 | 日期、时间和文件选择优先保留原生能力；明确标签、时区和单位，不为外观改写解析或校验 |
 | 可选设置与依据 | `Collapsible`，多组独立内容才用 `Accordion`；展开控件必须有文字和展开状态 |
-| 收藏与结果 | 普通语义列表优先；需要独立面板时使用完整 `Card` 结构；用 `Badge` 表达证据状态、`Separator` 分组 |
+| 收藏与结果 | 普通语义列表优先；独立面板使用共享的表面与边界样式；用 `Badge` 表达证据状态，必要时以分隔线分组 |
 | 异常与空状态 | `Alert` 显示错误、未保存或冲突；`Empty` 显示首次或无收藏；成功优先就地确认 |
 | 覆盖与清空确认 | `AlertDialog` 展示准确影响范围、取消和确认；取消保持原资料，默认焦点放在取消；单项删除保持现有确认语义 |
 
@@ -190,7 +189,6 @@
 
 ## 实施与验收边界
 
-1. 先制作桌面与手机概念稿，覆盖首次设置和已有资料的收入首页；设置展开、数据不足、未保存等状态需可审阅。概念示例仅用明确标注的合成数据，不使用个人财务截图。
-2. 后续实施使用 Bun 接入 shadcn/ui，复用现有页面与领域模块；基础样式和公共 variants 集中维护，不新增平行 UI、不改写购买草稿与本地资料语义。
-3. 渲染后核对字号、配色、数字稳定性、表单密度、估算可见性、焦点与全部规定宽度；检查首填 → 看板 → 设置 → 购买 → 收藏及已有备份恢复/失败路径。
-4. 本轮只有文档检查。组件安装、页面改造、上述浏览器检查及 `bun run check` 均属于后续实施验收；不得由规范完成推定 UI 已实现或通过用户验证。
+1. 手机与桌面概念稿见[概念稿页面](docs/design/frontend-concepts.html)；演示只使用合成数据，不使用个人财务截图。
+2. 现有应用已接入 shadcn/ui，复用原页面与领域模块；基础样式和公共 variants 集中维护，未新增平行 UI，也未改写购买草稿与本地资料语义。
+3. 本地 preview 与临时 Docker 容器的可重复交互、视口及资源检查见[前端验收记录](docs/design/frontend-acceptance.md)。该记录只覆盖列明的状态与视口；概念稿、组件接入和有限浏览器检查不能推定真实用户验证、原生浏览器缩放、完整对比度组合或 Jev 全部网络行为已通过。

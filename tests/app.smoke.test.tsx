@@ -40,19 +40,17 @@ function resultFor(output: CalculationOutput, id: CalculationResult["id"]): Calc
 }
 
 describe("App", () => {
-  it("starts with direct price entry and keeps optional conversation and comparison details closed", () => {
+  it("starts with one-sentence input and keeps manual entry immediately available", () => {
     const html = renderToStaticMarkup(<App />);
     expect(html).toContain("这次购买要花多少工作时间？");
     expect(html).toContain("清空购买草稿");
-    expect(html).toContain("价格可以直接填写；想用一句话补充时再打开对话。不会自动发送内容。");
-    expect(html).toContain("用一句话补充");
-    expect(html).toContain('name="purchaseAmount"');
-    expect(html).toContain("详细修改这次的比较条件");
-    expect(html).not.toMatch(/<details[^>]*open/u);
-    expect(html).not.toContain("用一句话描述你的收入和想买的东西");
-    expect(html).not.toContain("整理这句话");
-    expect(html).toContain('name="work-time-mode"');
-    expect(html).toContain("确认并查看结果");
+    expect(html).toContain("说说这次购买");
+    expect(html).toContain("手动填写");
+    expect(html).toContain('id="assist-text"');
+    expect(html).toContain("发送并整理");
+    expect(html).toContain("点击发送后");
+    expect(html).not.toContain('name="purchaseAmount"');
+    expect(html).not.toContain("详细修改这次的比较条件");
     expect(html).toContain("收入资料、日历排班、日期例外、价值期待和决定理由不会整体发送");
     expect(html).toContain("清空购买草稿不会删除已保存的收入资料");
     expect(html).not.toContain("Goal");
@@ -63,7 +61,7 @@ describe("App", () => {
     expect(html).not.toContain("下载这次记录");
   });
 
-  it("prefills the purchase form from the saved profile and labels changes as one-time", () => {
+  it("prefills the shared purchase draft from the saved profile", () => {
     const profileInput: DecisionInput = {
       ...baseInput,
       income: "8000",
@@ -86,12 +84,12 @@ describe("App", () => {
       <App initialInput={profileInput} comparisonMonth="2026-09" timeZone="Asia/Shanghai" onBack={() => undefined} />,
     );
     expect(html).toContain("沿用每月到手收入 8000 元 · 2026-09 作息估算 · Asia/Shanghai");
-    expect(html).toContain('name="purchaseAmount"');
-    expect(html).toContain("收入和作息只用于这次计算，不会写回已保存资料");
-    expect(html).toContain("仅调整这次购买的工作时间");
-    expect(html).toContain("更改只影响这次试算，不会修改收入资料");
+    expect(html).toContain("月收入和本月作息沿用已保存资料");
+    expect(html).toContain('id="assist-summary-income"');
+    expect(html).toContain('id="assist-summary-purchaseAmount"');
+    expect(html).toContain("核对并修改摘要");
+    expect(html).not.toContain('name="purchaseAmount"');
     expect(html).toContain("返回收入看板");
-    expect(html).not.toMatch(/<details[^>]*open/u);
   });
 
   it("puts the work-time conclusion first and keeps income rate as a supplement", () => {

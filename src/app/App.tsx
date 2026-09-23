@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldDescription, FieldError as UiFieldError, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { AssistInput } from "./AssistInput";
 import {
   EMPTY_ASSIST_ESTIMATES,
@@ -248,7 +255,7 @@ function localTimeZone(): string {
 }
 
 function FieldError({ field, code, id }: { readonly field: InputErrorField; readonly code?: InputErrorCode; readonly id: string }) {
-  return code ? <span className="error" id={id} role="alert">{inputErrorText(field, code)}</span> : null;
+  return code ? <UiFieldError id={id}>{inputErrorText(field, code)}</UiFieldError> : null;
 }
 
 function NumericFieldControl({
@@ -276,9 +283,9 @@ function NumericFieldControl({
       ? schedule?.hoursPerDay ?? ""
       : input[field];
   return (
-    <div className="field">
-      <label htmlFor={inputId}>{FIELD_LABELS[field]}（{unit}）</label>
-      <input
+    <Field className="field" data-invalid={error ? true : undefined}>
+      <FieldLabel htmlFor={inputId}>{FIELD_LABELS[field]}（{unit}）</FieldLabel>
+      <Input
         id={inputId}
         name={field}
         type="text"
@@ -288,9 +295,9 @@ function NumericFieldControl({
         aria-describedby={describedBy}
         onChange={(event) => onChange(event.currentTarget.value)}
       />
-      {hint ? <span className="field-hint" id={hintId}>{hint}</span> : null}
+      {hint ? <FieldDescription className="field-hint" id={hintId}>{hint}</FieldDescription> : null}
       <FieldError field={field} code={error} id={errorId} />
-    </div>
+    </Field>
   );
 }
 
@@ -495,7 +502,7 @@ export function App({
   const [decision, setDecision] = useState<DecisionForm>({ code: "", rationale: "", reviewCondition: "" });
   const [assistResetKey, setAssistResetKey] = useState(0);
   const [assistEstimatedValues, setAssistEstimatedValues] = useState<AssistEstimateMap>({ ...EMPTY_ASSIST_ESTIMATES });
-  const [manualMode, setManualMode] = useState(true);
+  const [manualMode, setManualMode] = useState(false);
   const [marginRequested, setMarginRequested] = useState(false);
   const [approximateInput, setApproximateInput] = useState(false);
   const [draftRevision, setDraftRevision] = useState(0);
@@ -519,7 +526,7 @@ export function App({
     setDecision({ code: "", rationale: "", reviewCondition: "" });
     setAssistResetKey((current) => current + 1);
     setAssistEstimatedValues({ ...EMPTY_ASSIST_ESTIMATES });
-    setManualMode(true);
+    setManualMode(false);
     setMarginRequested(false);
     setApproximateInput(false);
     setDraftNotice(null);
@@ -653,14 +660,18 @@ export function App({
   return (
     <main className="app-shell">
       <header className="topbar">
-        {onBack ? <button className="quiet-button" type="button" onClick={onBack}>{fromSavedProfile ? "返回收入看板" : "返回收藏"}</button> : <a className="brand" href="#page-title">值观</a>}
-        <button className="quiet-button" type="button" onClick={clear}>清空购买草稿</button>
+        {onBack ? <Button variant="ghost" type="button" onClick={onBack}>{fromSavedProfile ? "返回收入看板" : "返回收藏"}</Button> : <a className="brand" href="#page-title">值观</a>}
+        <Button variant="ghost" type="button" onClick={clear}>清空购买草稿</Button>
       </header>
 
       <section className="intro" aria-labelledby="page-title">
         <h1 id="page-title">这次购买要花多少工作时间？</h1>
-        <p>{fromSavedProfile ? "填入这次购买的价格即可。月收入和本月作息沿用已保存资料；对话与更多设置都可以按需打开。" : "已从旧收藏开启新草稿。请重新确认收入和工作时间；原收藏不会变化。"}</p>
+        <p>{initialInput ? fromSavedProfile ? "用一句话说说这次购买。月收入和本月作息沿用已保存资料；也可以随时手动填写。" : "已从旧收藏开启新草稿。请重新确认收入和工作时间；原收藏不会变化。也可以随时手动填写。" : "用一句话说说这次购买、收入和工作时间；也可以随时手动填写。"}</p>
       </section>
+
+      {initialInput ? (
+        <p className="field-hint purchase-profile-context">{fromSavedProfile ? "沿用每月到手收入" : "旧收藏中的月收入"} {input.income || "—"} 元 · {selectedMonth} {input.workTime?.mode === "unselected" ? "工作时间待确认" : "作息估算"} · {selectedTimeZone}</p>
+      ) : null}
 
       <AssistInput
         key={assistResetKey}
@@ -684,9 +695,7 @@ export function App({
           <p>收入和作息只用于这次计算，不会写回已保存资料；金额单位为人民币。</p>
         </div>
         <div className="field-grid">
-          {initialInput ? (
-            <p className="field-hint field-wide">{fromSavedProfile ? "沿用每月到手收入" : "旧收藏中的月收入"} {input.income || "—"} 元 · {selectedMonth} {input.workTime?.mode === "unselected" ? "工作时间待确认" : "作息估算"} · {selectedTimeZone}</p>
-          ) : <NumericFieldControl field="income" input={input} error={visibleErrors.income} onChange={(value) => updateNumericField("income", value)} />}
+          {!initialInput ? <NumericFieldControl field="income" input={input} error={visibleErrors.income} onChange={(value) => updateNumericField("income", value)} /> : null}
           <NumericFieldControl field="purchaseAmount" input={input} error={visibleErrors.purchaseAmount} onChange={(value) => updateNumericField("purchaseAmount", value)} />
         </div>
 
@@ -694,54 +703,51 @@ export function App({
           <summary>详细修改这次的比较条件</summary>
           <div className="optional-content">
             {initialInput ? <NumericFieldControl field="income" input={input} error={visibleErrors.income} onChange={(value) => updateNumericField("income", value)} /> : null}
-            <div className="field">
-              <label htmlFor="tax-basis">收入类型</label>
-              <select
-                id="tax-basis"
-                name="tax-basis"
-                value={input.taxBasis}
-                aria-invalid={visibleErrors.taxBasis ? "true" : undefined}
-                aria-describedby={visibleErrors.taxBasis ? "tax-basis-error" : undefined}
-                onChange={({ currentTarget: { value } }) => manualUpdate({ ...input, taxBasis: value as TaxBasis | "" })}
-              >
-                <option value="">尚未确认</option>
-                <option value="after-tax">税后（到手）</option>
-                <option value="before-tax">税前（还没扣税）</option>
-              </select>
+            <Field className="field" data-invalid={visibleErrors.taxBasis ? true : undefined}>
+              <FieldLabel htmlFor="tax-basis">收入类型</FieldLabel>
+              <Select name="tax-basis" value={input.taxBasis} onValueChange={(value) => manualUpdate({ ...input, taxBasis: value === "unset" ? "" : value as TaxBasis })}>
+                <SelectTrigger id="tax-basis" className="w-full" aria-invalid={visibleErrors.taxBasis ? "true" : undefined} aria-describedby={visibleErrors.taxBasis ? "tax-basis-error" : undefined}>
+                  <SelectValue placeholder="尚未确认" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unset">尚未确认</SelectItem>
+                  <SelectItem value="after-tax">税后（到手）</SelectItem>
+                  <SelectItem value="before-tax">税前（还没扣税）</SelectItem>
+                </SelectContent>
+              </Select>
               <FieldError field="taxBasis" code={visibleErrors.taxBasis} id="tax-basis-error" />
-            </div>
+            </Field>
 
             <fieldset className="work-time-inputs" aria-invalid={visibleErrors.workHours ? "true" : undefined} aria-describedby="work-time-hint">
               <legend>仅调整这次购买的工作时间</legend>
               <p className="field-hint" id="work-time-hint">更改只影响这次试算，不会修改收入资料。按每周作息估算会用全年平均月工时。</p>
-              {initialCalendar ? (
-                <label className="work-time-manual">
-                  <input
-                    type="radio"
-                    name="work-time-mode"
-                    value="calendar"
-                    checked={workTimeMode === "calendar"}
-                    onChange={() => manualUpdate({ ...input, workHours: "", workTime: initialCalendar })}
-                  />
-                  沿用 {initialCalendar.comparisonMonth} 的已保存作息
-                </label>
-              ) : null}
-              <div className="work-time-options">
-                {([
-                  ["five-day", "每周 5 天，每天 8 小时"],
-                  ["six-day", "每周 6 天，每天 8 小时"],
-                  ["custom", "自定义每周作息"],
-                ] as const).map(([mode, label]) => (
-                  <label key={mode}>
-                    <input type="radio" name="work-time-mode" value={mode} checked={workTimeMode === mode} onChange={() => manualUpdate(updateWorkTimeMode(input, mode), "workHours")} />
-                    {label}
+              <RadioGroup name="work-time-mode" value={workTimeMode} onValueChange={(mode) => {
+                if (mode === "calendar" && initialCalendar) manualUpdate({ ...input, workHours: "", workTime: initialCalendar });
+                else if (mode === "five-day" || mode === "six-day" || mode === "custom" || mode === "monthly") manualUpdate(updateWorkTimeMode(input, mode), "workHours");
+              }}>
+                {initialCalendar ? (
+                  <label className="work-time-manual" htmlFor="work-time-calendar">
+                    <RadioGroupItem id="work-time-calendar" value="calendar" />
+                    沿用 {initialCalendar.comparisonMonth} 的已保存作息
                   </label>
-                ))}
-              </div>
-              <label className="work-time-manual">
-                <input type="radio" name="work-time-mode" value="monthly" checked={workTimeMode === "monthly"} onChange={() => manualUpdate(updateWorkTimeMode(input, "monthly"), "workHours")} />
-                直接填写每月工作小时数
-              </label>
+                ) : null}
+                <div className="work-time-options">
+                  {([
+                    ["five-day", "每周 5 天，每天 8 小时"],
+                    ["six-day", "每周 6 天，每天 8 小时"],
+                    ["custom", "自定义每周作息"],
+                  ] as const).map(([mode, label]) => (
+                    <label key={mode} htmlFor={`work-time-${mode}`}>
+                      <RadioGroupItem id={`work-time-${mode}`} value={mode} />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+                <label className="work-time-manual" htmlFor="work-time-monthly">
+                  <RadioGroupItem id="work-time-monthly" value="monthly" />
+                  直接填写每月工作小时数
+                </label>
+              </RadioGroup>
               {workTimeMode === "custom" ? (
                 <div className="field-grid work-time-custom">
                   <NumericFieldControl field="workDaysPerWeek" input={input} error={visibleErrors.workDaysPerWeek} hint="可以填小数，例如大小周填 5.5。" onChange={(value) => manualUpdate(updateNumeric(input, "workDaysPerWeek", value))} />
@@ -760,15 +766,10 @@ export function App({
               {output.workTime.basis.conversion ? <p className="field-hint work-time-note">按平均作息估算，不代表本月实际出勤。包含经常性加班，不含通勤和休息。</p> : null}
             </fieldset>
 
-            <label className="check-row">
-              <input
-                type="checkbox"
-                checked={approximateInput}
-                aria-describedby={hasAssistEstimates ? "assist-estimate-hint" : undefined}
-                onChange={({ currentTarget: { checked } }) => changeApproximatePreference(checked)}
-              />
-              我填写的数字里有大概数
-            </label>
+            <div className="check-row">
+              <Checkbox id="purchase-approximate" checked={approximateInput} aria-describedby={hasAssistEstimates ? "assist-estimate-hint" : undefined} onCheckedChange={(checked) => changeApproximatePreference(checked === true)} />
+              <label htmlFor="purchase-approximate">我填写的数字里有大概数</label>
+            </div>
             {hasAssistEstimates ? <p className="field-hint" id="assist-estimate-hint">辅助整理逐项识别的大概数仍按估算；填写更准确的数值后可重新确认。</p> : null}
           </div>
         </details>
@@ -777,46 +778,44 @@ export function App({
           <summary>还想看买完后，这个月剩多少？（可选）</summary>
           <div className="optional-content">
             <NumericFieldControl field="fixedExpenses" input={input} error={visibleErrors.fixedExpenses} hint="没有固定支出可以填 0。" onChange={(value) => updateNumericField("fixedExpenses", value)} />
-            <div className="field">
-              <label htmlFor="fixed-cost-coverage">固定支出范围</label>
-              <select
-                id="fixed-cost-coverage"
-                value={input.fixedCostCoverage}
-                aria-invalid={visibleErrors.fixedCostCoverage ? "true" : undefined}
-                aria-describedby={visibleErrors.fixedCostCoverage ? "fixed-cost-coverage-error" : undefined}
-                onChange={({ currentTarget: { value } }) => manualUpdate({ ...input, fixedCostCoverage: value as DecisionInput["fixedCostCoverage"] })}
-              >
-                <option value="">尚未确认</option>
-                <option value="complete">包含本月全部固定支出</option>
-                <option value="partial">只包含一部分</option>
-                <option value="unknown">不确定</option>
-              </select>
-            </div>
-            <FieldError field="fixedCostCoverage" code={visibleErrors.fixedCostCoverage} id="fixed-cost-coverage-error" />
-            <div className="field">
-              <label htmlFor="purchase-included">本月是否付款</label>
-              <select
-                id="purchase-included"
-                value={input.purchaseIncluded}
-                aria-invalid={visibleErrors.purchaseIncluded ? "true" : undefined}
-                aria-describedby={visibleErrors.purchaseIncluded ? "purchase-included-error" : undefined}
-                onChange={({ currentTarget: { value } }) => manualUpdate({ ...input, purchaseIncluded: value as DecisionInput["purchaseIncluded"] })}
-              >
-                <option value="">尚未确认</option>
-                <option value="included">本月付款</option>
-                <option value="excluded">不在本月付款</option>
-              </select>
-            </div>
-            <FieldError field="purchaseIncluded" code={visibleErrors.purchaseIncluded} id="purchase-included-error" />
-            <div className="field field-wide">
-              <label htmlFor="value-expectation">你希望它带来什么？（可选）</label>
-              <textarea id="value-expectation" rows={2} value={input.valueExpectation} aria-describedby="value-expectation-hint" onChange={({ currentTarget: { value } }) => manualUpdate({ ...input, valueExpectation: value })} />
-              <span className="field-hint" id="value-expectation-hint">不参与计算，只帮你记住当时的期待。</span>
-            </div>
+            <Field className="field" data-invalid={visibleErrors.fixedCostCoverage ? true : undefined}>
+              <FieldLabel htmlFor="fixed-cost-coverage">固定支出范围</FieldLabel>
+              <Select value={input.fixedCostCoverage} onValueChange={(value) => manualUpdate({ ...input, fixedCostCoverage: value === "unset" ? "" : value as DecisionInput["fixedCostCoverage"] })}>
+                <SelectTrigger id="fixed-cost-coverage" className="w-full" aria-invalid={visibleErrors.fixedCostCoverage ? "true" : undefined} aria-describedby={visibleErrors.fixedCostCoverage ? "fixed-cost-coverage-error" : undefined}>
+                  <SelectValue placeholder="尚未确认" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unset">尚未确认</SelectItem>
+                  <SelectItem value="complete">包含本月全部固定支出</SelectItem>
+                  <SelectItem value="partial">只包含一部分</SelectItem>
+                  <SelectItem value="unknown">不确定</SelectItem>
+                </SelectContent>
+              </Select>
+              <FieldError field="fixedCostCoverage" code={visibleErrors.fixedCostCoverage} id="fixed-cost-coverage-error" />
+            </Field>
+            <Field className="field" data-invalid={visibleErrors.purchaseIncluded ? true : undefined}>
+              <FieldLabel htmlFor="purchase-included">本月是否付款</FieldLabel>
+              <Select value={input.purchaseIncluded} onValueChange={(value) => manualUpdate({ ...input, purchaseIncluded: value === "unset" ? "" : value as DecisionInput["purchaseIncluded"] })}>
+                <SelectTrigger id="purchase-included" className="w-full" aria-invalid={visibleErrors.purchaseIncluded ? "true" : undefined} aria-describedby={visibleErrors.purchaseIncluded ? "purchase-included-error" : undefined}>
+                  <SelectValue placeholder="尚未确认" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unset">尚未确认</SelectItem>
+                  <SelectItem value="included">本月付款</SelectItem>
+                  <SelectItem value="excluded">不在本月付款</SelectItem>
+                </SelectContent>
+              </Select>
+              <FieldError field="purchaseIncluded" code={visibleErrors.purchaseIncluded} id="purchase-included-error" />
+            </Field>
+            <Field className="field field-wide">
+              <FieldLabel htmlFor="value-expectation">你希望它带来什么？（可选）</FieldLabel>
+              <Textarea id="value-expectation" rows={2} value={input.valueExpectation} aria-describedby="value-expectation-hint" onChange={({ currentTarget: { value } }) => manualUpdate({ ...input, valueExpectation: value })} />
+              <FieldDescription className="field-hint" id="value-expectation-hint">不参与计算，只帮你记住当时的期待。</FieldDescription>
+            </Field>
           </div>
         </details>
 
-        <button className="primary-button" type="submit">确认并查看结果</button>
+        <Button type="submit">确认并查看结果</Button>
       </form> : null}
 
       {draftNotice ? <p className="draft-notice" role="status">{draftNotice}</p> : null}
@@ -841,37 +840,41 @@ export function App({
       {calculated ? (
         <section className="card decision-card" aria-labelledby="decision-title">
           <h2 id="decision-title">你准备怎么做？</h2>
-          <fieldset className="decision-options" aria-labelledby="decision-title">
+          <RadioGroup className="decision-options" name="decision" value={decision.code} aria-labelledby="decision-title" onValueChange={(code) => {
+            favoriteRequestId.current += 1;
+            setFavoriteState("idle");
+            setDecision((current) => ({ ...current, code: code as PurchaseDecisionCode }));
+          }}>
             {DECISION_OPTIONS.map((option) => (
-              <label key={option.code}>
-                <input type="radio" name="decision" value={option.code} checked={decision.code === option.code} onChange={() => { favoriteRequestId.current += 1; setFavoriteState("idle"); setDecision((current) => ({ ...current, code: option.code })); }} />
+              <label key={option.code} htmlFor={`decision-${option.code}`}>
+                <RadioGroupItem id={`decision-${option.code}`} value={option.code} />
                 {option.label}
               </label>
             ))}
-          </fieldset>
-          <div className="field field-wide">
-            <label htmlFor="decision-rationale">想记下原因吗？（可选）</label>
-            <textarea id="decision-rationale" rows={2} value={decision.rationale} aria-describedby="decision-rationale-hint" onChange={({ currentTarget: { value } }) => { favoriteRequestId.current += 1; setFavoriteState("idle"); setDecision((current) => ({ ...current, rationale: value })); }} />
-            <span className="field-hint" id="decision-rationale-hint">这段话不参与计算。</span>
-          </div>
+          </RadioGroup>
+          <Field className="field field-wide">
+            <FieldLabel htmlFor="decision-rationale">想记下原因吗？（可选）</FieldLabel>
+            <Textarea id="decision-rationale" rows={2} value={decision.rationale} aria-describedby="decision-rationale-hint" onChange={({ currentTarget: { value } }) => { favoriteRequestId.current += 1; setFavoriteState("idle"); setDecision((current) => ({ ...current, rationale: value })); }} />
+            <FieldDescription className="field-hint" id="decision-rationale-hint">这段话不参与计算。</FieldDescription>
+          </Field>
           {onFavorite ? (
             <>
-              <button className="secondary-button" type="button" disabled={favoriteState === "saving" || favoriteState === "saved"} onClick={() => void favorite()}>
+              <Button variant="outline" type="button" disabled={favoriteState === "saving" || favoriteState === "saved"} onClick={() => void favorite()}>
                 {favoriteState === "saving" ? "正在收藏…" : favoriteState === "saved" ? "已加入收藏" : "收藏这次结果"}
-              </button>
+              </Button>
               {favoriteState === "error" ? <p className="error" role="alert">收藏没有保存成功，请检查后重试。</p> : null}
             </>
           ) : null}
-          <button className="secondary-button" type="button" onClick={downloadCurrentSnapshot}>下载这次记录（@2）</button>
+          <Button variant="outline" type="button" onClick={downloadCurrentSnapshot}>下载这次记录（@2）</Button>
         </section>
       ) : null}
 
       {monthNoticeVisible ? (
         <section className="draft-notice" role="status">
           <p>当前已进入 {currentMonth()}，这份草稿仍按 {selectedMonth} 计算。旧月结果不会标成新月结果。</p>
-          <button className="secondary-button" type="button" onClick={adoptCurrentMonth}>
+          <Button variant="outline" type="button" onClick={adoptCurrentMonth}>
             {onAdoptMonth ? `采用 ${currentMonth()} 并重新计算` : "返回收入看板后用新月份重新打开"}
-          </button>
+          </Button>
         </section>
       ) : null}
 

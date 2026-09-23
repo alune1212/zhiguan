@@ -1,5 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
+import { Settings2 } from "lucide-react";
+
+import { Alert } from "@/components/ui/alert";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { App as PurchaseWorkbench, monthInTimeZone } from "./App";
 import { downloadJson } from "./download";
@@ -34,6 +46,22 @@ import type { DecisionInput, WorkTimeInput } from "../domain/calculation";
 import type { PurchaseSnapshotV2 } from "../domain/purchase-snapshot";
 
 type Screen = "setup" | "dashboard" | "purchase" | "favorites";
+
+type PendingConfirmation = {
+  kind: "save" | "restore" | "clear" | "delete" | "reload";
+  draft: IncomeProfile;
+  raw: string | null;
+  revision: string | null;
+  run: () => void | Promise<void>;
+};
+
+const CONFIRM_COPY: Record<PendingConfirmation["kind"], { title: string; description: string; action: string }> = {
+  save: { title: "保存并重算收入？", description: "今日和本月估算将按新资料重新计算；已收藏的结果保持原样。", action: "保存并重算" },
+  restore: { title: "用备份替换本地资料？", description: "此浏览器中的基础资料和全部收藏将被备份内容替换。文件只作为数据读取，不会执行。", action: "导入并替换" },
+  clear: { title: "清空本地资料？", description: "此浏览器中保存的基础资料、全部收藏和本页临时输入将被清空；已下载的备份文件不受影响。", action: "清空资料" },
+  delete: { title: "删除这条收藏？", description: "仅删除这条收藏，基础资料和其他收藏不会改变。", action: "删除收藏" },
+  reload: { title: "重新载入最新资料？", description: "当前未保存的编辑将被放弃，改为浏览器中最新保存的内容。", action: "放弃编辑并载入" },
+};
 
 const EMPTY_STORAGE: LocalDataReadResult = { status: "empty", document: null, raw: null };
 const WEEKDAYS = [
@@ -107,11 +135,11 @@ function ProfileSettings({
         <div className="income-weekday-options">
           {WEEKDAYS.map((day) => (
             <label key={day.value}>
-              <input
-                type="checkbox"
+              <Checkbox
+                id={`income-weekday-${day.value}`}
                 checked={profile.workDays.includes(day.value)}
-                onChange={(event) => {
-                  const workDays = event.target.checked
+                onCheckedChange={(checked) => {
+                  const workDays = checked === true
                     ? [...profile.workDays, day.value].sort((left, right) => left - right)
                     : profile.workDays.filter((current) => current !== day.value);
                   onChange(profileScheduleChanged(profile, { workDays }));
@@ -148,17 +176,14 @@ function ProfileSettings({
             </label>
             <label>
               <span>结束日期</span>
-              <select
-                aria-label={`第 ${index + 1} 个时段结束日期`}
-                value={period.endDayOffset}
-                onChange={(event) => updatePeriod(index, { endDayOffset: Number(event.target.value) as 0 | 1 })}
-              >
-                <option value={0}>当天</option>
-                <option value={1}>次日</option>
-              </select>
+              <Select value={String(period.endDayOffset)} onValueChange={(value) => updatePeriod(index, { endDayOffset: Number(value) as 0 | 1 })}>
+                <SelectTrigger aria-label={`第 ${index + 1} 个时段结束日期`}><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="0">当天</SelectItem><SelectItem value="1">次日</SelectItem></SelectContent>
+              </Select>
             </label>
-            <button
-              className="quiet-button income-remove-period"
+            <Button
+              variant="ghost"
+              className="income-remove-period"
               type="button"
               disabled={profile.periods.length <= 1}
               onClick={() => onChange(profileScheduleChanged(profile, {
@@ -166,18 +191,19 @@ function ProfileSettings({
               }))}
             >
               删除时段
-            </button>
+            </Button>
           </div>
         ))}
-        <button
-          className="secondary-button income-add-period"
+        <Button
+          variant="secondary"
+          className="income-add-period"
           type="button"
           onClick={() => onChange(profileScheduleChanged(profile, {
             periods: [...profile.periods, { start: "", end: "", endDayOffset: 0 }],
           }))}
         >
           添加工作时段
-        </button>
+        </Button>
       </fieldset>
 
       <fieldset className="income-exceptions">
@@ -186,40 +212,36 @@ function ProfileSettings({
         <div className="income-exception-form">
           <label>
             <span>日期</span>
-            <input aria-label="特殊日期" type="date" value={exceptionDate} onChange={(event) => setExceptionDate(event.target.value)} />
+            <Input aria-label="特殊日期" type="date" value={exceptionDate} onChange={(event) => setExceptionDate(event.target.value)} />
           </label>
           <label>
             <span>安排</span>
-            <select aria-label="特殊日期安排" value={exceptionKind} onChange={(event) => setExceptionKind(event.target.value as IncomeException)}>
-              <option value="rest">休息</option>
-              <option value="work">按平时时段工作</option>
-            </select>
+            <Select value={exceptionKind} onValueChange={(value) => setExceptionKind(value as IncomeException)}>
+              <SelectTrigger aria-label="特殊日期安排"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="rest">休息</SelectItem><SelectItem value="work">按平时时段工作</SelectItem></SelectContent>
+            </Select>
           </label>
-          <button className="secondary-button" type="button" disabled={!exceptionDate} onClick={() => {
+          <Button variant="secondary" type="button" disabled={!exceptionDate} onClick={() => {
             if (!exceptionDate) return;
             onChange(profileScheduleChanged(profile, {
               exceptions: { ...profile.exceptions, [exceptionDate]: exceptionKind },
             }));
             setExceptionDate("");
-          }}>添加日期</button>
+          }}>添加日期</Button>
         </div>
         {Object.entries(profile.exceptions).length > 0 ? (
           <ul className="income-exception-list">
             {Object.entries(profile.exceptions).sort(([left], [right]) => left.localeCompare(right)).map(([date, kind]) => (
               <li key={date}>
                 <time dateTime={date}>{date}</time>
-                <select
-                  aria-label={`${date} 的安排`}
-                  value={kind}
-                  onChange={(event) => onChange(profileScheduleChanged(profile, {
-                    exceptions: { ...profile.exceptions, [date]: event.target.value as IncomeException },
-                  }))}
-                >
-                  <option value="rest">休息</option>
-                  <option value="work">按平时时段工作</option>
-                </select>
-                <button
-                  className="quiet-button"
+                <Select value={kind} onValueChange={(value) => onChange(profileScheduleChanged(profile, {
+                  exceptions: { ...profile.exceptions, [date]: value as IncomeException },
+                }))}>
+                  <SelectTrigger aria-label={`${date} 的安排`}><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="rest">休息</SelectItem><SelectItem value="work">按平时时段工作</SelectItem></SelectContent>
+                </Select>
+                <Button
+                  variant="ghost"
                   type="button"
                   onClick={() => {
                     const exceptions = { ...profile.exceptions };
@@ -228,7 +250,7 @@ function ProfileSettings({
                   }}
                 >
                   删除
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
@@ -237,7 +259,7 @@ function ProfileSettings({
 
       <label className="field income-time-zone">
         <span>时区</span>
-        <input
+        <Input
           type="text"
           autoComplete="off"
           value={profile.timeZone}
@@ -255,6 +277,7 @@ function IncomeProfileForm({
   onSubmit,
   submitLabel,
   disabled = false,
+  busy = false,
   advancedDisclosure = true,
   issues = [],
   onCancel,
@@ -264,13 +287,17 @@ function IncomeProfileForm({
   readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly submitLabel: string;
   readonly disabled?: boolean;
+  readonly busy?: boolean;
   readonly advancedDisclosure?: boolean;
   readonly issues?: readonly IncomeProfileIssue[];
   readonly onCancel?: () => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const incomeIssue = issues.find((issue) => issue.field === "income");
+  const otherIssues = issues.filter((issue) => issue.field !== "income");
   const settings = <ProfileSettings profile={profile} onChange={onChange} />;
   return (
-    <form className="card income-form" onSubmit={onSubmit} noValidate>
+    <form className="income-form" onSubmit={onSubmit} noValidate aria-busy={busy} inert={busy}>
       <div className="section-heading">
         <div>
           <p className="eyebrow">基础信息</p>
@@ -279,11 +306,11 @@ function IncomeProfileForm({
         <p>只填这一项也能开始</p>
       </div>
 
-      <label className="field income-salary-field" htmlFor="income-monthly">
-        <span>每月到手收入</span>
+      <Field className="income-salary-field">
+        <FieldLabel htmlFor="income-monthly">每月到手收入</FieldLabel>
         <span className="income-money-input">
           <span aria-hidden="true">¥</span>
-          <input
+          <Input
             id="income-monthly"
             name="income"
             type="text"
@@ -291,34 +318,36 @@ function IncomeProfileForm({
             autoComplete="off"
             value={profile.income}
             onChange={(event) => onChange({ ...profile, income: event.target.value })}
-            aria-describedby="income-monthly-help"
+            aria-invalid={Boolean(incomeIssue)}
+            aria-describedby={incomeIssue ? "income-monthly-help income-monthly-error" : "income-monthly-help"}
           />
         </span>
-        <span id="income-monthly-help" className="field-hint">填写税后实际到手金额，最多保留两位小数。</span>
-      </label>
+        <FieldDescription id="income-monthly-help">填写税后实际到手金额，最多保留两位小数。</FieldDescription>
+        {incomeIssue ? <FieldError id="income-monthly-error">{validationMessage(incomeIssue)}</FieldError> : null}
+      </Field>
 
       <p className="income-default-summary">
         {profile.scheduleSource === "default" ? "默认按" : "当前按"}{weekdaySummary(profile.workDays)}，每天 {profile.periods.map((period) => `${period.start}–${period.end}${period.endDayOffset ? "（次日）" : ""}`).join("、") || "未设置时段"}（合计 {plannedHours(profile.periods)}），时区 {profile.timeZone} 估算。
       </p>
       <p className="income-local-notice">资料仅保存在此浏览器中；清除浏览器数据可能会丢失。保存失败时仍可临时使用。</p>
 
-      {advancedDisclosure ? (
-        <details className="income-advanced">
-          <summary>想按自己的情况调整？展开详细设置</summary>
+      {advancedDisclosure ? <Collapsible open={expanded} onOpenChange={setExpanded} className="income-advanced">
+        <CollapsibleTrigger asChild><Button type="button" variant="ghost" aria-expanded={expanded}>想按自己的情况调整？{expanded ? "收起详细设置" : "展开详细设置"}</Button></CollapsibleTrigger>
+        <CollapsibleContent>
           <p className="field-hint">不修改也可以直接开始；工作小时数会由所选时段自动计算。</p>
           {settings}
-        </details>
-      ) : settings}
+        </CollapsibleContent>
+      </Collapsible> : settings}
 
-      {issues.length > 0 ? (
+      {otherIssues.length > 0 ? (
         <ul className="income-validation" role="alert">
-          {issues.map((issue, index) => <li key={`${issue.field}-${issue.code}-${index}`}>{validationMessage(issue)}</li>)}
+          {otherIssues.map((issue, index) => <li key={`${issue.field}-${issue.code}-${index}`}>{validationMessage(issue)}</li>)}
         </ul>
       ) : null}
 
       <div className="income-form-actions">
-        <button className="primary-button" type="submit" disabled={disabled}>{submitLabel}</button>
-        {onCancel ? <button className="quiet-button" type="button" onClick={onCancel} disabled={disabled}>取消修改</button> : null}
+        <Button type="submit" disabled={disabled}>{submitLabel}</Button>
+        {onCancel ? <Button variant="ghost" type="button" onClick={onCancel} disabled={busy}>取消修改</Button> : null}
       </div>
     </form>
   );
@@ -485,34 +514,36 @@ function FavoriteCard({
   readonly disabled: boolean;
 }) {
   const { snapshot } = favorite;
+  const workTimeResult = snapshot.results.find((result) => result.id === "work-time-equivalent");
   return (
-    <article className="card income-favorite-card">
+    <article className="income-favorite-card">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">收藏于 {dateTimeDisplay(favorite.savedAt, snapshot.time_zone)}</p>
-          <h2>{snapshot.comparison_month} · {currencyDisplay(snapshot.inputs.purchase_amount)}</h2>
+          <p className="eyebrow">{snapshot.comparison_month} · 收藏于 {dateTimeDisplay(favorite.savedAt, snapshot.time_zone)}</p>
+          <h2>{snapshot.inputs.value_expectation || "一笔购买"}</h2>
         </div>
-        <span className="income-decision-label">{decisionLabel(snapshot)}</span>
+        <Badge variant="secondary" className="income-decision-label">{decisionLabel(snapshot)}</Badge>
       </div>
-      {snapshot.inputs.value_expectation ? <p>当时在意：{snapshot.inputs.value_expectation}</p> : null}
+      <p className="income-favorite-result"><span>当时工作时间等价</span><strong>{workTimeResult?.display ?? "资料不足"}</strong></p>
+      <p>当时金额 {currencyDisplay(snapshot.inputs.purchase_amount)} · 这是收藏时的结果，不会自动重算。</p>
       <details className="income-snapshot-details">
         <summary>查看当时的结果与依据</summary>
         <dl className="income-snapshot-results">
           {snapshot.results.map((result) => (
             <div key={result.id}>
               <dt>{result.label}</dt>
-              <dd>{result.display ?? `资料不足${result.reasons.length > 0 ? `：${result.reasons.join("、")}` : ""}`}</dd>
+              <dd>{result.display ?? "资料不足；当时缺少这项计算所需的条件。"}</dd>
             </div>
           ))}
         </dl>
         <p>当时收入 {currencyDisplay(snapshot.inputs.income)}；比较月份 {snapshot.comparison_month}；时区 {snapshot.time_zone}。</p>
         <p>{snapshot.inputs.work_time_basis.mode === "calendar" ? "按当月日历作息估算" : "使用当时选择的工作时间口径"}；规则版本 {snapshot.ruleset_version}。</p>
         <p>当时的决定依据：{snapshot.decision.rationale || "未填写"}</p>
+        <div className="income-form-actions">
+          <Button variant="secondary" type="button" disabled={disabled} onClick={() => onRecalculate(snapshot)}>用当前资料重新试算</Button>
+          <Button variant="destructive" type="button" disabled={disabled} onClick={() => onDelete(favorite)}>删除收藏</Button>
+        </div>
       </details>
-      <div className="income-form-actions">
-        <button className="secondary-button" type="button" disabled={disabled} onClick={() => onRecalculate(snapshot)}>重新试算</button>
-        <button className="quiet-button" type="button" disabled={disabled} onClick={() => onDelete(favorite)}>删除收藏</button>
-      </div>
     </article>
   );
 }
@@ -529,7 +560,9 @@ export function IncomeApp() {
   const [formIssues, setFormIssues] = useState<readonly IncomeProfileIssue[]>([]);
   const [conflict, setConflict] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<PendingConfirmation | null>(null);
   const [settingsDrafting, setSettingsDrafting] = useState(false);
+  const [basisOpen, setBasisOpen] = useState(false);
   const [purchaseInput, setPurchaseInput] = useState<DecisionInput | undefined>();
   const [purchaseContext, setPurchaseContext] = useState<{ comparisonMonth: string; timeZone: string } | null>(null);
   const [purchaseKey, setPurchaseKey] = useState(0);
@@ -537,6 +570,7 @@ export function IncomeApp() {
   const operationGenerationRef = useRef(0);
   const mountedRef = useRef(false);
   const settingsRef = useRef<HTMLDetailsElement>(null);
+  const settingsHeadingRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -604,6 +638,26 @@ export function IncomeApp() {
   );
   const expectedRevision = stored.status === "ready" ? stored.document.revision : null;
 
+  const requestConfirmation = (kind: PendingConfirmation["kind"], run: PendingConfirmation["run"]) => {
+    if (busy) return;
+    setPending({ kind, run, draft, raw: stored.raw, revision: expectedRevision });
+  };
+
+  const confirmPending = () => {
+    if (!pending) return;
+    setPending(null);
+    if (!mountedRef.current || busy || pending.draft !== draft || pending.revision !== expectedRevision) {
+      setNotice("确认期间资料已变化，操作已取消；当前编辑仍保留。请重新检查后再试。");
+      return;
+    }
+    if (pending.kind !== "reload" && (conflict || pending.raw !== readLocalData().raw)) {
+      setConflict(true);
+      setNotice("另一个页面保存了更新，操作已取消；当前编辑仍保留。请重新载入后再试。");
+      return;
+    }
+    void pending.run();
+  };
+
   const rememberWrite = (document: LocalDataDocument, raw: string) => {
     lastRawRef.current = raw;
     setStored({ status: "ready", document, raw });
@@ -634,28 +688,11 @@ export function IncomeApp() {
     setFormIssues([]);
   };
 
-  const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const validation = validateProfile({ ...draft, updatedAt: new Date().toISOString() });
-    if (!validation.ok) {
-      setFormIssues(validation.issues);
-      return;
-    }
-    if (conflict) {
-      setNotice("资料已在另一个页面更新。先重新载入，再保存修改。");
-      return;
-    }
-    if (stored.status === "invalid") {
-      setNotice("浏览器中的资料损坏或版本不支持；原内容仍保留。请导入有效备份后再保存。");
-      return;
-    }
-    const hasExistingData = profile !== null || stored.status === "ready";
-    if (hasExistingData && !window.confirm("保存后，今日和本月的估算会按新资料重新计算；已收藏的结果不会变化。继续保存吗？")) return;
-
+  const commitProfile = async (value: IncomeProfile) => {
     setBusy(true);
     const operation = ++operationGenerationRef.current;
     const content: LocalDataContent = {
-      profile: validation.value,
+      profile: value,
       favorites: stored.status === "ready" ? stored.document.favorites : [],
     };
     try {
@@ -672,8 +709,8 @@ export function IncomeApp() {
         setNotice("资料已保存在此浏览器。今日和本月估算已按新资料重算。");
       } else if (result.status === "unavailable") {
         if (profile === null) {
-          setProfile(validation.value);
-          setDraft(validation.value);
+          setProfile(value);
+          setDraft(value);
           setProfileSaved(false);
           setView("dashboard");
           setSettingsDrafting(false);
@@ -690,8 +727,8 @@ export function IncomeApp() {
     } catch {
       if (mountedRef.current && operation === operationGenerationRef.current) {
         if (profile === null) {
-          setProfile(validation.value);
-          setDraft(validation.value);
+          setProfile(value);
+          setDraft(value);
           setProfileSaved(false);
           setView("dashboard");
           setSettingsDrafting(false);
@@ -703,6 +740,26 @@ export function IncomeApp() {
     } finally {
       if (mountedRef.current && operation === operationGenerationRef.current) setBusy(false);
     }
+  };
+
+  const saveProfile = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const validation = validateProfile({ ...draft, updatedAt: new Date().toISOString() });
+    if (!validation.ok) {
+      setFormIssues(validation.issues);
+      return;
+    }
+    if (conflict) {
+      setNotice("资料已在另一个页面更新。先重新载入，再保存修改。");
+      return;
+    }
+    if (stored.status === "invalid") {
+      setNotice("浏览器中的资料损坏或版本不支持；原内容仍保留。请导入有效备份后再保存。");
+      return;
+    }
+    const hasExistingData = profile !== null || stored.status === "ready";
+    if (hasExistingData) requestConfirmation("save", () => commitProfile(validation.value));
+    else void commitProfile(validation.value);
   };
 
   const startPurchase = (initialInput?: DecisionInput, context?: { comparisonMonth: string; timeZone: string }) => {
@@ -739,8 +796,7 @@ export function IncomeApp() {
     }
   };
 
-  const removeFavorite = async (favorite: FavoriteSnapshot) => {
-    if (conflict || !window.confirm("删除这条收藏？基础资料和其他收藏不会受影响。")) return;
+  const deleteFavoriteNow = async (favorite: FavoriteSnapshot) => {
     setBusy(true);
     const operation = ++operationGenerationRef.current;
     try {
@@ -762,13 +818,12 @@ export function IncomeApp() {
     }
   };
 
-  const clearAll = async () => {
-    if (conflict) {
-      setNotice("另一个页面保存了更新。先重新载入，再清空资料。");
-      return;
-    }
-    if ((stored.status === "ready" || stored.status === "invalid")
-      && !window.confirm("将清空此浏览器中保存的基础资料和全部收藏。已下载的备份文件不会删除。确定清空吗？")) return;
+  const removeFavorite = (favorite: FavoriteSnapshot) => {
+    if (conflict) return;
+    requestConfirmation("delete", () => deleteFavoriteNow(favorite));
+  };
+
+  const clearAllNow = async () => {
     setBusy(true);
     const operation = ++operationGenerationRef.current;
     try {
@@ -798,6 +853,14 @@ export function IncomeApp() {
     }
   };
 
+  const clearAll = () => {
+    if (conflict) {
+      setNotice("另一个页面保存了更新。先重新载入，再清空资料。");
+      return;
+    }
+    requestConfirmation("clear", clearAllNow);
+  };
+
   const importBackup = async (event: ChangeEvent<HTMLInputElement>) => {
     const input = event.currentTarget;
     const file = input.files?.[0];
@@ -817,30 +880,39 @@ export function IncomeApp() {
         setNotice("另一个页面保存了更新。先重新载入，再导入备份。");
         return;
       }
-      if (!window.confirm("导入会整体替换此浏览器中保存的基础资料和收藏。文件内容只作为数据读取，不会执行。继续导入吗？")) return;
       const content: LocalDataContent = {
         profile: parsed.document.profile,
         favorites: parsed.document.favorites,
       };
-      const result = stored.status === "invalid"
-        ? await restoreInvalidLocalData(content, stored.raw)
-        : await restoreLocalData(content, expectedRevision);
-      if (!mountedRef.current || operation !== operationGenerationRef.current) return;
-      if (result.status === "saved") {
-        rememberWrite(result.document, result.raw);
-        setProfile(result.document.profile);
-        setDraft(result.document.profile ?? defaultProfile());
-        setProfileSaved(Boolean(result.document.profile));
-        setView(result.document.profile ? "dashboard" : "setup");
-        setPurchaseInput(undefined);
-        setPurchaseKey((current) => current + 1);
-        setNotice("备份已恢复；看板会按恢复的资料和当前时刻重新估算。");
-      } else if (result.status === "conflict") {
-        setConflict(true);
-        setNotice("另一个页面保存了更新，备份没有导入。请重新载入后再试。");
-      } else {
-        setNotice("备份没有导入；原有资料保持不变。");
-      }
+      requestConfirmation("restore", async () => {
+        setBusy(true);
+        const restoreOperation = ++operationGenerationRef.current;
+        try {
+          const result = stored.status === "invalid"
+            ? await restoreInvalidLocalData(content, stored.raw)
+            : await restoreLocalData(content, expectedRevision);
+          if (!mountedRef.current || restoreOperation !== operationGenerationRef.current) return;
+          if (result.status === "saved") {
+            rememberWrite(result.document, result.raw);
+            setProfile(result.document.profile);
+            setDraft(result.document.profile ?? defaultProfile());
+            setProfileSaved(Boolean(result.document.profile));
+            setView(result.document.profile ? "dashboard" : "setup");
+            setPurchaseInput(undefined);
+            setPurchaseKey((current) => current + 1);
+            setNotice("备份已恢复；看板会按恢复的资料和当前时刻重新估算。");
+          } else if (result.status === "conflict") {
+            setConflict(true);
+            setNotice("另一个页面保存了更新，备份没有导入。请重新载入后再试。");
+          } else {
+            setNotice("备份没有导入；原有资料保持不变。");
+          }
+        } catch {
+          if (mountedRef.current && restoreOperation === operationGenerationRef.current) setNotice("无法恢复这个文件；原有资料保持不变。");
+        } finally {
+          if (mountedRef.current && restoreOperation === operationGenerationRef.current) setBusy(false);
+        }
+      });
     } catch {
       if (mountedRef.current && operation === operationGenerationRef.current) setNotice("无法读取或恢复这个文件；原有资料保持不变。");
     } finally {
@@ -850,9 +922,10 @@ export function IncomeApp() {
   };
 
   const reloadChangedData = () => {
-    if (!window.confirm("重新载入会放弃当前尚未保存的编辑。继续吗？")) return;
-    applyReadResult(readLocalData());
-    setNotice("已重新载入浏览器中的最新资料。");
+    requestConfirmation("reload", () => {
+      applyReadResult(readLocalData());
+      setNotice("已重新载入浏览器中的最新资料。");
+    });
   };
 
   const exportBackup = () => {
@@ -913,13 +986,24 @@ export function IncomeApp() {
     setPurchaseKey((current) => current + 1);
   };
 
+  const openSettings = () => {
+    setView("dashboard");
+    window.requestAnimationFrame(() => {
+      if (!settingsRef.current) return;
+      settingsRef.current.open = true;
+      settingsRef.current.scrollIntoView({ block: "start" });
+      settingsHeadingRef.current?.focus();
+    });
+  };
+
   return (
     <>
       {view !== "purchase" ? <header className="app-shell topbar income-topbar">
         <a className="brand" href="/" onClick={(event) => { event.preventDefault(); setView(profile ? "dashboard" : "setup"); }}>值观</a>
         <nav aria-label="主导航" className="income-navigation">
-          {profile && view !== "dashboard" ? <button className="quiet-button" type="button" onClick={() => setView("dashboard")}>返回收入看板</button> : null}
-          {favorites.length > 0 && view !== "favorites" ? <button className="quiet-button" type="button" onClick={() => setView("favorites")}>查看收藏（{favorites.length}）</button> : null}
+          {profile && view !== "dashboard" ? <Button variant="ghost" type="button" onClick={() => setView("dashboard")}>返回首页</Button> : null}
+          {view !== "favorites" ? <Button variant="ghost" type="button" onClick={() => setView("favorites")}>收藏{favorites.length > 0 ? `（${favorites.length}）` : ""}</Button> : null}
+          {profile && view !== "setup" ? <Button variant="ghost" type="button" onClick={openSettings}><Settings2 aria-hidden="true" />设置</Button> : null}
         </nav>
       </header> : null}
 
@@ -938,19 +1022,19 @@ export function IncomeApp() {
         <main className="app-shell income-main">
           {view === "setup" ? (
             <>
-              <section className="intro income-intro">
+              <section className="intro income-intro income-setup-intro">
                 <p className="eyebrow">个人价值流</p>
                 <h1>先看见时间与收入</h1>
                 <p>填一次到手月收入，就能看到按平时作息估算的今日收入变化。没有购买计划也可以直接使用。</p>
               </section>
               {stored.status === "invalid" ? (
-                <section className="income-storage-warning" role="alert">
+                <Alert className="income-storage-warning" role="alert">
                   <h2>{stored.reason === "unsupported-version" ? "这份本地资料版本暂不支持" : "浏览器中的本地资料无法读取"}</h2>
                   <p>原内容仍保留，没有用默认值覆盖。可尝试导入之前下载的有效备份。</p>
-                </section>
+                </Alert>
               ) : null}
               {stored.status === "unavailable" ? (
-                <p className="income-storage-warning" role="status">当前浏览器存储不可用。可以临时使用，保存状态会明确显示。</p>
+                <Alert className="income-storage-warning" role="status">当前浏览器存储不可用。可以临时使用，保存状态会明确显示。</Alert>
               ) : null}
               <IncomeProfileForm
                 profile={draft}
@@ -958,22 +1042,23 @@ export function IncomeApp() {
                 onSubmit={saveProfile}
                 submitLabel={busy ? "正在保存…" : "保存并开始"}
                 disabled={!loaded || busy}
+                busy={busy}
                 issues={formIssues}
               />
-              <section className="card income-data-actions">
+              <section className="income-data-actions">
                 <h2>本地资料管理</h2>
                 <p>可导出备份，或导入之前保存的值观备份。导入会替换当前基础资料和收藏。</p>
                 <div className="income-form-actions">
-                  <button className="secondary-button" type="button" onClick={exportBackup} disabled={busy || stored.status !== "ready"}>导出备份</button>
+                  <Button variant="secondary" type="button" onClick={exportBackup} disabled={busy || stored.status !== "ready"}>导出备份</Button>
                   <label className="secondary-button income-file-button">
                     导入备份
                     <input type="file" accept="application/json,.json" onChange={importBackup} disabled={busy} />
                   </label>
-                  {stored.status === "ready" || stored.status === "invalid" ? <button className="quiet-button" type="button" onClick={clearAll} disabled={busy}>清空资料</button> : null}
+                  {stored.status === "ready" || stored.status === "invalid" || profile ? <Button variant="destructive" type="button" onClick={clearAll} disabled={busy}>清空资料</Button> : null}
                 </div>
               </section>
               {favorites.length > 0 ? (
-                <button className="secondary-button income-open-favorites" type="button" onClick={() => setView("favorites")}>查看已收藏的购买结果（{favorites.length}）</button>
+                <Button variant="secondary" className="income-open-favorites" type="button" onClick={() => setView("favorites")}>查看已收藏的购买结果（{favorites.length}）</Button>
               ) : null}
             </>
           ) : view === "favorites" ? (
@@ -983,6 +1068,10 @@ export function IncomeApp() {
                 <h1>购买收藏</h1>
                 <p>这里展示当时保存的金额、依据和决定，不会随当前资料变化而重算。</p>
               </div>
+              <div className="income-form-actions">
+                <Button variant="ghost" type="button" onClick={() => setView(profile ? "dashboard" : "setup")}>{profile ? "返回收入首页" : "返回基础设置"}</Button>
+                {favorites.length > 0 ? <Button variant="secondary" type="button" onClick={() => profile ? startPurchase() : setView("setup")}>{profile ? "算一笔购买" : "先填写收入资料"}</Button> : null}
+              </div>
               {favorites.length > 0 ? sortedFavorites.map((favorite) => (
                 <FavoriteCard
                   key={favorite.id}
@@ -991,65 +1080,50 @@ export function IncomeApp() {
                   onDelete={(value) => { void removeFavorite(value); }}
                   disabled={busy || conflict}
                 />
-              )) : <section className="card"><p>还没有收藏。完成一笔购买计算后，可以主动保存结果供以后查看。</p></section>}
+              )) : <Empty className="income-favorites-empty"><EmptyHeader><EmptyTitle>还没有收藏</EmptyTitle><EmptyDescription>完成一笔购买计算后，可以主动保存结果，之后再回来查看。</EmptyDescription></EmptyHeader><Button type="button" onClick={() => profile ? startPurchase() : setView("setup")}>{profile ? "算一笔购买" : "先填写收入资料"}</Button></Empty>}
             </section>
           ) : view === "dashboard" && profile ? (
             <>
-              <section className="intro income-intro">
-                <p className="eyebrow">按设定作息估算 · 非实际到账</p>
-                <h1>今日收入估算</h1>
-                <p>按本月计划工作时间分摊到手月收入。关闭页面后再次打开，会按当前时刻重新计算。</p>
-              </section>
-
-              {!profileSaved ? <p className="income-unsaved-warning" role="status">未保存，本次仅在当前页面临时使用；重新载入后可能无法恢复。</p> : null}
-              {conflict ? <section className="income-storage-warning" role="alert">
+              {!profileSaved ? <Alert className="income-unsaved-warning" role="status">未保存，本次仅在当前页面临时使用；重新载入后可能无法恢复。</Alert> : null}
+              {conflict ? <Alert className="income-storage-warning" role="alert">
                 <p>{notice ?? "另一个页面已经保存了更新；当前编辑仍保留。"}</p>
-                <button className="secondary-button" type="button" onClick={reloadChangedData} disabled={busy}>重新载入最新资料</button>
-              </section> : null}
+                <Button variant="secondary" type="button" onClick={reloadChangedData} disabled={busy}>重新载入最新资料</Button>
+              </Alert> : null}
 
-              <section className="card income-dashboard-card" aria-labelledby="income-today-heading">
-                <div className="income-dashboard-heading">
-                  <div>
-                    <p className="eyebrow">{calculation?.localDate ?? "当前日期"}</p>
-                    <h2 id="income-today-heading">今天按作息累计</h2>
+              <section className="income-dashboard-card" aria-labelledby="income-today-heading">
+                <p className="eyebrow income-dashboard-date">{calculation?.localDate ?? "当前日期"}</p>
+                <h1 id="income-today-heading">今日收入估算</h1>
+                <p className="income-today-value" aria-live="off">{calculation?.status === "available" ? currencyDisplay(calculation.todayIncome?.decimal) : "—"}</p>
+                <p className="income-estimate-note">按设定作息估算，非实际到账</p>
+                <Badge variant="secondary" className={`income-work-state income-work-state-${calculation?.workState ?? "insufficient-data"}`}>
+                  {calculation?.status !== "available" ? "依据不足" : calculation.workState === "working" ? "当前工作时段" : "休息时间 · 暂停增长"}
+                </Badge>
+                {calculation?.status === "available" ? <div className="income-supporting-metrics">
+                  <div><span>本月收入估算</span><strong aria-live="off">{currencyDisplay(calculation.monthIncome?.decimal)}</strong></div>
+                  <div><span>每秒收入估算</span><strong>{rateDisplay(calculation)}</strong></div>
+                </div> : <div className="income-insufficient" role="status">
+                  <p>{calculation ? calculationReasonText(calculation) ?? "当前资料无法可靠计算，请检查收入、时区、工作日或时段。" : "当前资料无法可靠计算，请检查设置。"}</p>
+                  <Button variant="secondary" type="button" onClick={openSettings}>检查收入与作息</Button>
+                </div>}
+                <Collapsible open={basisOpen} onOpenChange={setBasisOpen}>
+                  <div className="income-primary-actions">
+                    <CollapsibleTrigger asChild><Button variant="ghost" type="button" aria-expanded={basisOpen}>计算依据</Button></CollapsibleTrigger>
+                    <Button variant="outline" type="button" onClick={() => startPurchase()}>算一笔购买</Button>
                   </div>
-                  <span className={`income-work-state income-work-state-${calculation?.workState ?? "insufficient-data"}`}>
-                    {calculation?.workState === "working" ? "当前工作时段" : calculation?.workState === "resting" ? "休息时间 · 暂停增长" : "依据不足"}
-                  </span>
-                </div>
-                {calculation?.status === "available" ? (
-                  <>
-                    <p className="income-today-value" aria-live="off">{currencyDisplay(calculation.todayIncome?.decimal)}</p>
-                    <div className="income-supporting-metrics">
-                      <div><span>本月累计</span><strong aria-live="off">{currencyDisplay(calculation.monthIncome?.decimal)}</strong></div>
-                      <div><span>每秒估算</span><strong>{rateDisplay(calculation)}</strong></div>
-                    </div>
-                    <p className="income-progress-note">{calculation.workState === "working" ? "当前处于设定工作时段，金额按时间推算。" : "当前不在设定工作时段，估算暂时停止增长。"}</p>
-                  </>
-                ) : (
-                  <div className="income-insufficient" role="status">
-                    <p>当前资料无法可靠计算收入估算，请检查收入、时区、工作日或时段设置。</p>
-                  </div>
-                )}
-                <details className="income-calculation-details">
-                  <summary>计算依据</summary>
-                  <p>{calculation?.comparisonMonth ?? "当前月份"}：月收入按当月计划工作时间分摊，工作时段以 {profile.timeZone} 为准。</p>
-                  <p>每周安排：{weekdaySummary(profile.workDays)}；每天时段：{profile.periods.map((period) => `${period.start}–${period.end}${period.endDayOffset ? "（次日）" : ""}`).join("、") || "未设置"}。</p>
-                  <p>本月计划工作时间：{calendarHours(calculation?.totalWorkSeconds ?? null)}。每秒估算 = 到手月收入 ÷ 本月计划工作总秒数；今日与本月累计按已过去的计划工作秒数计算。</p>
-                  {calculation ? <p>当前提示：{calculationReasonText(calculation) ?? "计算正常。"}</p> : null}
-                </details>
+                  <CollapsibleContent className="income-calculation-details">
+                    <p>{calculation?.comparisonMonth ?? "当前月份"}：月收入按当月计划工作时间分摊，工作时段以 {profile.timeZone} 为准。</p>
+                    <p>每周安排：{weekdaySummary(profile.workDays)}；每天时段：{profile.periods.map((period) => `${period.start}–${period.end}${period.endDayOffset ? "（次日）" : ""}`).join("、") || "未设置"}。</p>
+                    <p>本月计划工作时间：{calendarHours(calculation?.totalWorkSeconds ?? null)}。每秒估算 = 到手月收入 ÷ 本月计划工作总秒数；今日与本月累计按已过去的计划工作秒数计算。</p>
+                    {calculation ? <p>当前提示：{calculationReasonText(calculation) ?? "计算正常。"}</p> : null}
+                  </CollapsibleContent>
+                </Collapsible>
                 <p className="income-updated-at">资料更新时间：<time dateTime={profile.updatedAt}>{dateTimeDisplay(profile.updatedAt, profile.timeZone)}</time></p>
               </section>
 
               {notice ? <p className="income-notice" role="status">{notice}</p> : null}
 
-              <div className="income-primary-actions">
-                <button className="primary-button" type="button" onClick={() => startPurchase()}>算一笔购买</button>
-                {favorites.length > 0 ? <button className="secondary-button" type="button" onClick={() => setView("favorites")}>查看收藏（{favorites.length}）</button> : null}
-              </div>
-
-              {view === "dashboard" && profile ? <details className="card income-settings" ref={settingsRef}>
-                <summary>调整收入与作息</summary>
+              <details className="income-settings" ref={settingsRef}>
+                <summary ref={settingsHeadingRef}>调整收入与作息</summary>
                 <p className="field-hint">保存修改前会说明重算范围；已收藏的结果保持原样。</p>
                 <IncomeProfileForm
                   profile={settingsDrafting ? draft : profile}
@@ -1057,6 +1131,7 @@ export function IncomeApp() {
                   onSubmit={saveProfile}
                   submitLabel={busy ? "正在保存…" : "保存修改并重算"}
                   disabled={busy || conflict}
+                  busy={busy}
                   advancedDisclosure={false}
                   issues={formIssues}
                   onCancel={() => {
@@ -1070,26 +1145,26 @@ export function IncomeApp() {
                   <h3>备份与删除</h3>
                   <p>备份仅包含当前已保存资料和收藏；临时内容不会写入备份。</p>
                   <div className="income-form-actions">
-                    <button className="secondary-button" type="button" onClick={exportBackup} disabled={busy || stored.status !== "ready"}>导出备份</button>
+                    <Button variant="secondary" type="button" onClick={exportBackup} disabled={busy || stored.status !== "ready"}>导出备份</Button>
                     <label className="secondary-button income-file-button">
                       导入备份
                       <input type="file" accept="application/json,.json" onChange={importBackup} disabled={busy} />
                     </label>
-                    <button className="quiet-button" type="button" onClick={() => { void clearAll(); }} disabled={busy}>清空本地资料</button>
+                    <Button variant="destructive" type="button" onClick={clearAll} disabled={busy}>清空本地资料</Button>
                   </div>
                 </section>
-              </details> : <section className="card income-settings-unavailable"><p>收入资料当前不可用。</p><button className="secondary-button" type="button" onClick={() => { setView("setup"); setProfile(null); }}>返回基础设置</button></section>}
+              </details>
             </>
           ) : null}
 
           {notice && view !== "dashboard" ? <p className="income-notice" role="status">{notice}</p> : null}
-          {conflict && view !== "dashboard" ? <section className="income-storage-warning" role="alert">
+          {conflict && view !== "dashboard" ? <Alert className="income-storage-warning" role="alert">
             <p>另一个页面保存了更新；当前输入仍保留。重新载入会放弃未保存编辑。</p>
-            <button className="secondary-button" type="button" onClick={reloadChangedData} disabled={busy}>重新载入最新资料</button>
-          </section> : null}
+            <Button variant="secondary" type="button" onClick={reloadChangedData} disabled={busy}>重新载入最新资料</Button>
+          </Alert> : null}
 
           {view === "favorites" ? <div className="income-backup-footer">
-            <button className="secondary-button" type="button" onClick={exportBackup} disabled={busy || stored.status !== "ready"}>导出备份</button>
+            <Button variant="secondary" type="button" onClick={exportBackup} disabled={busy || stored.status !== "ready"}>导出备份</Button>
             <label className="secondary-button income-file-button">导入备份<input type="file" accept="application/json,.json" onChange={importBackup} disabled={busy} /></label>
           </div> : null}
           <footer className="footer">
@@ -1098,6 +1173,20 @@ export function IncomeApp() {
           </footer>
         </main>
       )}
+      <AlertDialog open={pending !== null} onOpenChange={(open) => { if (!open) setPending(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{pending ? CONFIRM_COPY[pending.kind].title : ""}</AlertDialogTitle>
+            <AlertDialogDescription>{pending ? CONFIRM_COPY[pending.kind].description : ""}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消，保留当前内容</AlertDialogCancel>
+            <AlertDialogAction variant={pending?.kind === "delete" || pending?.kind === "clear" ? "destructive" : "default"} onClick={confirmPending}>
+              {pending ? CONFIRM_COPY[pending.kind].action : "继续"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

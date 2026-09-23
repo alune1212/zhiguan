@@ -1,0 +1,1071 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="值观收入看板的静态响应式概念稿，包含首次使用、首页与关键状态。"
+    />
+    <title>值观 · 前端概念稿</title>
+    <style>
+      :root {
+        --background: oklch(0.97071 0.00265 286.35);
+        --foreground: oklch(0.23158 0.00381 286.10);
+        --card: oklch(1 0 0);
+        --card-foreground: var(--foreground);
+        --popover: var(--card);
+        --popover-foreground: var(--foreground);
+        --primary: oklch(0.52197 0.17709 255.83);
+        --primary-foreground: var(--card);
+        --primary-hover: oklch(0.48021 0.16048 255.42);
+        --primary-pressed: oklch(0.43523 0.14467 255.27);
+        --secondary: oklch(0.93243 0.00670 286.27);
+        --secondary-foreground: var(--foreground);
+        --muted: var(--secondary);
+        --muted-foreground: oklch(0.48792 0.01107 285.98);
+        --accent: oklch(0.96091 0.01878 255.53);
+        --accent-foreground: var(--foreground);
+        --destructive: oklch(0.50034 0.18205 29.51);
+        --destructive-foreground: var(--card);
+        --border: oklch(0.86524 0.00683 286.26);
+        --input: oklch(0.62166 0.00742 286.18);
+        --ring: var(--primary);
+        --font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        --radius: 0.75rem;
+        --radius-card: 1.125rem;
+        --radius-pill: 9999px;
+        --space-xs: 0.25rem;
+        --space-sm: 0.5rem;
+        --space-md: 0.75rem;
+        --space-lg: 1rem;
+        --space-xl: 1.5rem;
+        --space-2xl: 2rem;
+        --space-3xl: 3rem;
+        --space-4xl: 4rem;
+        --text-caption: 0.875rem;
+        --text-body: 1rem;
+        --text-section: 1.25rem;
+        --text-title: clamp(1.5rem, 3vw, 2rem);
+        --text-income: clamp(2.5rem, 6vw, 5rem);
+        --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+        --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+        --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+        --dur-fast: 120ms;
+        --dur-base: 180ms;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        color-scheme: light;
+        overflow-x: clip;
+        scroll-behavior: smooth;
+      }
+
+      body {
+        min-width: 320px;
+        margin: 0;
+        overflow-x: clip;
+        background: var(--background);
+        color: var(--foreground);
+        font-family: var(--font-ui);
+        font-size: var(--text-body);
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      button {
+        min-height: 44px;
+        border: 0;
+        border-radius: var(--radius-pill);
+        cursor: default;
+      }
+
+      button:focus-visible,
+      input:focus-visible,
+      a:focus-visible {
+        outline: 2px solid var(--ring);
+        outline-offset: 2px;
+      }
+
+      a {
+        color: var(--primary);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 3px;
+      }
+
+      .gallery {
+        width: min(100%, 1160px);
+        margin-inline: auto;
+        padding: 48px 28px 64px;
+      }
+
+      .gallery-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 36px;
+      }
+
+      .eyebrow,
+      .concept-number,
+      .synthetic-tag {
+        color: var(--muted-foreground);
+        font-size: var(--text-caption);
+        font-weight: 500;
+      }
+
+      .eyebrow {
+        margin: 0 0 8px;
+        letter-spacing: 0.02em;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        margin-bottom: 8px;
+        font-size: var(--text-title);
+        font-weight: 600;
+        line-height: 1.25;
+      }
+
+      .gallery-intro {
+        max-width: 660px;
+        margin-bottom: 0;
+        color: var(--muted-foreground);
+      }
+
+      .synthetic-tag {
+        flex: none;
+        padding: 7px 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-pill);
+        background: var(--card);
+        color: var(--foreground);
+      }
+
+      .concept-list {
+        display: grid;
+        gap: 32px;
+      }
+
+      .concept {
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);
+        background: var(--card);
+      }
+
+      .concept-heading {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 22px 28px 0;
+      }
+
+      .concept-number {
+        flex: none;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .concept-heading h2 {
+        margin-bottom: 4px;
+        font-size: var(--text-section);
+        font-weight: 600;
+        line-height: 1.35;
+      }
+
+      .concept-summary {
+        margin: 0;
+        padding: 0 28px;
+        color: var(--muted-foreground);
+        font-size: var(--text-caption);
+      }
+
+      .screen {
+        min-height: 300px;
+        margin: 20px 12px 12px;
+        padding: 0 32px 36px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);
+        background: var(--card);
+      }
+
+      .app-header {
+        display: flex;
+        min-height: 68px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .wordmark {
+        color: var(--foreground);
+        font-size: 1rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        text-decoration: none;
+      }
+
+      .app-nav,
+      .button-row,
+      .setting-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .button-ghost,
+      .button-outline,
+      .button-primary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 18px;
+        font-size: var(--text-caption);
+        font-weight: 500;
+        white-space: nowrap;
+      }
+
+      .button-ghost {
+        background: transparent;
+        color: var(--foreground);
+      }
+
+      .button-outline {
+        border: 1px solid var(--input);
+        background: var(--card);
+        color: var(--foreground);
+      }
+
+      .button-primary {
+        background: var(--primary);
+        color: var(--primary-foreground);
+      }
+
+      .button-primary:hover {
+        background: var(--primary-hover);
+      }
+
+      .button-primary:active {
+        background: var(--primary-pressed);
+      }
+
+      .app-content {
+        width: min(100%, 900px);
+        margin-inline: auto;
+      }
+
+      .setup-content {
+        width: min(100%, 510px);
+        margin: 52px auto 0;
+      }
+
+      .setup-content h3,
+      .settings-title {
+        margin-bottom: 8px;
+        font-size: var(--text-title);
+        font-weight: 600;
+        line-height: 1.35;
+      }
+
+      .setup-copy,
+      .field-help,
+      .local-note,
+      .estimate-note,
+      .settings-copy {
+        color: var(--muted-foreground);
+      }
+
+      .setup-copy {
+        margin-bottom: 28px;
+      }
+
+      .field {
+        display: grid;
+        gap: 8px;
+      }
+
+      .field label,
+      .field-label {
+        font-size: var(--text-body);
+        font-weight: 500;
+      }
+
+      .input {
+        width: 100%;
+        min-height: 48px;
+        padding: 10px 14px;
+        border: 1px solid var(--input);
+        border-radius: var(--radius);
+        background: var(--card);
+        color: var(--foreground);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .input::placeholder {
+        color: var(--muted-foreground);
+        opacity: 1;
+      }
+
+      .field-help {
+        margin: 0;
+        font-size: var(--text-caption);
+      }
+
+      .schedule-note {
+        margin: 24px 0;
+        padding-top: 20px;
+        border-top: 1px solid var(--border);
+      }
+
+      .schedule-note strong {
+        display: block;
+        margin-bottom: 4px;
+        font-weight: 500;
+      }
+
+      .schedule-note p,
+      .local-note {
+        margin-bottom: 0;
+        color: var(--muted-foreground);
+        font-size: var(--text-caption);
+      }
+
+      .local-note {
+        margin-top: 16px;
+      }
+
+      .setup-actions {
+        flex-wrap: wrap;
+      }
+
+      .dashboard-content {
+        padding-top: 38px;
+      }
+
+      .hero {
+        text-align: center;
+      }
+
+      .hero-date {
+        margin-bottom: 10px;
+        color: var(--muted-foreground);
+        font-size: var(--text-caption);
+      }
+
+      .hero h3 {
+        margin-bottom: 12px;
+        font-size: var(--text-section);
+        font-weight: 500;
+      }
+
+      .hero-amount {
+        margin: 0;
+        font-size: var(--text-income);
+        font-weight: 600;
+        line-height: 1.1;
+        letter-spacing: 0;
+        font-variant-numeric: tabular-nums lining-nums;
+        white-space: nowrap;
+      }
+
+      .amount-unit {
+        margin-right: 0.1em;
+        font-size: 0.62em;
+        font-weight: 500;
+      }
+
+      .estimate-note {
+        margin: 12px 0 0;
+        font-size: var(--text-caption);
+      }
+
+      .work-state {
+        display: inline-flex;
+        min-height: 32px;
+        align-items: center;
+        margin-top: 18px;
+        padding: 4px 12px;
+        border-radius: var(--radius-pill);
+        background: var(--secondary);
+        color: var(--secondary-foreground);
+        font-size: var(--text-caption);
+      }
+
+      .metric-group {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        max-width: 640px;
+        margin: 34px auto 0;
+        border-top: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
+      }
+
+      .metric {
+        min-width: 0;
+        padding: 18px 24px;
+      }
+
+      .metric + .metric {
+        border-left: 1px solid var(--border);
+      }
+
+      .metric-label {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--muted-foreground);
+        font-size: var(--text-caption);
+      }
+
+      .metric-value {
+        display: block;
+        font-size: clamp(1.125rem, 2vw, 1.5rem);
+        font-weight: 600;
+        line-height: 1.35;
+        font-variant-numeric: tabular-nums lining-nums;
+        white-space: nowrap;
+      }
+
+      .metric-unit {
+        font-size: 0.78em;
+        font-weight: 400;
+      }
+
+      .dashboard-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 20px;
+      }
+
+      .text-action {
+        display: inline-flex;
+        min-height: 44px;
+        align-items: center;
+        padding: 0 14px;
+        border-radius: var(--radius-pill);
+        color: var(--foreground);
+        font-size: var(--text-caption);
+        text-decoration: none;
+      }
+
+      .text-action::after {
+        content: "⌄";
+        margin-left: 8px;
+        color: var(--muted-foreground);
+      }
+
+      .buy-action::after {
+        content: "↗";
+      }
+
+      .detail-line {
+        max-width: 640px;
+        margin: 16px auto 0;
+        padding-top: 16px;
+        border-top: 1px solid var(--border);
+        color: var(--muted-foreground);
+        font-size: var(--text-caption);
+      }
+
+      .detail-line summary {
+        width: fit-content;
+        min-height: 44px;
+        align-content: center;
+        color: var(--foreground);
+        cursor: default;
+      }
+
+      .detail-copy {
+        max-width: 640px;
+        margin: 8px auto 0;
+        color: var(--muted-foreground);
+        font-size: var(--text-caption);
+      }
+
+      .settings-block {
+        max-width: 780px;
+        margin: 28px auto 0;
+        padding-top: 28px;
+        border-top: 1px solid var(--border);
+      }
+
+      @media (max-width: 600px) {
+        .setup-actions {
+          align-items: stretch;
+        }
+      }
+
+      .settings-heading {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 24px;
+      }
+
+      .settings-title {
+        margin-bottom: 4px;
+        font-size: var(--text-section);
+      }
+
+      .settings-copy {
+        margin: 0;
+        font-size: var(--text-caption);
+      }
+
+      .settings-fields {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 24px;
+      }
+
+      .schedule-fields {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .workdays {
+        grid-column: 1 / -1;
+        padding-top: 18px;
+        border-top: 1px solid var(--border);
+      }
+
+      .day-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        margin-top: 10px;
+        color: var(--foreground);
+        font-size: var(--text-caption);
+      }
+
+      .day-list span::before {
+        content: "✓";
+        margin-right: 7px;
+        color: var(--muted-foreground);
+      }
+
+      .recalc-note {
+        margin: 24px 0;
+        padding: 14px 16px;
+        border-radius: var(--radius);
+        background: var(--muted);
+        color: var(--muted-foreground);
+        font-size: var(--text-caption);
+      }
+
+      .setting-actions {
+        justify-content: flex-end;
+      }
+
+      .unsaved-settings .setting-actions {
+        margin-top: 20px;
+      }
+
+      .insufficient-message {
+        max-width: 570px;
+        margin: 14px auto 0;
+        color: var(--muted-foreground);
+        font-size: var(--text-body);
+      }
+
+      .insufficient-message strong {
+        color: var(--foreground);
+        font-weight: 500;
+      }
+
+      .insufficient-action {
+        margin-top: 24px;
+      }
+
+      .alert {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        margin: 20px auto 0;
+        padding: 14px 16px;
+        border: 1px solid var(--input);
+        border-radius: var(--radius);
+        background: var(--card);
+        color: var(--foreground);
+        font-size: var(--text-caption);
+      }
+
+      .alert-mark {
+        display: inline-grid;
+        width: 22px;
+        height: 22px;
+        flex: none;
+        place-items: center;
+        border: 1px solid var(--input);
+        border-radius: var(--radius-pill);
+        font-weight: 600;
+      }
+
+      .alert strong {
+        display: block;
+        margin-bottom: 2px;
+        font-weight: 600;
+      }
+
+      .alert p {
+        margin-bottom: 0;
+        color: var(--muted-foreground);
+      }
+
+      .unsaved-settings {
+        max-width: 780px;
+        margin: 28px auto 0;
+        padding-top: 24px;
+        border-top: 1px solid var(--border);
+      }
+
+      .unsaved-settings .field {
+        max-width: 360px;
+      }
+
+      .unsaved-settings .field-help {
+        margin-top: 2px;
+      }
+
+      .review-note {
+        margin-top: 40px;
+        padding: 20px 24px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-card);
+        background: var(--card);
+      }
+
+      .review-note h2 {
+        margin-bottom: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+      }
+
+      .review-note p {
+        margin-bottom: 0;
+        color: var(--muted-foreground);
+        font-size: var(--text-caption);
+      }
+
+      .review-note p + p {
+        margin-top: 8px;
+      }
+
+      @media (max-width: 600px) {
+        .gallery {
+          padding: 28px 16px 40px;
+        }
+
+        .gallery-header {
+          display: block;
+          margin-bottom: 24px;
+        }
+
+        .synthetic-tag {
+          display: inline-flex;
+          margin-top: 16px;
+        }
+
+        .concept-list {
+          gap: 20px;
+        }
+
+        .concept {
+          border-radius: var(--radius);
+        }
+
+        .concept-heading {
+          gap: 8px;
+          padding: 18px 16px 0;
+        }
+
+        .concept-summary {
+          padding-inline: 16px;
+        }
+
+        .screen {
+          min-height: 280px;
+          margin: 16px 8px 8px;
+          padding: 0 16px 24px;
+          border-radius: var(--radius);
+        }
+
+        .app-header {
+          min-height: 60px;
+        }
+
+        .app-nav {
+          gap: 0;
+        }
+
+        .button-ghost {
+          padding-inline: 12px;
+        }
+
+        .button-outline,
+        .button-primary {
+          padding-inline: 16px;
+        }
+
+        .setup-content {
+          margin-top: 34px;
+        }
+
+        .dashboard-content {
+          padding-top: 32px;
+        }
+
+        .hero-amount {
+          font-size: clamp(2.5rem, 11vw, 3rem);
+        }
+
+        .metric-group {
+          margin-top: 28px;
+        }
+
+        .metric {
+          padding: 16px 10px;
+        }
+
+        .metric-value {
+          font-size: clamp(1rem, 4.5vw, 1.25rem);
+        }
+
+        .dashboard-actions {
+          gap: 0;
+        }
+
+        .text-action {
+          padding-inline: 10px;
+        }
+
+        .settings-heading {
+          display: block;
+          margin-bottom: 20px;
+        }
+
+        .settings-fields,
+        .schedule-fields {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .workdays {
+          grid-column: auto;
+        }
+
+        .setting-actions {
+          justify-content: stretch;
+        }
+
+        .setting-actions button {
+          flex: 1;
+        }
+
+        .review-note {
+          margin-top: 24px;
+          padding: 18px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="gallery" id="top">
+      <header class="gallery-header">
+        <div>
+          <p class="eyebrow">值观 · 静态概念稿</p>
+          <h1>先看见时间与收入</h1>
+          <p class="gallery-intro">
+            从首次填写到日常查看，再到设置与异常反馈。所有示例金额和日期均为合成数据；页面只用于审阅层级与布局，不包含真实计算或保存功能。
+          </p>
+        </div>
+        <span class="synthetic-tag">合成数据 · 非实际记录</span>
+      </header>
+
+      <div class="concept-list">
+        <article class="concept" aria-labelledby="concept-first-title">
+          <header class="concept-heading">
+            <span class="concept-number">01</span>
+            <h2 id="concept-first-title">首次使用</h2>
+          </header>
+          <p class="concept-summary">一个必填收入，可见默认作息；保存后开始查看估算。</p>
+          <section class="screen" aria-label="首次设置概念稿">
+            <header class="app-header">
+              <a class="wordmark" href="#top" aria-label="值观首页">值观</a>
+            </header>
+            <div class="setup-content">
+              <p class="eyebrow">开始</p>
+              <h3>先看见时间与收入</h3>
+              <p class="setup-copy">
+                填写每月到手收入，就可以查看按计划作息估算的今日收入。
+              </p>
+              <div class="field">
+                <label for="first-income">每月到手收入（元）</label>
+                <input
+                  class="input"
+                  id="first-income"
+                  type="text"
+                  inputmode="decimal"
+                  placeholder="例如 18,000"
+                  aria-describedby="first-income-help"
+                />
+                <p class="field-help" id="first-income-help">
+                  金额为合成示例；实际使用时由你填写。
+                </p>
+              </div>
+              <div class="schedule-note">
+                <strong>默认作息 · 可修改</strong>
+                <p>按双休、工作日 09:00–12:00 与 13:00–18:00 估算</p>
+              </div>
+              <div class="button-row setup-actions">
+                <button class="button-primary" type="button">保存并开始</button>
+                <button class="button-ghost" type="button">从备份恢复</button>
+              </div>
+              <p class="local-note">
+                仅保存在此浏览器，清除浏览器数据可能丢失。也可以从备份恢复。
+              </p>
+            </div>
+          </section>
+        </article>
+
+        <article class="concept" aria-labelledby="concept-home-title">
+          <header class="concept-heading">
+            <span class="concept-number">02</span>
+            <h2 id="concept-home-title">正常收入首页</h2>
+          </header>
+          <p class="concept-summary">今日估算居中，辅助数字成组；收藏与设置在顶栏，依据与购买在主数字下方。</p>
+          <section class="screen" aria-label="收入首页概念稿">
+            <header class="app-header">
+              <a class="wordmark" href="#top">值观</a>
+              <nav class="app-nav" aria-label="页面操作">
+                <button class="button-ghost" type="button">收藏</button>
+                <button class="button-ghost" type="button">设置</button>
+              </nav>
+            </header>
+            <div class="app-content dashboard-content">
+              <section class="hero" aria-labelledby="home-estimate-title">
+                <p class="hero-date">2026 年 9 月 23 日 · 合成日期</p>
+                <h3 id="home-estimate-title">今日收入估算</h3>
+                <p class="hero-amount"><span class="amount-unit">¥</span>428.16</p>
+                <p class="estimate-note">按设定作息估算，非实际到账</p>
+                <span class="work-state">当前工作时段</span>
+              </section>
+              <section class="metric-group" aria-label="辅助收入估算">
+                <div class="metric">
+                  <span class="metric-label">本月收入估算</span>
+                  <span class="metric-value"><span class="metric-unit">¥</span>12,480.00</span>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">每秒收入估算</span>
+                  <span class="metric-value">0.0342<span class="metric-unit"> 元/秒</span></span>
+                </div>
+              </section>
+              <nav class="dashboard-actions" aria-label="查看依据或继续">
+                <a class="text-action" href="#basis">计算依据</a>
+                <span class="text-action buy-action">算一笔购买</span>
+              </nav>
+              <details class="detail-line" id="basis">
+                <summary>本月按当前资料估算</summary>
+                <p class="detail-copy">
+                  示例口径：合成月收入 18,000 元，按设置时区、本月计划工作日与工作时段分摊；结果状态为估算。
+                </p>
+              </details>
+            </div>
+          </section>
+        </article>
+
+        <article class="concept" aria-labelledby="concept-settings-title">
+          <header class="concept-heading">
+            <span class="concept-number">03</span>
+            <h2 id="concept-settings-title">设置展开</h2>
+          </header>
+          <p class="concept-summary">沿首页向下展开编辑；进入设置不改值，主动保存后才按新资料重算。</p>
+          <section class="screen" aria-label="收入首页及展开的设置概念稿">
+            <header class="app-header">
+              <a class="wordmark" href="#top">值观</a>
+              <nav class="app-nav" aria-label="页面操作">
+                <button class="button-ghost" type="button">收藏</button>
+                <button class="button-ghost" type="button" aria-expanded="true">设置</button>
+              </nav>
+            </header>
+            <div class="app-content dashboard-content">
+              <section class="hero" aria-labelledby="settings-estimate-title">
+                <p class="hero-date">2026 年 9 月 23 日 · 合成日期</p>
+                <h3 id="settings-estimate-title">今日收入估算</h3>
+                <p class="hero-amount"><span class="amount-unit">¥</span>428.16</p>
+                <p class="estimate-note">按设定作息估算，非实际到账 · 合成数据</p>
+                <span class="work-state">当前工作时段</span>
+              </section>
+              <section class="metric-group" aria-label="辅助收入估算">
+                <div class="metric">
+                  <span class="metric-label">本月收入估算</span>
+                  <span class="metric-value"><span class="metric-unit">¥</span>12,480.00</span>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">每秒收入估算</span>
+                  <span class="metric-value">0.0342<span class="metric-unit"> 元/秒</span></span>
+                </div>
+              </section>
+              <nav class="dashboard-actions" aria-label="查看依据或继续">
+                <a class="text-action" href="#basis">计算依据</a>
+                <span class="text-action buy-action">算一笔购买</span>
+              </nav>
+              <section class="settings-block" aria-labelledby="settings-form-title">
+                <div class="settings-heading">
+                  <div>
+                    <h3 class="settings-title" id="settings-form-title">收入与作息</h3>
+                    <p class="settings-copy">进入设置不会更改当前资料。</p>
+                  </div>
+                </div>
+                <div class="settings-fields">
+                  <div class="field">
+                    <label for="settings-income">每月到手收入（元）</label>
+                    <input class="input" id="settings-income" type="text" value="18,000" readonly />
+                  </div>
+                  <div class="schedule-fields">
+                    <div class="field">
+                      <span class="field-label">上午</span>
+                      <input class="input" type="text" value="09:00 – 12:00" readonly aria-label="上午工作时段" />
+                    </div>
+                    <div class="field">
+                      <span class="field-label">下午</span>
+                      <input class="input" type="text" value="13:00 – 18:00" readonly aria-label="下午工作时段" />
+                    </div>
+                  </div>
+                  <div class="workdays">
+                    <span class="field-label">每周工作日</span>
+                    <div class="day-list" aria-label="周一至周五工作">
+                      <span>周一</span><span>周二</span><span>周三</span><span>周四</span><span>周五</span>
+                    </div>
+                  </div>
+                </div>
+                <p class="recalc-note">保存后，今日和本月估算将按新资料重新计算。</p>
+                <div class="setting-actions">
+                  <button class="button-outline" type="button">取消</button>
+                  <button class="button-primary" type="button">保存设置</button>
+                </div>
+              </section>
+            </div>
+          </section>
+        </article>
+
+        <article class="concept" aria-labelledby="concept-insufficient-title">
+          <header class="concept-heading">
+            <span class="concept-number">04</span>
+            <h2 id="concept-insufficient-title">数据不足</h2>
+          </header>
+          <p class="concept-summary">主数字位显示破折号，说明缺少什么并提供修正入口，不以零或旧结果填补。</p>
+          <section class="screen" aria-label="收入数据不足概念稿">
+            <header class="app-header">
+              <a class="wordmark" href="#top">值观</a>
+              <nav class="app-nav" aria-label="页面操作">
+                <button class="button-ghost" type="button">收藏</button>
+                <button class="button-ghost" type="button">设置</button>
+              </nav>
+            </header>
+            <div class="app-content dashboard-content">
+              <section class="hero" aria-labelledby="missing-estimate-title">
+                <p class="hero-date">2026 年 9 月 23 日 · 合成日期</p>
+                <h3 id="missing-estimate-title">今日收入估算</h3>
+                <p class="hero-amount" aria-label="数据不足">—</p>
+                <span class="work-state">数据不足</span>
+                <p class="insufficient-message">
+                  <strong>还没有有效的每月到手收入。</strong><br />
+                  填写收入后，即可按计划作息估算今日与本月收入。
+                </p>
+                <button class="button-primary insufficient-action" type="button">完善收入设置</button>
+              </section>
+            </div>
+          </section>
+        </article>
+
+        <article class="concept" aria-labelledby="concept-unsaved-title">
+          <header class="concept-heading">
+            <span class="concept-number">05</span>
+            <h2 id="concept-unsaved-title">未保存</h2>
+          </header>
+          <p class="concept-summary">保存失败提示放在主内容前，保留当前输入，并明确本次只能临时使用。</p>
+          <section class="screen" aria-label="收入资料未保存概念稿">
+            <header class="app-header">
+              <a class="wordmark" href="#top">值观</a>
+              <nav class="app-nav" aria-label="页面操作">
+                <button class="button-ghost" type="button">收藏</button>
+                <button class="button-ghost" type="button" aria-expanded="true">设置</button>
+              </nav>
+            </header>
+            <div class="app-content">
+              <div class="alert" role="alert">
+                <span class="alert-mark" aria-hidden="true">!</span>
+                <div>
+                  <strong>未保存，本次可临时使用</strong>
+                  <p>当前输入仍保留在本页；关闭页面后，未保存的修改不会保留。</p>
+                </div>
+              </div>
+              <section class="hero dashboard-content" aria-labelledby="unsaved-estimate-title">
+                <p class="hero-date">2026 年 9 月 23 日 · 合成日期</p>
+                <h3 id="unsaved-estimate-title">今日收入估算</h3>
+                <p class="hero-amount"><span class="amount-unit">¥</span>432.08</p>
+                <p class="estimate-note">按本页当前输入估算，非实际到账 · 合成数据</p>
+                <span class="work-state">当前工作时段</span>
+              </section>
+              <section class="unsaved-settings" aria-labelledby="unsaved-form-title">
+                <h3 class="settings-title" id="unsaved-form-title">收入与作息</h3>
+                <div class="field">
+                  <label for="unsaved-income">每月到手收入（元）</label>
+                  <input class="input" id="unsaved-income" type="text" value="18,500" readonly />
+                  <p class="field-help">此值尚未写入浏览器资料。</p>
+                </div>
+                <div class="setting-actions">
+                  <button class="button-outline" type="button">取消</button>
+                  <button class="button-primary" type="button">重试保存</button>
+                </div>
+              </section>
+            </div>
+          </section>
+        </article>
+      </div>
+
+      <aside class="review-note" aria-labelledby="review-title">
+        <h2 id="review-title">审阅记录 · 对照 DESIGN.md</h2>
+        <p>
+          已核对：浅灰/白色表面、系统字体与单一蓝色操作色；主金额开放居中，辅助数字成组，细节左对齐；收藏与设置在顶栏，计算依据与购买入口在主数字下方；手机布局单列，桌面增加留白；金额和日期标为合成示例；数据不足与未保存均有文字说明和恢复入口。
+        </p>
+        <p>
+          这是静态概念稿。此处仅记录结构与主题基线核对，未验证浏览器运行、实际交互、全尺寸视觉、对比度测量或用户验收。
+        </p>
+      </aside>
+    </main>
+  </body>
+</html>

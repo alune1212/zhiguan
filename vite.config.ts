@@ -1,3 +1,5 @@
+import { fileURLToPath, URL } from "node:url";
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
@@ -14,7 +16,8 @@ export const PREVIEW_HEADERS: Record<string, string> = {
 
 export default defineConfig({
   base: "./",
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
+  resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   server: {
     proxy: { "/api": { target: "http://127.0.0.1:4174", changeOrigin: false } },
   },

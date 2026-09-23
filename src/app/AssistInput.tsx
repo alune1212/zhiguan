@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import type { DecisionInput, NumericField } from "../domain/calculation";
 import {
   ASSIST_FIELD_NAMES,
@@ -85,6 +91,13 @@ const FIELD_LABELS: Readonly<Record<AssistFieldName, string>> = {
   fixedExpenses: "每月固定支出",
   fixedCostCoverage: "固定支出范围",
   purchaseIncluded: "本月是否付款",
+};
+
+const SUMMARY_OPTIONS: Partial<Record<AssistFieldName, readonly (readonly [string, string])[]>> = {
+  taxBasis: [["after-tax", "税后（到手）"], ["before-tax", "税前"]],
+  workTimeMode: [["custom", "按每周作息估算"], ["monthly", "直接填每月工时"]],
+  fixedCostCoverage: [["complete", "包含全部"], ["partial", "只包含一部分"], ["unknown", "不确定"]],
+  purchaseIncluded: [["included", "本月付款"], ["excluded", "不在本月付款"]],
 };
 
 const MONEY_FIELD_LABELS: Readonly<Record<AssistMoneyFieldName, string>> = {
@@ -464,7 +477,7 @@ export function AssistInput({
     return (
       <section className="assist-return" aria-label="对话输入">
         <p>价格可以直接填写；想用一句话补充时再打开对话。不会自动发送内容。</p>
-        <button className="secondary-button" type="button" onClick={changeModeAndResume}>用一句话补充</button>
+        <Button variant="outline" type="button" onClick={changeModeAndResume}>用一句话补充</Button>
       </section>
     );
   }
@@ -483,9 +496,9 @@ export function AssistInput({
         <div>
           <p className="eyebrow">少填一点</p>
           <h2 id="assist-title">先用一句话说说这次购买</h2>
-          <p className="assist-lead">Jev 会帮你整理收入、价格和工作时间；你可以继续补充，也可以直接改摘要。</p>
+          <p className="assist-lead">发送后会整理价格、收入和作息；你可以继续补充，也可以直接改摘要。</p>
         </div>
-        <button className="quiet-button" type="button" onClick={switchToManual}>手动填写</button>
+        <Button variant="ghost" type="button" onClick={switchToManual}>手动填写</Button>
       </div>
 
       <p className="assist-disclosure">点击发送后，当前回答、问题，以及理解回答所需的少量相关字段会发送给 TypeSafe/Jev。不会自动发送整份草稿或决定理由。</p>
@@ -506,23 +519,23 @@ export function AssistInput({
 
       {pendingMoneyTargetFields.length === 0 ? <>
         <label className="field field-wide" htmlFor="assist-text">
-          <span>{currentQuestion ? "补充这一项，也可以顺便改口其他内容" : "用一句话描述你的收入和想买的东西"}</span>
-          <textarea
+          <span>{currentQuestion ? "补充这一项，也可以顺便改口其他内容" : "说说这次购买"}</span>
+          <Textarea
             id="assist-text"
             rows={3}
             maxLength={2000}
             value={text}
             aria-describedby="assist-text-hint"
             onChange={(event) => updateTurnText(event.currentTarget.value)}
-            placeholder={currentQuestion ? "写下你的回答，例如：税后到手，或每周上五天、每天九小时。" : "例如：税后每月到手八千，想买三千元的相机，平时每周上五天、每天八小时。"}
+            placeholder={currentQuestion ? "写下你的回答，例如：税后到手，或每周上五天、每天九小时。" : currentInput.income ? "例如：想买一台三千元的相机。" : "例如：每月到手八千，想买三千元的相机，平时每周上五天、每天八小时。"}
           />
         </label>
         <p className="field-hint" id="assist-text-hint">只会在点击发送后整理这段内容。最多 2000 字。</p>
         <div className="assist-actions">
-          <button className="primary-button" type="button" disabled={!text.trim() || status === "loading"} onClick={() => void request()}>
-            {status === "loading" ? "整理中…" : currentQuestion ? "发送回答" : "整理这句话"}
-          </button>
-          {status === "loading" ? <button className="quiet-button" type="button" onClick={() => { stopPendingRequest(); setStatus("idle"); setError(null); }}>取消</button> : null}
+          <Button type="button" disabled={!text.trim() || status === "loading"} onClick={() => void request()}>
+            {status === "loading" ? "整理中…" : currentQuestion ? "发送回答" : "发送并整理"}
+          </Button>
+          {status === "loading" ? <Button variant="ghost" type="button" onClick={() => { stopPendingRequest(); setStatus("idle"); setError(null); }}>取消</Button> : null}
           <span className="assist-count" aria-live="polite">{text.length}/2000</span>
         </div>
       </> : null}
@@ -530,25 +543,25 @@ export function AssistInput({
         <div className="assist-error" role="alert">
           <p>{error}</p>
           <div className="assist-actions">
-            <button className="secondary-button" type="button" disabled={!text.trim()} onClick={() => void request()}>重试这一句</button>
-            <button className="quiet-button" type="button" onClick={switchToManual}>改用手动填写</button>
+            <Button variant="outline" type="button" disabled={!text.trim()} onClick={() => void request()}>重试这一句</Button>
+            <Button variant="ghost" type="button" onClick={switchToManual}>改用手动填写</Button>
           </div>
         </div>
       ) : null}
       {pendingMoneyTargetFields.length > 1 ? (
         <div className="assist-answer-options" aria-label="金额修改目标">
           {pendingMoneyTargetFields.map((field) => (
-            <button key={field} className="quick-answer" type="button" onClick={() => chooseMoneyTarget(field)}>{MONEY_FIELD_LABELS[field]}</button>
+            <Button key={field} variant="outline" type="button" onClick={() => chooseMoneyTarget(field)}>{MONEY_FIELD_LABELS[field]}</Button>
           ))}
-          <button className="quick-answer quick-answer-quiet" type="button" onClick={skipMoneyTarget}>放弃这次修改</button>
+          <Button variant="ghost" type="button" onClick={skipMoneyTarget}>放弃这次修改</Button>
         </div>
       ) : status !== "loading" && currentQuestion ? (
         <div className="assist-answer-options" aria-label="快捷回答">
           {currentOptions.map((option) => (
-            <button key={option.value} className="quick-answer" type="button" onClick={() => answerQuickly(currentQuestion, option.value)}>{option.label}</button>
+            <Button key={option.value} variant="outline" type="button" onClick={() => answerQuickly(currentQuestion, option.value)}>{option.label}</Button>
           ))}
-          <button className="quick-answer quick-answer-quiet" type="button" onClick={() => skipQuestion(false)}>先跳过</button>
-          <button className="quick-answer quick-answer-quiet" type="button" onClick={() => skipQuestion(true)}>我不确定</button>
+          <Button variant="ghost" type="button" onClick={() => skipQuestion(false)}>先跳过</Button>
+          <Button variant="ghost" type="button" onClick={() => skipQuestion(true)}>我不确定</Button>
         </div>
       ) : null}
       {lastChangedFields.length > 0 && status !== "loading" ? (
@@ -562,7 +575,7 @@ export function AssistInput({
             <h3>还想看买完后本月剩多少吗？</h3>
             <p>这部分是可选的。只有你主动开启后，才会追问固定支出和付款月份。</p>
           </div>
-          <button className="secondary-button" type="button" onClick={requestMargin}>开启余量计算</button>
+          <Button variant="outline" type="button" onClick={requestMargin}>开启余量计算</Button>
         </div>
       ) : null}
 
@@ -573,7 +586,7 @@ export function AssistInput({
               <p className="eyebrow">一份草稿，一次确认</p>
               <h3 id="assist-review-title">核对并修改摘要</h3>
             </div>
-            <button className="quiet-button" type="button" onClick={switchToManual}>更多手动选项</button>
+            <Button variant="ghost" type="button" onClick={switchToManual}>更多手动选项</Button>
           </div>
           <p className="assist-review-copy">识别结果还不是已确认事实。缺少的信息可以留空，之后仍能看已有结果。</p>
           <div className="assist-summary-grid">
@@ -582,6 +595,7 @@ export function AssistInput({
               const note = notes[field];
               const fieldStatus = statusForField(note, currentValue);
               const id = `assist-summary-${field}`;
+              const options = SUMMARY_OPTIONS[field];
               const scheduleMode = assistValue(currentInput, "workTimeMode");
               const isCalendarWorkTime = currentMode(currentInput) === "calendar";
               const calendarDetail = field === "workTimeMode" || field === "workDaysPerWeek" || field === "workHoursPerDay" || field === "workHours";
@@ -590,29 +604,21 @@ export function AssistInput({
                 && (field !== "workHours" || scheduleMode === "monthly");
               if (!showField) return null;
               return (
-                <div className="assist-field-row" key={field}>
+                <Field className="assist-field-row" key={field}>
                   <div className="assist-field-heading">
-                    <label htmlFor={id}>{FIELD_LABELS[field]}</label>
+                    <FieldLabel htmlFor={id}>{FIELD_LABELS[field]}</FieldLabel>
                     <span className={`assist-status assist-status-${fieldStatus}`}>{STATUS_LABELS[fieldStatus]}</span>
                   </div>
-                  {field === "taxBasis" ? (
-                    <select id={id} value={currentValue} onChange={(event) => updateDraftField(field, event.currentTarget.value)}>
-                      <option value="">尚未提供</option><option value="after-tax">税后（到手）</option><option value="before-tax">税前</option>
-                    </select>
-                  ) : field === "workTimeMode" ? (
-                    <select id={id} value={currentValue} onChange={(event) => updateDraftField(field, event.currentTarget.value)}>
-                      <option value="">尚未提供</option><option value="custom">按每周作息估算</option><option value="monthly">直接填每月工时</option>
-                    </select>
-                  ) : field === "fixedCostCoverage" ? (
-                    <select id={id} value={currentValue} onChange={(event) => updateDraftField(field, event.currentTarget.value)}>
-                      <option value="">尚未提供</option><option value="complete">包含全部</option><option value="partial">只包含一部分</option><option value="unknown">不确定</option>
-                    </select>
-                  ) : field === "purchaseIncluded" ? (
-                    <select id={id} value={currentValue} onChange={(event) => updateDraftField(field, event.currentTarget.value)}>
-                      <option value="">尚未提供</option><option value="included">本月付款</option><option value="excluded">不在本月付款</option>
-                    </select>
+                  {options ? (
+                    <Select value={currentValue} onValueChange={(value) => updateDraftField(field, value === "unset" ? "" : value)}>
+                      <SelectTrigger id={id} className="w-full"><SelectValue placeholder="尚未提供" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unset">尚未提供</SelectItem>
+                        {options.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   ) : (
-                    <input
+                    <Input
                       id={id}
                       type="text"
                       inputMode="decimal"
@@ -621,29 +627,29 @@ export function AssistInput({
                     />
                   )}
                   {note?.span && currentValue === note.value ? <p className="assist-source">对应原话：“{note.span}”</p> : null}
-                </div>
+                </Field>
               );
             })}
           </div>
           {assistValue(currentInput, "workTimeMode") === "custom" ? (
             <p className="assist-hint">每周 {scheduleValues(currentInput).daysPerWeek || "—"} 天 × 每天 {scheduleValues(currentInput).hoursPerDay || "—"} 小时；完整后按平时作息估算月工时。</p>
           ) : null}
-          <label className="check-row assist-estimate-toggle">
-            <input type="checkbox" checked={approximateInput} onChange={(event) => toggleApproximate(event.currentTarget.checked)} />
-            我填的数字里有大概数
-          </label>
+          <div className="check-row assist-estimate-toggle">
+            <Checkbox id="assist-approximate" checked={approximateInput} onCheckedChange={(checked) => toggleApproximate(checked === true)} />
+            <label htmlFor="assist-approximate">我填的数字里有大概数</label>
+          </div>
           <p className="field-hint">逐项识别为大概数的字段会一直保留估算标记，不会因取消这个统一选项变成精确数字。</p>
           {marginRequested ? <p className="assist-hint">余量计算已开启；固定支出不完整、未知或本月不付款时，会显示对应的不足说明。</p> : null}
-          <button className="primary-button" type="button" disabled={status !== "idle"} onClick={() => onConfirm(finalizeAssistInput(currentInput, estimatedValues, approximateInput), estimatedValues)}>
+          <Button type="button" disabled={status !== "idle"} onClick={() => onConfirm(finalizeAssistInput(currentInput, estimatedValues, approximateInput), estimatedValues)}>
             确认摘要并查看结果
-          </button>
+          </Button>
         </section>
       ) : null}
 
       {showSummary && (currentQuestion !== null || pendingMoneyTargetFields.length > 1) ? (
         <section className="assist-progress" aria-label="当前草稿进度">
           <p>已整理的内容会保留在草稿里；每次只追问一个必要信息。你也可以跳过、手动补充或随时核对摘要。</p>
-          <button className="quiet-button" type="button" onClick={switchToManual}>现在手动填写</button>
+          <Button variant="ghost" type="button" onClick={switchToManual}>现在手动填写</Button>
         </section>
       ) : null}
     </section>
