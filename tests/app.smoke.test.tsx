@@ -43,8 +43,8 @@ describe("App", () => {
   it("starts with one-sentence input and keeps manual entry immediately available", () => {
     const html = renderToStaticMarkup(<App />);
     expect(html).toContain("这次购买要花多少工作时间？");
-    expect(html).toContain("清空购买草稿");
-    expect(html).toContain("说说这次购买");
+    expect(html).toContain("清空重填");
+    expect(html).toContain("先说说这次购买");
     expect(html).toContain("手动填写");
     expect(html).toContain('id="assist-text"');
     expect(html).toContain("发送并整理");
@@ -52,7 +52,7 @@ describe("App", () => {
     expect(html).not.toContain('name="purchaseAmount"');
     expect(html).not.toContain("详细修改这次的比较条件");
     expect(html).toContain("收入资料、日历排班、日期例外、价值期待和决定理由不会整体发送");
-    expect(html).toContain("清空购买草稿不会删除已保存的收入资料");
+    expect(html).toContain("清空重填不会删除已保存的收入资料");
     expect(html).not.toContain("Goal");
     expect(html).not.toContain("目标进度");
     expect(html).not.toContain("购买前算一算");
@@ -87,7 +87,8 @@ describe("App", () => {
     expect(html).toContain("月收入和本月作息沿用已保存资料");
     expect(html).toContain('id="assist-summary-income"');
     expect(html).toContain('id="assist-summary-purchaseAmount"');
-    expect(html).toContain("核对并修改摘要");
+    expect(html).toContain("我整理的信息");
+    expect(html).toContain("确认并查看结果");
     expect(html).not.toContain('name="purchaseAmount"');
     expect(html).toContain("返回收入看板");
   });

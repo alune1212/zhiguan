@@ -1,7 +1,36 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { IncomeApp } from "../src/app/IncomeApp";
+import { calculateDecision, type DecisionInput } from "../src/domain/calculation";
+import { defaultProfile } from "../src/domain/income";
+import { LOCAL_DATA_FORMAT, type FavoriteSnapshot, type LocalDataReadResult } from "../src/domain/local-data";
+import { createPurchaseSnapshot } from "../src/domain/purchase-snapshot";
+import { FavoriteCard, favoriteRecalculationInput, IncomeApp, isSuccessfulLocalDataRead } from "../src/app/IncomeApp";
+
+const favoriteInput: DecisionInput = {
+  income: "8000",
+  workHours: "160",
+  fixedExpenses: "",
+  purchaseAmount: "800",
+  taxBasis: "after-tax",
+  fixedCostCoverage: "",
+  purchaseIncluded: "",
+  valueExpectation: "收藏测试",
+  evidence: {
+    income: "user-confirmed",
+    workHours: "user-confirmed",
+    fixedExpenses: "",
+    purchaseAmount: "user-confirmed",
+  },
+};
+
+function favoriteSnapshot(input = favoriteInput) {
+  return createPurchaseSnapshot(input, calculateDecision(input), {
+    code: "wait",
+    rationale: "再考虑一下",
+    reviewCondition: "",
+  }, { comparisonMonth: "2026-09", timeZone: "Asia/Shanghai" }, new Date("2026-09-23T00:00:00.000Z"));
+}
 
 describe("IncomeApp first use", () => {
   it("starts with only monthly take-home income and shows the folded, local estimate defaults", () => {
@@ -27,5 +56,64 @@ describe("IncomeApp first use", () => {
     expect(html).not.toContain('name="purchaseAmount"');
     expect(html).not.toContain('name="fixedExpenses"');
     expect(html).not.toContain("整理这句话");
+  });
+});
+
+describe("IncomeApp favorites and reload guards", () => {
+  it("requires a current profile before creating a recalculation draft", () => {
+    const snapshot = favoriteSnapshot();
+    expect(favoriteRecalculationInput(snapshot, null, null)).toBeNull();
+
+    const currentProfile = { ...defaultProfile(), income: "9000" };
+    expect(favoriteRecalculationInput(snapshot, currentProfile, null)).toMatchObject({
+      income: "9000",
+      purchaseAmount: "800",
+      workHours: "160",
+      evidence: { income: "user-confirmed", workHours: "user-confirmed" },
+    });
+  });
+
+  it("accepts only complete reads before discarding the current draft", () => {
+    const ready: LocalDataReadResult = {
+      status: "ready",
+      document: { format: LOCAL_DATA_FORMAT, revision: "r1", profile: defaultProfile(), favorites: [] },
+      raw: "stored-document",
+    };
+    expect(isSuccessfulLocalDataRead(ready)).toBe(true);
+    expect(isSuccessfulLocalDataRead({ status: "empty", document: null, raw: null })).toBe(true);
+    expect(isSuccessfulLocalDataRead({ status: "invalid", document: null, raw: "damaged", reason: "malformed" })).toBe(false);
+    expect(isSuccessfulLocalDataRead({ status: "unavailable", document: null, raw: null, reason: "storage-unavailable" })).toBe(false);
+  });
+
+  it.each(["", "bad-money"])("shows insufficient data for an invalid saved amount: %s", (purchaseAmount) => {
+    const snapshot = favoriteSnapshot({
+      ...favoriteInput,
+      income: "bad-income",
+      purchaseAmount,
+      evidence: { ...favoriteInput.evidence, income: "", purchaseAmount: "" },
+    });
+    const favorite: FavoriteSnapshot = {
+      id: "favorite-1",
+      savedAt: "2026-09-23T00:00:00.000Z",
+      snapshot,
+    };
+    const html = renderToStaticMarkup(<FavoriteCard favorite={favorite} onRecalculate={() => undefined} onDelete={() => undefined} disabled={false} />);
+
+    expect(html).toContain("当时金额 资料不足");
+    expect(html).toContain("当时收入 资料不足");
+    expect(html).not.toContain("¥.00");
+    expect(html).not.toContain("¥bad-money");
+    expect(html).not.toContain("¥bad-income");
+  });
+
+  it("keeps valid saved amounts formatted as currency", () => {
+    const favorite: FavoriteSnapshot = {
+      id: "favorite-1",
+      savedAt: "2026-09-23T00:00:00.000Z",
+      snapshot: favoriteSnapshot(),
+    };
+    const html = renderToStaticMarkup(<FavoriteCard favorite={favorite} onRecalculate={() => undefined} onDelete={() => undefined} disabled={false} />);
+    expect(html).toContain("当时金额 ¥800.00");
+    expect(html).toContain("当时收入 ¥8,000.00");
   });
 });

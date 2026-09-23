@@ -495,7 +495,7 @@ export function AssistInput({
       <div className="assist-header">
         <div>
           <p className="eyebrow">少填一点</p>
-          <h2 id="assist-title">先用一句话说说这次购买</h2>
+          <h2 id="assist-title">先说说这次购买</h2>
           <p className="assist-lead">发送后会整理价格、收入和作息；你可以继续补充，也可以直接改摘要。</p>
         </div>
         <Button variant="ghost" type="button" onClick={switchToManual}>手动填写</Button>
@@ -584,7 +584,7 @@ export function AssistInput({
           <div className="assist-review-heading">
             <div>
               <p className="eyebrow">一份草稿，一次确认</p>
-              <h3 id="assist-review-title">核对并修改摘要</h3>
+              <h3 id="assist-review-title">我整理的信息</h3>
             </div>
             <Button variant="ghost" type="button" onClick={switchToManual}>更多手动选项</Button>
           </div>
@@ -641,7 +641,7 @@ export function AssistInput({
           <p className="field-hint">逐项识别为大概数的字段会一直保留估算标记，不会因取消这个统一选项变成精确数字。</p>
           {marginRequested ? <p className="assist-hint">余量计算已开启；固定支出不完整、未知或本月不付款时，会显示对应的不足说明。</p> : null}
           <Button type="button" disabled={status !== "idle"} onClick={() => onConfirm(finalizeAssistInput(currentInput, estimatedValues, approximateInput), estimatedValues)}>
-            确认摘要并查看结果
+            确认并查看结果
           </Button>
         </section>
       ) : null}

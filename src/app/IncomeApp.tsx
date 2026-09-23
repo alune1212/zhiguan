@@ -13,7 +13,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-import { App as PurchaseWorkbench, monthInTimeZone } from "./App";
+import { App as PurchaseWorkbench } from "./App";
 import { downloadJson } from "./download";
 import {
   calculateIncome,
@@ -42,7 +42,7 @@ import {
   type LocalDataDocument,
   type LocalDataReadResult,
 } from "../domain/local-data";
-import type { DecisionInput, WorkTimeInput } from "../domain/calculation";
+import { parseAmount, type DecisionInput, type WorkTimeInput } from "../domain/calculation";
 import type { PurchaseSnapshotV2 } from "../domain/purchase-snapshot";
 
 type Screen = "setup" | "dashboard" | "purchase" | "favorites";
@@ -64,6 +64,11 @@ const CONFIRM_COPY: Record<PendingConfirmation["kind"], { title: string; descrip
 };
 
 const EMPTY_STORAGE: LocalDataReadResult = { status: "empty", document: null, raw: null };
+
+export function isSuccessfulLocalDataRead(result: LocalDataReadResult): boolean {
+  return result.status === "ready" || result.status === "empty";
+}
+
 const WEEKDAYS = [
   { value: 1, label: "周一" },
   { value: 2, label: "周二" },
@@ -362,6 +367,14 @@ function currencyDisplay(decimal: string | null | undefined): string {
   return `${negative ? "-" : ""}¥${grouped}.${fraction}`;
 }
 
+function snapshotCurrencyDisplay(raw: string): string {
+  const parsed = parseAmount(raw);
+  if (!parsed.ok) return "资料不足";
+  const yuan = parsed.value.cents / 100n;
+  const fen = (parsed.value.cents % 100n).toString().padStart(2, "0");
+  return currencyDisplay(`${yuan}.${fen}`);
+}
+
 function rateDisplay(calculation: IncomeCalculation): string {
   const value = calculation.perSecondIncome;
   if (!value) return "暂无可用结果";
@@ -502,7 +515,32 @@ function newPurchaseInput(profile: IncomeProfile, calculation: IncomeCalculation
   };
 }
 
-function FavoriteCard({
+export function favoriteRecalculationInput(
+  snapshot: PurchaseSnapshotV2,
+  profile: IncomeProfile | null,
+  calculation: IncomeCalculation | null,
+): DecisionInput | null {
+  if (!profile) return null;
+  const savedInput = inputFromSnapshot(snapshot);
+  const savedWorkTime = workTimeFromSnapshot(snapshot);
+  const workTime = savedWorkTime.mode === "calendar"
+    ? calculation?.workTimeInput ?? savedWorkTime
+    : savedWorkTime;
+  const income = profile.income;
+  return {
+    ...savedInput,
+    income,
+    workHours: workTime.mode === "monthly" ? savedInput.workHours : "",
+    workTime,
+    evidence: {
+      ...savedInput.evidence,
+      income: income ? "user-confirmed" : "",
+      workHours: workTime.mode === "monthly" ? savedInput.evidence.workHours : "estimated",
+    },
+  };
+}
+
+export function FavoriteCard({
   favorite,
   onRecalculate,
   onDelete,
@@ -525,7 +563,7 @@ function FavoriteCard({
         <Badge variant="secondary" className="income-decision-label">{decisionLabel(snapshot)}</Badge>
       </div>
       <p className="income-favorite-result"><span>当时工作时间等价</span><strong>{workTimeResult?.display ?? "资料不足"}</strong></p>
-      <p>当时金额 {currencyDisplay(snapshot.inputs.purchase_amount)} · 这是收藏时的结果，不会自动重算。</p>
+      <p>当时金额 {snapshotCurrencyDisplay(snapshot.inputs.purchase_amount)} · 这是收藏时的结果，不会自动重算。</p>
       <details className="income-snapshot-details">
         <summary>查看当时的结果与依据</summary>
         <dl className="income-snapshot-results">
@@ -536,7 +574,7 @@ function FavoriteCard({
             </div>
           ))}
         </dl>
-        <p>当时收入 {currencyDisplay(snapshot.inputs.income)}；比较月份 {snapshot.comparison_month}；时区 {snapshot.time_zone}。</p>
+        <p>当时收入 {snapshotCurrencyDisplay(snapshot.inputs.income)}；比较月份 {snapshot.comparison_month}；时区 {snapshot.time_zone}。</p>
         <p>{snapshot.inputs.work_time_basis.mode === "calendar" ? "按当月日历作息估算" : "使用当时选择的工作时间口径"}；规则版本 {snapshot.ruleset_version}。</p>
         <p>当时的决定依据：{snapshot.decision.rationale || "未填写"}</p>
         <div className="income-form-actions">
@@ -569,6 +607,8 @@ export function IncomeApp() {
   const lastRawRef = useRef<string | null>(null);
   const operationGenerationRef = useRef(0);
   const mountedRef = useRef(false);
+  const confirmationOriginRef = useRef<HTMLElement | null>(null);
+  const previousViewRef = useRef<Screen | null>(null);
   const settingsRef = useRef<HTMLDetailsElement>(null);
   const settingsHeadingRef = useRef<HTMLElement>(null);
 
@@ -630,6 +670,20 @@ export function IncomeApp() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!loaded) return;
+    if (previousViewRef.current === null) {
+      previousViewRef.current = view;
+      return;
+    }
+    if (previousViewRef.current === view) return;
+    previousViewRef.current = view;
+    const headingId = view === "purchase" ? "page-title"
+      : view === "dashboard" ? "income-today-heading"
+        : view === "favorites" ? "favorites-heading" : "setup-heading";
+    document.getElementById(headingId)?.focus();
+  }, [loaded, view]);
+
   const calculation = useMemo(() => profile ? calculateIncome(profile, now) : null, [profile, now]);
   const favorites = stored.status === "ready" ? stored.document.favorites : [];
   const sortedFavorites = useMemo(
@@ -640,6 +694,7 @@ export function IncomeApp() {
 
   const requestConfirmation = (kind: PendingConfirmation["kind"], run: PendingConfirmation["run"]) => {
     if (busy) return;
+    confirmationOriginRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setPending({ kind, run, draft, raw: stored.raw, revision: expectedRevision });
   };
 
@@ -923,7 +978,15 @@ export function IncomeApp() {
 
   const reloadChangedData = () => {
     requestConfirmation("reload", () => {
-      applyReadResult(readLocalData());
+      const latest = readLocalData();
+      if (!isSuccessfulLocalDataRead(latest)) {
+        setConflict(true);
+        setNotice(latest.status === "unavailable"
+          ? "无法读取浏览器中的最新资料；当前编辑仍保留，请检查存储后重试。"
+          : "浏览器中的最新资料损坏或版本不支持；当前编辑仍保留，请导入有效备份后重试。");
+        return;
+      }
+      applyReadResult(latest);
       setNotice("已重新载入浏览器中的最新资料。");
     });
   };
@@ -942,24 +1005,13 @@ export function IncomeApp() {
   };
 
   const openFavorite = (snapshot: PurchaseSnapshotV2) => {
-    const savedInput = inputFromSnapshot(snapshot);
-    const savedWorkTime = workTimeFromSnapshot(snapshot);
-    const workTime = savedWorkTime.mode === "calendar"
-      ? calculation?.workTimeInput ?? savedWorkTime
-      : savedWorkTime;
-    const nextIncome = profile?.income ?? savedInput.income;
-    const noProfile = profile === null;
-    startPurchase({
-      ...savedInput,
-      income: nextIncome,
-      workHours: workTime.mode === "monthly" ? savedInput.workHours : "",
-      workTime: noProfile && workTime.mode === "calendar" ? { mode: "unselected" } : workTime,
-      evidence: {
-        ...savedInput.evidence,
-        income: nextIncome ? "user-confirmed" : "",
-        workHours: noProfile && workTime.mode === "calendar" ? "" : workTime.mode === "monthly" ? savedInput.evidence.workHours : "estimated",
-      },
-    }, noProfile ? { comparisonMonth: monthInTimeZone(new Date(), snapshot.time_zone), timeZone: snapshot.time_zone } : undefined);
+    const input = favoriteRecalculationInput(snapshot, profile, calculation);
+    if (!input) {
+      setNotice("请先完成基础资料设置，再重新试算这笔收藏。");
+      setView("setup");
+      return;
+    }
+    startPurchase(input);
   };
 
   const adoptMonth = (month: string, input: DecisionInput) => {
@@ -1024,7 +1076,7 @@ export function IncomeApp() {
             <>
               <section className="intro income-intro income-setup-intro">
                 <p className="eyebrow">个人价值流</p>
-                <h1>先看见时间与收入</h1>
+                <h1 id="setup-heading" tabIndex={-1}>先看见时间与收入</h1>
                 <p>填一次到手月收入，就能看到按平时作息估算的今日收入变化。没有购买计划也可以直接使用。</p>
               </section>
               {stored.status === "invalid" ? (
@@ -1065,7 +1117,7 @@ export function IncomeApp() {
             <section className="income-favorites-view">
               <div className="intro income-intro">
                 <p className="eyebrow">仅保存你主动收藏的结果</p>
-                <h1>购买收藏</h1>
+                <h1 id="favorites-heading" tabIndex={-1}>购买收藏</h1>
                 <p>这里展示当时保存的金额、依据和决定，不会随当前资料变化而重算。</p>
               </div>
               <div className="income-form-actions">
@@ -1092,7 +1144,7 @@ export function IncomeApp() {
 
               <section className="income-dashboard-card" aria-labelledby="income-today-heading">
                 <p className="eyebrow income-dashboard-date">{calculation?.localDate ?? "当前日期"}</p>
-                <h1 id="income-today-heading">今日收入估算</h1>
+                <h1 id="income-today-heading" tabIndex={-1}>今日收入估算</h1>
                 <p className="income-today-value" aria-live="off">{calculation?.status === "available" ? currencyDisplay(calculation.todayIncome?.decimal) : "—"}</p>
                 <p className="income-estimate-note">按设定作息估算，非实际到账</p>
                 <Badge variant="secondary" className={`income-work-state income-work-state-${calculation?.workState ?? "insufficient-data"}`}>
@@ -1174,7 +1226,12 @@ export function IncomeApp() {
         </main>
       )}
       <AlertDialog open={pending !== null} onOpenChange={(open) => { if (!open) setPending(null); }}>
-        <AlertDialogContent>
+        <AlertDialogContent onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          const origin = confirmationOriginRef.current;
+          confirmationOriginRef.current = null;
+          if (origin?.isConnected) origin.focus();
+        }}>
           <AlertDialogHeader>
             <AlertDialogTitle>{pending ? CONFIRM_COPY[pending.kind].title : ""}</AlertDialogTitle>
             <AlertDialogDescription>{pending ? CONFIRM_COPY[pending.kind].description : ""}</AlertDialogDescription>

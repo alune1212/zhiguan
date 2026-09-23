@@ -661,11 +661,11 @@ export function App({
     <main className="app-shell">
       <header className="topbar">
         {onBack ? <Button variant="ghost" type="button" onClick={onBack}>{fromSavedProfile ? "返回收入看板" : "返回收藏"}</Button> : <a className="brand" href="#page-title">值观</a>}
-        <Button variant="ghost" type="button" onClick={clear}>清空购买草稿</Button>
+        <Button variant="ghost" type="button" onClick={clear}>清空重填</Button>
       </header>
 
       <section className="intro" aria-labelledby="page-title">
-        <h1 id="page-title">这次购买要花多少工作时间？</h1>
+        <h1 id="page-title" tabIndex={-1}>这次购买要花多少工作时间？</h1>
         <p>{initialInput ? fromSavedProfile ? "用一句话说说这次购买。月收入和本月作息沿用已保存资料；也可以随时手动填写。" : "已从旧收藏开启新草稿。请重新确认收入和工作时间；原收藏不会变化。也可以随时手动填写。" : "用一句话说说这次购买、收入和工作时间；也可以随时手动填写。"}</p>
       </section>
 
@@ -865,7 +865,7 @@ export function App({
               {favoriteState === "error" ? <p className="error" role="alert">收藏没有保存成功，请检查后重试。</p> : null}
             </>
           ) : null}
-          <Button variant="outline" type="button" onClick={downloadCurrentSnapshot}>下载这次记录（@2）</Button>
+          <Button variant="outline" type="button" onClick={downloadCurrentSnapshot}>下载这次记录</Button>
         </section>
       ) : null}
 
@@ -880,7 +880,7 @@ export function App({
 
       <footer className="footer">
         <p>购买试算留在本地；主动保存的收入资料与收藏只保存在此浏览器，清除浏览器数据可能丢失。未收藏的购买草稿与对话在离开或刷新后不保留。{fromSavedProfile ? "导出、恢复或删除资料，请返回收入看板，展开“调整收入与作息”中的“备份与删除”。" : "导出、恢复或删除资料，请返回收藏，再点左上角“值观”进入基础设置。"}</p>
-        <p>只有点击发送后，当前回答、问题和理解回答所需的少量相关字段才会发送给 TypeSafe/Jev；收入资料、日历排班、日期例外、价值期待和决定理由不会整体发送。对话服务是否留存内容以其服务说明为准。清空购买草稿不会删除已保存的收入资料。</p>
+        <p>只有点击发送后，当前回答、问题和理解回答所需的少量相关字段才会发送给 TypeSafe/Jev；收入资料、日历排班、日期例外、价值期待和决定理由不会整体发送。对话服务是否留存内容以其服务说明为准。清空重填不会删除已保存的收入资料。</p>
       </footer>
     </main>
   );

@@ -26,3 +26,11 @@ CDP `Network.requestWillBeSent` 观察到：从看板进入购买页、再切换
 - **3.2：** 上述合成数据主路径、资料损坏后从有效备份恢复、存储读取失败提示和删除最后一项收藏均已观察。没有进行真实用户财务资料验证。
 - **3.3：** 所列宽度均无横向溢出。前景/背景取样对比度为 15.46:1，主色/背景为 5.11:1；这不是所有颜色组合的完整对比度审计。200% CSS 重排已在 384 CSS px 检查，原生浏览器缩放未验证。减少动态模式下按钮无动画或过渡。
 - preview 和临时 Docker 容器的浏览器控制台均无 error/warn。Docker 静态服务返回的 CSP 保持为 `default-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`，资源和核心控件操作通过。容器已删除，未更改现有 compose 服务。最终 `bun run check` 通过：依赖检查、类型检查、84 项测试和构建全部通过；`openspec validate redesign-frontend-with-shadcn --strict` 与 `git diff --check` 通过，最终源码已重新构建 Docker 镜像。
+
+## 修复后复核（2026-09-23）
+
+针对前次 OpenSpec 核验指出的问题，已补上以下保护并用合成资料回归：没有当前收入资料时，从旧收藏点“重新试算”会先进入基础设置，旧收入不会被提升为已确认；重新载入遇到读取不可用或损坏时保留正在编辑的草稿，并显示原因；旧收藏缺失或无效金额显示“资料不足”。购买入口、按钮和余量说明已与当前页面文案对齐。对应单元测试覆盖了无资料收藏、读取状态和异常金额；本次在隔离浏览器页导入合成备份时，Chrome 扩展未获文件 URL 权限，旧收藏导入路径未再次完成浏览器操作。
+
+在 macOS 27 / Chrome 154 的本地 Docker 页面 `http://127.0.0.1:4174/`，使用浏览器原生 **200% 缩放**检查收入看板、购买页、收藏页和展开设置，约 761 CSS px 可视宽度下均未发现横向溢出。进入购买、收藏以及返回看板后，焦点分别落在页面标题；“保存并重算”确认层按 Escape 关闭后，焦点回到原按钮，未保存的合成输入仍在。检查完成后已恢复 100% 缩放。另在本地 preview 页面复核“导入备份”控件边框：更新后对页面与白卡分别为 3.33:1、3.62:1；页面切换焦点、保存与清空弹层 Escape 后的焦点及草稿保留均通过 Chrome 可访问性树和 DOM 检查。此检查不等同于所有视口、颜色和状态组合的覆盖。
+
+`bun run check` 再次通过：依赖检查、类型检查、**89 项测试**和构建均通过；`openspec validate redesign-frontend-with-shadcn --strict` 与 `git diff --check` 通过。现有 Compose 服务已用本次源码执行 `docker compose up -d --build --wait`，容器健康，首页、JS、CSS 均返回 200，浏览器控制台无 error/warn；未改 CSP。真实 VoiceOver、全部颜色与状态组合及真实用户验证仍未完成。
