@@ -566,7 +566,6 @@ export function IncomeApp() {
       window.clearInterval(interval);
       interval = null;
     };
-    if (document.visibilityState === "visible") startInterval();
     const onVisibility = () => {
       if (document.visibilityState === "visible") {
         updateNow();
@@ -584,6 +583,7 @@ export function IncomeApp() {
     window.addEventListener("pageshow", updateNow);
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("storage", onStorage);
+    if (document.visibilityState === "visible") startInterval();
     return () => {
       mountedRef.current = false;
       operationGenerationRef.current += 1;
@@ -648,7 +648,8 @@ export function IncomeApp() {
       setNotice("浏览器中的资料损坏或版本不支持；原内容仍保留。请导入有效备份后再保存。");
       return;
     }
-    if (profile && !window.confirm("保存后，今日和本月的估算会按新资料重新计算；已收藏的结果不会变化。继续保存吗？")) return;
+    const hasExistingData = profile !== null || stored.status === "ready";
+    if (hasExistingData && !window.confirm("保存后，今日和本月的估算会按新资料重新计算；已收藏的结果不会变化。继续保存吗？")) return;
 
     setBusy(true);
     const operation = ++operationGenerationRef.current;
@@ -704,7 +705,10 @@ export function IncomeApp() {
   };
 
   const startPurchase = (initialInput?: DecisionInput) => {
-    if (!profile) return;
+    if (!profile) {
+      setNotice("当前还没有可用的基础资料，请先回到设置页填写收入与作息。");
+      return;
+    }
     setPurchaseInput(initialInput ?? newPurchaseInput(profile, calculation));
     setPurchaseKey((current) => current + 1);
     setView("purchase");
@@ -761,7 +765,7 @@ export function IncomeApp() {
       setNotice("另一个页面保存了更新。先重新载入，再清空资料。");
       return;
     }
-    if (!window.confirm("将清空此浏览器中保存的基础资料和全部收藏。已下载的备份文件不会删除。确定清空吗？")) return;
+    if (stored.status === "ready" && !window.confirm("将清空此浏览器中保存的基础资料和全部收藏。已下载的备份文件不会删除。确定清空吗？")) return;
     setBusy(true);
     const operation = ++operationGenerationRef.current;
     try {

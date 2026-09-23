@@ -8,7 +8,7 @@ import {
   type ExactValue,
   type ResultId,
 } from "./calculation";
-import { validateProfile } from "./income";
+import { validateWorkTimeBasis } from "./income";
 
 export const PURCHASE_SNAPSHOT_FORMAT = "zhiguan-purchase-decision@2" as const;
 export const PURCHASE_RULESET_VERSION = "zhiguan-income-calendar@1" as const;
@@ -212,15 +212,13 @@ function isWorkTimeBasis(value: unknown, comparisonMonth: string, timeZone: stri
       && Array.isArray(value.periods) && value.periods.every(isPeriod)
       && isExceptions(value.exceptions)
       && (value.schedule_source === "default" || value.schedule_source === "user-confirmed")
-      && validateProfile({
-        income: "1",
+      && validateWorkTimeBasis({
         timeZone: value.time_zone,
         workDays: value.work_days,
         periods: value.periods,
         exceptions: value.exceptions,
-        updatedAt: new Date(0).toISOString(),
         scheduleSource: value.schedule_source,
-      }).ok;
+      });
   }
 
   if (!hasExactKeys(value, commonKeys) || value.days_per_week !== null && !isString(value.days_per_week) || value.hours_per_day !== null && !isString(value.hours_per_day)) return false;

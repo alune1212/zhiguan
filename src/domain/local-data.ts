@@ -213,7 +213,8 @@ async function withStorageLock<T extends LocalDataWriteResult | LocalDataClearRe
         return { status: "unavailable", reason: "write-failed" } as T;
       }
     });
-  } catch {
+  } catch (error) {
+    console.error("local-data lock acquisition failed", error);
     return { status: "unavailable", reason: "locks-unavailable" } as T;
   }
 }

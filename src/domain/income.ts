@@ -197,7 +197,25 @@ function periodMinutes(period: IncomePeriod): { start: number; end: number } | n
 }
 
 let cachedFormatter: { readonly timeZone: string; readonly formatter: Intl.DateTimeFormat } | null = null;
-let cachedMonth: { readonly key: string; readonly result: PreparedMonthResult } | null = null;
+const monthCacheSlots: Array<{ readonly key: string; readonly result: PreparedMonthResult }> = [];
+const MONTH_CACHE_MAX_SLOTS = 4;
+function readMonthCache(key: string): PreparedMonthResult | null {
+  for (let i = 0; i < monthCacheSlots.length; i += 1) {
+    if (monthCacheSlots[i]?.key === key) {
+      const entry = monthCacheSlots[i];
+      if (entry) {
+        monthCacheSlots.splice(i, 1);
+        monthCacheSlots.unshift(entry);
+        return entry.result;
+      }
+    }
+  }
+  return null;
+}
+function writeMonthCache(key: string, result: PreparedMonthResult): void {
+  monthCacheSlots.unshift({ key, result });
+  if (monthCacheSlots.length > MONTH_CACHE_MAX_SLOTS) monthCacheSlots.length = MONTH_CACHE_MAX_SLOTS;
+}
 
 function isoWeekday(date: string): number {
   const parsed = dateParts(date);
@@ -261,6 +279,41 @@ function profileHasOverlap(
     }
   }
   return false;
+}
+
+export function validateWorkTimeBasis(input: unknown): boolean {
+  const profile = asRecord(input);
+  if (!profile) return false;
+  if (!isValidTimeZone(profile.timeZone)) return false;
+
+  if (!Array.isArray(profile.workDays)) return false;
+  if (!profile.workDays.every((day) => Number.isInteger(day) && (day as number) >= 1 && (day as number) <= 7)) return false;
+  if (new Set(profile.workDays).size !== profile.workDays.length) return false;
+
+  if (!Array.isArray(profile.periods)) return false;
+  const parsedPeriods: IncomePeriod[] = [];
+  for (const value of profile.periods) {
+    const period = asRecord(value);
+    if (!period || typeof period.start !== "string" || typeof period.end !== "string"
+      || (period.endDayOffset !== 0 && period.endDayOffset !== 1)) return false;
+    const parsed = periodMinutes(period as unknown as IncomePeriod);
+    if (!parsed || parsed.end > parsed.start + 24 * 60
+      || (period.endDayOffset === 0 && parsed.end < parsed.start)) return false;
+    if (parsed.end === parsed.start) return false;
+    parsedPeriods.push({ start: period.start, end: period.end, endDayOffset: period.endDayOffset });
+  }
+
+  const exceptionsRecord = asRecord(profile.exceptions);
+  if (!exceptionsRecord) return false;
+  for (const [date, value] of Object.entries(exceptionsRecord)) {
+    if (!dateParts(date)) return false;
+    if (value !== "work" && value !== "rest") return false;
+  }
+
+  if (profile.scheduleSource !== "default" && profile.scheduleSource !== "user-confirmed") return false;
+  const typedExceptions: Record<string, IncomeException> = {};
+  for (const [date, value] of Object.entries(exceptionsRecord)) typedExceptions[date] = value as IncomeException;
+  return !profileHasOverlap(profile.workDays as number[], parsedPeriods, typedExceptions);
 }
 
 export function validateProfile(input: unknown): IncomeProfileValidation {
@@ -453,7 +506,7 @@ function secondsBetween(intervals: readonly WorkInterval[], start: number, end: 
 
 function monthCacheKey(profile: IncomeProfile, month: string): string {
   const exceptions = Object.entries(profile.exceptions).sort(([left], [right]) => left.localeCompare(right));
-  return JSON.stringify([month, profile.timeZone, profile.workDays, profile.periods, exceptions]);
+  return JSON.stringify([month, profile.timeZone, profile.workDays, profile.periods, exceptions, profile.updatedAt]);
 }
 
 function prepareMonth(
@@ -462,7 +515,8 @@ function prepareMonth(
   formatter: Intl.DateTimeFormat,
 ): PreparedMonthResult {
   const key = monthCacheKey(profile, month);
-  if (cachedMonth?.key === key) return cachedMonth.result;
+  const cached = readMonthCache(key);
+  if (cached) return cached;
 
   const firstDate = `${month}-01`;
   const afterMonthDate = nextMonthDate(month);
@@ -470,12 +524,12 @@ function prepareMonth(
   const monthEnd = localToEpoch(afterMonthDate, "00:00", formatter);
   if (!monthStart.ok) {
     const result: PreparedMonthResult = { ok: false, reason: { code: "invalid-calendar-boundary", date: firstDate } };
-    cachedMonth = { key, result };
+    writeMonthCache(key, result);
     return result;
   }
   if (!monthEnd.ok) {
     const result: PreparedMonthResult = { ok: false, reason: { code: "invalid-calendar-boundary", date: afterMonthDate } };
-    cachedMonth = { key, result };
+    writeMonthCache(key, result);
     return result;
   }
 
@@ -488,18 +542,18 @@ function prepareMonth(
       const start = localToEpoch(anchorDate, period.start, formatter);
       if (!start.ok) {
         const result: PreparedMonthResult = { ok: false, reason: { code: start.code, date: anchorDate, time: period.start } };
-        cachedMonth = { key, result };
+        writeMonthCache(key, result);
         return result;
       }
       const end = localToEpoch(endDate, period.end, formatter);
       if (!end.ok) {
         const result: PreparedMonthResult = { ok: false, reason: { code: end.code, date: endDate, time: period.end } };
-        cachedMonth = { key, result };
+        writeMonthCache(key, result);
         return result;
       }
       if (end.epoch <= start.epoch) {
         const result: PreparedMonthResult = { ok: false, reason: { code: "invalid-period", date: anchorDate, time: period.start } };
-        cachedMonth = { key, result };
+        writeMonthCache(key, result);
         return result;
       }
       const clippedStart = Math.max(start.epoch, monthStart.epoch);
@@ -514,7 +568,7 @@ function prepareMonth(
     const current = intervals[index] as WorkInterval;
     if (current.start < previous.end) {
       const result: PreparedMonthResult = { ok: false, reason: { code: "overlapping-periods", date: firstDate } };
-      cachedMonth = { key, result };
+      writeMonthCache(key, result);
       return result;
     }
   }
@@ -525,7 +579,7 @@ function prepareMonth(
   );
   if (totalSeconds === 0n) {
     const result: PreparedMonthResult = { ok: false, reason: { code: "no-working-time" } };
-    cachedMonth = { key, result };
+    writeMonthCache(key, result);
     return result;
   }
 
@@ -540,7 +594,7 @@ function prepareMonth(
         ok: false,
         reason: { code: "invalid-calendar-boundary", date: failedDate },
       };
-      cachedMonth = { key, result };
+      writeMonthCache(key, result);
       return result;
     }
     const dayIntervals = intervals.flatMap((interval) => {
@@ -560,7 +614,7 @@ function prepareMonth(
     ok: true,
     value: { start: monthStart.epoch, end: monthEnd.epoch, intervals, days, totalSeconds },
   };
-  cachedMonth = { key, result };
+  writeMonthCache(key, result);
   return result;
 }
 
