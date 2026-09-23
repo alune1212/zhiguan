@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
+import NumberFlow, { useCanAnimate } from "@number-flow/react";
 import { Settings2 } from "lucide-react";
 
 import { Alert } from "@/components/ui/alert";
@@ -15,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 import { App as PurchaseWorkbench } from "./App";
 import { downloadJson } from "./download";
+import { isPausedIncomeCurrent, parseAnimatedAmount, shouldAnimateIncome, type IncomeMotionFrame } from "./income-motion";
 import {
   calculateIncome,
   defaultProfile,
@@ -46,6 +48,8 @@ import { parseAmount, type DecisionInput, type WorkTimeInput } from "../domain/c
 import type { PurchaseSnapshotV2 } from "../domain/purchase-snapshot";
 
 type Screen = "setup" | "dashboard" | "purchase" | "favorites";
+
+type PausedIncome = { calculation: IncomeCalculation; profile: IncomeProfile; at: Date };
 
 type PendingConfirmation = {
   kind: "save" | "restore" | "clear" | "delete" | "reload";
@@ -594,6 +598,9 @@ export function IncomeApp() {
   const [loaded, setLoaded] = useState(false);
   const [view, setView] = useState<Screen>("setup");
   const [now, setNow] = useState(() => new Date());
+  const [motionGeneration, setMotionGeneration] = useState(0);
+  const [pausedIncome, setPausedIncome] = useState<PausedIncome | null>(null);
+  const [displayFeedback, setDisplayFeedback] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [formIssues, setFormIssues] = useState<readonly IncomeProfileIssue[]>([]);
   const [conflict, setConflict] = useState(false);
@@ -611,6 +618,8 @@ export function IncomeApp() {
   const previousViewRef = useRef<Screen | null>(null);
   const settingsRef = useRef<HTMLDetailsElement>(null);
   const settingsHeadingRef = useRef<HTMLElement>(null);
+  const previousIncomeFrameRef = useRef<IncomeMotionFrame | null>(null);
+  const canAnimate = useCanAnimate();
 
   useEffect(() => {
     mountedRef.current = true;
@@ -631,6 +640,14 @@ export function IncomeApp() {
     setLoaded(true);
 
     const updateNow = () => setNow(new Date());
+    const resumeNow = () => {
+      setMotionGeneration((generation) => generation + 1);
+      updateNow();
+    };
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) setPausedIncome(null);
+      resumeNow();
+    };
     let interval: number | null = null;
     const startInterval = () => {
       if (interval !== null) return;
@@ -643,7 +660,7 @@ export function IncomeApp() {
     };
     const onVisibility = () => {
       if (document.visibilityState === "visible") {
-        updateNow();
+        resumeNow();
         startInterval();
       } else {
         stopInterval();
@@ -654,8 +671,8 @@ export function IncomeApp() {
       setConflict(true);
       setNotice("另一个页面保存了更新。当前内容仍保留；请重新载入后再保存，避免覆盖新资料。");
     };
-    window.addEventListener("focus", updateNow);
-    window.addEventListener("pageshow", updateNow);
+    window.addEventListener("focus", resumeNow);
+    window.addEventListener("pageshow", onPageShow);
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("storage", onStorage);
     if (document.visibilityState === "visible") startInterval();
@@ -663,8 +680,8 @@ export function IncomeApp() {
       mountedRef.current = false;
       operationGenerationRef.current += 1;
       stopInterval();
-      window.removeEventListener("focus", updateNow);
-      window.removeEventListener("pageshow", updateNow);
+      window.removeEventListener("focus", resumeNow);
+      window.removeEventListener("pageshow", onPageShow);
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("storage", onStorage);
     };
@@ -685,6 +702,34 @@ export function IncomeApp() {
   }, [loaded, view]);
 
   const calculation = useMemo(() => profile ? calculateIncome(profile, now) : null, [profile, now]);
+  const activePause = isPausedIncomeCurrent(pausedIncome, profile, calculation?.status ?? null, view === "dashboard")
+    ? pausedIncome : null;
+  const displayedCalculation = activePause?.calculation ?? calculation;
+  const displayedAt = activePause?.at ?? now;
+  const animatedAmount = displayedCalculation?.status === "available"
+    ? parseAnimatedAmount(displayedCalculation.todayIncome?.decimal) : null;
+  const incomeFrame: IncomeMotionFrame | null = profile && displayedCalculation?.status === "available"
+    && displayedCalculation.localDate && animatedAmount
+    ? {
+      cents: animatedAmount.cents,
+      localDate: displayedCalculation.localDate,
+      profile,
+      second: Math.floor(displayedAt.getTime() / 1000),
+      generation: motionGeneration,
+      workState: displayedCalculation.workState,
+    } : null;
+  const animateIncome = canAnimate && activePause === null
+    && shouldAnimateIncome(previousIncomeFrameRef.current, incomeFrame);
+
+  useLayoutEffect(() => {
+    previousIncomeFrameRef.current = view === "dashboard" ? incomeFrame : null;
+  });
+
+  useEffect(() => {
+    if (!pausedIncome || isPausedIncomeCurrent(pausedIncome, profile, calculation?.status ?? null, view === "dashboard")) return;
+    setPausedIncome(null);
+    if (view === "dashboard") setDisplayFeedback("收入依据已变化，暂停展示已结束。");
+  }, [pausedIncome, profile, calculation?.status, view]);
   const favorites = stored.status === "ready" ? stored.document.favorites : [];
   const sortedFavorites = useMemo(
     () => favorites.slice().sort((left, right) => right.savedAt.localeCompare(left.savedAt)),
@@ -1143,18 +1188,48 @@ export function IncomeApp() {
               </Alert> : null}
 
               <section className="income-dashboard-card" aria-labelledby="income-today-heading">
-                <p className="eyebrow income-dashboard-date">{calculation?.localDate ?? "当前日期"}</p>
+                <p className="eyebrow income-dashboard-date">{displayedCalculation?.localDate ?? "当前日期"}</p>
                 <h1 id="income-today-heading" tabIndex={-1}>今日收入估算</h1>
-                <p className="income-today-value" aria-live="off">{calculation?.status === "available" ? currencyDisplay(calculation.todayIncome?.decimal) : "—"}</p>
+                <p className={`income-today-value${displayedCalculation?.status === "available" && currencyDisplay(displayedCalculation.todayIncome?.decimal).length > 14 ? " income-today-value-long" : ""}`} aria-live="off">{displayedCalculation?.status === "available"
+                  ? animatedAmount && canAnimate ? <>
+                    <span aria-hidden="true"><NumberFlow
+                      value={animatedAmount.value}
+                      locales="en-US"
+                      prefix="¥"
+                      format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
+                      trend={1}
+                      animated={animateIncome}
+                      transformTiming={{ duration: 800, easing: "ease-out" }}
+                      spinTiming={{ duration: 800, easing: "ease-out" }}
+                    /></span>
+                    <span className="sr-only">{currencyDisplay(displayedCalculation.todayIncome?.decimal)}</span>
+                  </> : currencyDisplay(displayedCalculation.todayIncome?.decimal)
+                  : "—"}</p>
+                {displayedCalculation?.status === "available" ? <p className="income-live-rate"><span>每秒收入估算</span><strong>{rateDisplay(displayedCalculation)}</strong></p> : null}
                 <p className="income-estimate-note">按设定作息估算，非实际到账</p>
-                <Badge variant="secondary" className={`income-work-state income-work-state-${calculation?.workState ?? "insufficient-data"}`}>
-                  {calculation?.status !== "available" ? "依据不足" : calculation.workState === "working" ? "当前工作时段" : "休息时间 · 暂停增长"}
-                </Badge>
-                {calculation?.status === "available" ? <div className="income-supporting-metrics">
-                  <div><span>本月收入估算</span><strong aria-live="off">{currencyDisplay(calculation.monthIncome?.decimal)}</strong></div>
-                  <div><span>每秒收入估算</span><strong>{rateDisplay(calculation)}</strong></div>
+                <div className="income-display-controls">
+                  <Badge variant="secondary" className={`income-work-state income-work-state-${displayedCalculation?.workState ?? "insufficient-data"}`}>
+                    {displayedCalculation?.status !== "available" ? "依据不足" : displayedCalculation.workState === "working" ? "当前工作时段" : "休息时间 · 暂停增长"}
+                  </Badge>
+                  <Button variant="ghost" type="button" disabled={displayedCalculation?.status !== "available"} onClick={() => {
+                    if (activePause) {
+                      setPausedIncome(null);
+                      setNow(new Date());
+                      setMotionGeneration((generation) => generation + 1);
+                      setDisplayFeedback("已恢复实时展示，金额已按当前时刻更新。");
+                    } else if (profile && displayedCalculation?.status === "available") {
+                      setPausedIncome({ calculation: displayedCalculation, profile, at: now });
+                      setMotionGeneration((generation) => generation + 1);
+                      setDisplayFeedback("展示已暂停。");
+                    }
+                  }}>{activePause ? "恢复实时展示" : "暂停实时展示"}</Button>
+                </div>
+                {activePause ? <p className="income-pause-note">展示已暂停 · 暂停于 <time dateTime={activePause.at.toISOString()}>{dateTimeDisplay(activePause.at.toISOString(), profile.timeZone)}</time>。所示金额不是当前时刻估算。</p> : null}
+                <span className="sr-only" role="status">{displayFeedback}</span>
+                {displayedCalculation?.status === "available" ? <div className="income-supporting-metrics">
+                  <div><span>本月收入估算</span><strong aria-live="off">{currencyDisplay(displayedCalculation.monthIncome?.decimal)}</strong></div>
                 </div> : <div className="income-insufficient" role="status">
-                  <p>{calculation ? calculationReasonText(calculation) ?? "当前资料无法可靠计算，请检查收入、时区、工作日或时段。" : "当前资料无法可靠计算，请检查设置。"}</p>
+                  <p>{displayedCalculation ? calculationReasonText(displayedCalculation) ?? "当前资料无法可靠计算，请检查收入、时区、工作日或时段。" : "当前资料无法可靠计算，请检查设置。"}</p>
                   <Button variant="secondary" type="button" onClick={openSettings}>检查收入与作息</Button>
                 </div>}
                 <Collapsible open={basisOpen} onOpenChange={setBasisOpen}>
@@ -1163,10 +1238,10 @@ export function IncomeApp() {
                     <Button variant="outline" type="button" onClick={() => startPurchase()}>算一笔购买</Button>
                   </div>
                   <CollapsibleContent className="income-calculation-details">
-                    <p>{calculation?.comparisonMonth ?? "当前月份"}：月收入按当月计划工作时间分摊，工作时段以 {profile.timeZone} 为准。</p>
+                    <p>{displayedCalculation?.comparisonMonth ?? "当前月份"}：月收入按当月计划工作时间分摊，工作时段以 {profile.timeZone} 为准。</p>
                     <p>每周安排：{weekdaySummary(profile.workDays)}；每天时段：{profile.periods.map((period) => `${period.start}–${period.end}${period.endDayOffset ? "（次日）" : ""}`).join("、") || "未设置"}。</p>
-                    <p>本月计划工作时间：{calendarHours(calculation?.totalWorkSeconds ?? null)}。每秒估算 = 到手月收入 ÷ 本月计划工作总秒数；今日与本月累计按已过去的计划工作秒数计算。</p>
-                    {calculation ? <p>当前提示：{calculationReasonText(calculation) ?? "计算正常。"}</p> : null}
+                    <p>本月计划工作时间：{calendarHours(displayedCalculation?.totalWorkSeconds ?? null)}。每秒估算 = 到手月收入 ÷ 本月计划工作总秒数；今日与本月累计按已过去的计划工作秒数计算。</p>
+                    {displayedCalculation ? <p>当前提示：{calculationReasonText(displayedCalculation) ?? "计算正常。"}</p> : null}
                   </CollapsibleContent>
                 </Collapsible>
                 <p className="income-updated-at">资料更新时间：<time dateTime={profile.updatedAt}>{dateTimeDisplay(profile.updatedAt, profile.timeZone)}</time></p>
