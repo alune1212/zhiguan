@@ -6,7 +6,8 @@ import { defineConfig } from "vitest/config";
 /** Local preview permits only the same-origin, explicitly invoked assistance API. */
 export const PREVIEW_HEADERS: Record<string, string> = {
   "Cache-Control": "no-store",
-  "Content-Security-Policy": "default-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; script-src 'self'; style-src 'self'",
+  // NumberFlow 0.6.2 inserts this exact Shadow DOM stylesheet at runtime.
+  "Content-Security-Policy": "default-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; script-src 'self'; style-src 'self' 'sha256-HR6/MuuYfB8aijiNP5MPm3YOR8WqVmL7UkE3Q8OslTs='",
   "Cross-Origin-Resource-Policy": "same-origin",
   "Permissions-Policy": "camera=(), geolocation=(), microphone=(), payment=(), usb=()",
   "Referrer-Policy": "no-referrer",
