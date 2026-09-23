@@ -465,7 +465,7 @@ function newPurchaseInput(profile: IncomeProfile, calculation: IncomeCalculation
     purchaseIncluded: "",
     valueExpectation: "",
     evidence: {
-      income: "user-confirmed",
+      income: profile.income ? "user-confirmed" : "",
       workHours: "estimated",
       fixedExpenses: "user-confirmed",
       purchaseAmount: "user-confirmed",
@@ -625,6 +625,7 @@ export function IncomeApp() {
     }
     setFormIssues([]);
     setConflict(false);
+    setSettingsDrafting(false);
   };
 
   const updateDraft = (next: IncomeProfile) => {
@@ -863,12 +864,17 @@ export function IncomeApp() {
   const openFavorite = (snapshot: PurchaseSnapshotV2) => {
     const savedInput = inputFromSnapshot(snapshot);
     const workTime = calculation?.workTimeInput ?? workTimeFromSnapshot(snapshot);
+    const nextIncome = profile?.income ?? savedInput.income;
     startPurchase({
       ...savedInput,
-      income: profile?.income ?? savedInput.income,
+      income: nextIncome,
       workHours: "",
       workTime,
-      evidence: { ...savedInput.evidence, income: "user-confirmed", workHours: "estimated" },
+      evidence: {
+        ...savedInput.evidence,
+        income: nextIncome ? "user-confirmed" : "",
+        workHours: "estimated",
+      },
     });
   };
 

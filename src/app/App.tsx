@@ -579,7 +579,10 @@ export function App({
   };
 
   const confirmInput = (draft: DecisionInput = input, estimates: AssistEstimateMap = assistEstimatedValues) => {
-    if (isCalendarStale(draft, selectedMonth, selectedTimeZone)) return;
+    if (isCalendarStale(draft, selectedMonth, selectedTimeZone)) {
+      setDraftNotice("当前已进入新月份，这份草稿按旧月计算。请先采用新月份再确认。");
+      return;
+    }
     const confirmed = finalizeAssistInput(draft, estimates, approximateInput);
     setInput(confirmed);
     setAssistEstimatedValues(estimates);
@@ -598,7 +601,10 @@ export function App({
 
   const favorite = async () => {
     if (!onFavorite || !calculated) return;
-    if (isCalendarStale(input, selectedMonth, selectedTimeZone)) return;
+    if (isCalendarStale(input, selectedMonth, selectedTimeZone)) {
+      setDraftNotice("当前已进入新月份，这份草稿按旧月计算。请先采用新月份再收藏。");
+      return;
+    }
     const requestId = ++favoriteRequestId.current;
     setFavoriteState("saving");
     try {
@@ -614,7 +620,10 @@ export function App({
   };
 
   const downloadCurrentSnapshot = () => {
-    if (isCalendarStale(input, selectedMonth, selectedTimeZone)) return;
+    if (isCalendarStale(input, selectedMonth, selectedTimeZone)) {
+      setDraftNotice("当前已进入新月份，这份草稿按旧月计算。请先采用新月份再下载。");
+      return;
+    }
     const snapshot = createPurchaseSnapshot(input, output, decision, {
       comparisonMonth: selectedMonth,
       timeZone: selectedTimeZone,
