@@ -24,6 +24,6 @@
 ## Impact
 
 - 主要影响 `src/app/IncomeApp.tsx` 的看板主金额与展示状态、`src/styles/app.css` 的数位排版和动效；`src/domain/income.ts` 的精确计算及本地资料格式保持现状。
-- 可能按设计阶段的组件评估新增轻量数字动效依赖；不引入外部服务、账户、遥测或公开数据格式变化。
+- 实施时拟引入轻量数字动效组件 `@number-flow/react`，并保留不支持动效时的静态文本路径；不引入外部服务、账户、遥测或公开数据格式变化。
 - `redesign-frontend-with-shadcn` 已把首页布局要求同步进 `income-dashboard` 主规格；本变更以同步后的要求为基线，保留其居中布局、导航与窄屏约束。
 - 用户是否更容易理解收入积累仍需真实反馈验证；合成对比演示不等于用户验收。方案依据见 `docs/design/income-motion-research.md`。
