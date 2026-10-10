@@ -1,12 +1,20 @@
 # 收入动态展示与资料复用：需求讨论
 
-状态：需求访谈完成；Q1–Q13 已确认。方案与 RFC-0001、ADR-0008 已获批准并接入代码，自动检查及合成数据下的浏览器主路径验收通过；真实用户体验、回滚演练与正式发布仍待验证。最终方案见 [PRD-0003](../product/prd/PRD-0003-income-dashboard.md)。
+记录阶段：2026-09-22 的需求访谈与方案确认。本文保留当时 Q1–Q13 的选择及讨论边界；“本轮”“供审阅”等表述指该历史阶段，不代表新的实施或发布授权。
+
+当前状态：需求访谈完成；Q1–Q13 已确认。方案与 [RFC-0001](../product/rfc/RFC-0001-income-understanding.md)、[ADR-0008](../adr/ADR-0008-local-profile-and-purchase-favorites.md) 已获批准并接入代码，自动检查及合成数据下的浏览器主路径验收通过；真实用户体验、回滚演练与正式发布仍待验证。最终方案见 [PRD-0003](../product/prd/PRD-0003-income-dashboard.md)。
 
 ## 来源与问题
 
 2026-09-22 用户反馈：一次购买计算缺少直观价值、填写过多、稳定资料无法复用；希望默认双休、每天工作 8 小时、按月收入，并将详细修改折叠。用户允许重新讨论产品宪法。
 
-参考对话：[值观个人信息流方案设计](chatgpt-conversation://6a83f77c-2e5c-83e8-8c9c-02168e880073)。历史讨论包含实时工作收益入口与长期个人价值流愿景，不将其中建议视为本轮已批准范围。
+### 仓库内已批准决策摘要
+
+- [RFC-0001](../product/rfc/RFC-0001-income-understanding.md)：理解收入本身可以完成一次有效使用，不要求继续购买、记录决定或复盘；长期价值流与完整闭环指标保留为愿景和后续观察。
+- [PRD-0003](../product/prd/PRD-0003-income-dashboard.md)：当前阶段以少量输入展示按计划作息分摊的收入估算，购买分析作为次级入口；数字不代表实际出勤、到账或资产增长。
+- [ADR-0008](../adr/ADR-0008-local-profile-and-purchase-favorites.md)：同浏览器保存基础资料与主动收藏，提供本地备份、恢复和删除；不增加账户、跨设备同步或对话原文留存。购买对话仍遵循 [ADR-0007](../adr/ADR-0007-conversational-input.md) 的用户主动发送及最少上下文边界。
+
+以上仓库记录是本轮批准范围的可审阅依据。早期探索中的实时工作收益入口和长期个人价值流设想，不自动构成额外功能或公开发布承诺。
 
 ## 用户已确认
 
@@ -31,4 +39,6 @@
 
 ## 后续文档边界
 
-已确认术语进入 CONTEXT.md。持久化边界见 ADR-0008；宪法修订按 RFC-0001 审阅。现行 PRODUCT.md、策略、路线图、架构和 PRD-0001 仍描述旧阶段；新方案不冒充已实现能力。
+讨论阶段曾要求将已确认术语写入 CONTEXT.md、按 RFC-0001 审阅宪法修订，并同步旧阶段的策略、路线图、架构和购买 PRD。此同步已完成；当前以 [PRODUCT.md 0.2.0](../../PRODUCT.md)、[产品策略](../../PRODUCT_STRATEGY.md)、[路线图](../../ROADMAP.md)、[架构](../../ARCHITECTURE.md) 和 [PRD-0001](../product/prd/PRD-0001-single-purchase-decision-workbench.md) 的现行说明为准。术语见 [CONTEXT.md](../../CONTEXT.md)，持久化及对话边界分别见 [ADR-0008](../adr/ADR-0008-local-profile-and-purchase-favorites.md) 与 [ADR-0007](../adr/ADR-0007-conversational-input.md)。
+
+代码接入和合成数据检查不等于真实用户体验、回滚演练或正式发布已经完成；这些待验证项继续以 PRD-0003、RFC-0001 和 ADR-0008 的状态记录为准。
