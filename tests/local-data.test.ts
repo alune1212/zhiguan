@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { calculateDecision, type DecisionInput } from "../src/domain/calculation";
 import { createPurchaseSnapshot } from "../src/domain/purchase-snapshot";
+import * as snapshotValidation from "../src/domain/purchase-snapshot";
 import {
   addFavorite,
   clearInvalidLocalData,
@@ -12,12 +13,13 @@ import {
   LOCAL_DATA_FORMAT,
   LOCAL_DATA_STORAGE_KEY,
   parseLocalBackup,
+  parseLocalBackupFile,
   readLocalData,
   restoreInvalidLocalData,
   restoreLocalData,
   type LocalDataContent,
 } from "../src/domain/local-data";
-import type { IncomeProfile } from "../src/domain/income";
+import { calculateIncome, defaultProfile, type IncomeProfile } from "../src/domain/income";
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
@@ -75,6 +77,33 @@ const snapshot = createPurchaseSnapshot(input, calculateDecision(input), { code:
 let storage: MemoryStorage;
 let revision = 0;
 
+describe("backup file read boundary", () => {
+  it("rejects oversized files before reading them", async () => {
+    const text = vi.fn(async () => "{}");
+    expect(await parseLocalBackupFile({ size: 15_000_001, text })).toEqual({ status: "invalid", reason: "malformed" });
+    expect(text).not.toHaveBeenCalled();
+  });
+
+  it("retains the decoded character limit after the bounded read", async () => {
+    const text = vi.fn(async () => " ".repeat(5_000_001));
+    expect(await parseLocalBackupFile({ size: 5_000_001, text })).toEqual({ status: "invalid", reason: "malformed" });
+    expect(text).toHaveBeenCalledOnce();
+  });
+
+  it("accepts a valid UTF-8 backup with multibyte text", async () => {
+    const raw = JSON.stringify({
+      format: LOCAL_DATA_FORMAT,
+      revision: "备份",
+      profile,
+      favorites: [{ id: "收藏", savedAt: snapshot.exported_at, snapshot }],
+    });
+    const file = new File([raw], "备份.json", { type: "application/json" });
+    expect(file.size).toBeGreaterThan(raw.length);
+    expect(await parseLocalBackupFile(file)).toEqual(parseLocalBackup(raw));
+    expect((await parseLocalBackupFile(file)).status).toBe("valid");
+  });
+});
+
 function resetEnvironment(): void {
   storage = new MemoryStorage();
   revision = 0;
@@ -119,6 +148,77 @@ describe("local data and backups", () => {
 
     storage.failGet = true;
     expect(readLocalData()).toEqual({ status: "unavailable", document: null, raw: null, reason: "storage-unavailable" });
+  });
+
+  it("rejects a forged favorite before parsing or restoring can replace existing data", async () => {
+    const content = validContent({ favorites: [{ id: "favorite", savedAt: snapshot.exported_at, snapshot }] });
+    const saved = await commitLocalData(content, null);
+    expect(saved.status).toBe("saved");
+    if (saved.status !== "saved") return;
+    const backup = JSON.parse(createLocalBackup(saved.document));
+    backup.favorites[0].snapshot.results[0].display = "0.00";
+
+    expect(parseLocalBackup(JSON.stringify(backup))).toEqual({ status: "invalid", reason: "malformed" });
+    expect(await restoreLocalData({ profile: backup.profile, favorites: backup.favorites }, saved.document.revision)).toEqual({ status: "invalid", reason: "invalid-document" });
+    expect(storage.getItem(LOCAL_DATA_STORAGE_KEY)).toBe(saved.raw);
+  });
+
+  it("rejects excessive aggregate calendar work before recomputing any favorite", async () => {
+    const now = new Date("2026-09-15T12:00:00.000Z");
+    const timeAt = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
+    const calculation = calculateIncome({
+      ...defaultProfile(now, "UTC"),
+      income: "8000",
+      workDays: [1, 2, 3, 4, 5, 6, 7],
+      periods: Array.from({ length: 48 }, (_, index) => ({ start: timeAt(index * 2), end: timeAt(index * 2 + 1), endDayOffset: 0 })),
+    }, now);
+    if (!calculation.workTimeInput) throw new Error("invalid-calendar-fixture");
+    const calendarInput = { ...input, workHours: "", workTime: calculation.workTimeInput };
+    const calendarSnapshot = createPurchaseSnapshot(calendarInput, calculateDecision(calendarInput), { code: "", rationale: "", reviewCondition: "" }, { comparisonMonth: "2026-09", timeZone: "UTC" }, now);
+    const favorites = Array.from({ length: 20 }, (_, index) => ({
+      id: `calendar-${index}`,
+      savedAt: now.toISOString(),
+      snapshot: { ...calendarSnapshot, exported_at: new Date(now.getTime() + index).toISOString() },
+    }));
+    const backup = { format: LOCAL_DATA_FORMAT, revision: "calendar-backup", profile: null, favorites };
+    const validate = vi.spyOn(snapshotValidation, "isPurchaseSnapshotV2");
+    try {
+      expect(parseLocalBackup(JSON.stringify({ ...backup, favorites: favorites.slice(0, 1) })).status).toBe("valid");
+      expect(validate).toHaveBeenCalledOnce();
+      validate.mockClear();
+      expect(parseLocalBackup(JSON.stringify(backup))).toEqual({ status: "invalid", reason: "malformed" });
+      expect(await restoreLocalData(backup, null)).toEqual({ status: "invalid", reason: "invalid-document" });
+      expect(validate).not.toHaveBeenCalled();
+      expect(storage.getItem(LOCAL_DATA_STORAGE_KEY)).toBeNull();
+      const raw = JSON.stringify(backup);
+      storage.setItem(LOCAL_DATA_STORAGE_KEY, raw);
+      expect(readLocalData()).toMatchObject({ status: "invalid", raw, reason: "malformed" });
+      expect(validate).not.toHaveBeenCalled();
+      expect(storage.getItem(LOCAL_DATA_STORAGE_KEY)).toBe(raw);
+    } finally {
+      validate.mockRestore();
+    }
+  });
+
+  it("counts empty calendars toward the aggregate validation budget", () => {
+    const calendarInput: DecisionInput = {
+      ...input,
+      workHours: "",
+      workTime: {
+        mode: "calendar", comparisonMonth: "2026-09", timeZone: "UTC", totalWorkSeconds: "0",
+        workDays: [], periods: [], exceptions: {}, scheduleSource: "user-confirmed",
+      },
+    };
+    const emptySnapshot = createPurchaseSnapshot(calendarInput, calculateDecision(calendarInput), { code: "", rationale: "", reviewCondition: "" }, { comparisonMonth: "2026-09", timeZone: "UTC" });
+    const favorites = Array.from({ length: 513 }, (_, index) => ({ id: `empty-${index}`, savedAt: emptySnapshot.exported_at, snapshot: emptySnapshot }));
+    expect(parseLocalBackup(JSON.stringify({ format: LOCAL_DATA_FORMAT, revision: "empty-calendars", profile: null, favorites: favorites.slice(0, 1) })).status).toBe("valid");
+    const validate = vi.spyOn(snapshotValidation, "isPurchaseSnapshotV2");
+    try {
+      expect(parseLocalBackup(JSON.stringify({ format: LOCAL_DATA_FORMAT, revision: "empty-calendars", profile: null, favorites }))).toEqual({ status: "invalid", reason: "malformed" });
+      expect(validate).not.toHaveBeenCalled();
+    } finally {
+      validate.mockRestore();
+    }
   });
 
   it("commits under a revision check and leaves the previous record on conflict or write failure", async () => {

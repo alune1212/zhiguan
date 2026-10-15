@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { calculateDecision, type DecisionInput } from "../src/domain/calculation";
+import { calculateDecision, type CalendarWorkTimeInput, type DecisionInput } from "../src/domain/calculation";
+import { calculateIncome, MAX_INCOME_EXCEPTIONS, MAX_INCOME_PERIODS } from "../src/domain/income";
 import {
   createPurchaseSnapshot,
   isPurchaseSnapshotV2,
@@ -29,6 +30,23 @@ const baseInput: DecisionInput = {
 const decision = { code: "wait" as const, rationale: "再观察一周", reviewCondition: "周末复查" };
 const context = { comparisonMonth: "2026-09", timeZone: "Asia/Shanghai" };
 
+function calendarWorkTimeInput(
+  schedule: Omit<CalendarWorkTimeInput, "totalWorkSeconds">,
+): CalendarWorkTimeInput {
+  const calculation = calculateIncome({
+    income: "8000",
+    timeZone: schedule.timeZone,
+    workDays: schedule.workDays,
+    periods: schedule.periods,
+    exceptions: schedule.exceptions,
+    updatedAt: "2026-09-22T10:00:00.000Z",
+    scheduleSource: schedule.scheduleSource,
+  }, new Date(`${schedule.comparisonMonth}-15T12:00:00.000Z`));
+  if (calculation.workTimeInput) return calculation.workTimeInput;
+  if (calculation.reason?.code !== "no-working-time") throw new Error("invalid-calendar-fixture");
+  return { ...schedule, totalWorkSeconds: "0" };
+}
+
 describe("purchase snapshot v2", () => {
   it("preserves the five calculation results, decision, basis, and evidence", () => {
     const output = calculateDecision(baseInput);
@@ -55,6 +73,48 @@ describe("purchase snapshot v2", () => {
     });
     expect(isPurchaseSnapshotV2(snapshot)).toBe(true);
     expect(JSON.parse(serializePurchaseSnapshot(snapshot))).toEqual(snapshot);
+  });
+
+  it("rejects altered result display text", () => {
+    const snapshot = createPurchaseSnapshot(baseInput, calculateDecision(baseInput), decision, context);
+    const results = snapshot.results.map((result) => result.id === "income-rate"
+      ? { ...result, display: "900.00 元/小时" }
+      : result);
+
+    expect(isPurchaseSnapshotV2({ ...snapshot, results })).toBe(false);
+  });
+
+  it("rejects a self-consistent exact value unrelated to the saved inputs", () => {
+    const snapshot = createPurchaseSnapshot(baseInput, calculateDecision(baseInput), decision, context);
+    const results = snapshot.results.map((result) => result.id === "income-rate"
+      ? { ...result, exact: { numerator: "900", denominator: "1", decimal: "900.00" }, display: "900.00 元/小时" }
+      : result);
+
+    expect(isPurchaseSnapshotV2({ ...snapshot, results })).toBe(false);
+  });
+
+  it("rejects tampered result labels, formulas, and evidence", () => {
+    const snapshot = createPurchaseSnapshot(baseInput, calculateDecision(baseInput), decision, context);
+    const original = snapshot.results[0]!;
+
+    expect(isPurchaseSnapshotV2({ ...snapshot, results: [{ ...original, label: "已校验" }, ...snapshot.results.slice(1)] })).toBe(false);
+    expect(isPurchaseSnapshotV2({ ...snapshot, results: [{ ...original, formula: "收入 × 2" }, ...snapshot.results.slice(1)] })).toBe(false);
+    expect(isPurchaseSnapshotV2({ ...snapshot, results: [{ ...original, evidence_status: "user-confirmed" }, ...snapshot.results.slice(1)] })).toBe(false);
+  });
+
+  it("accepts semantically equal calculation objects with reordered keys", () => {
+    const snapshot = createPurchaseSnapshot(baseInput, calculateDecision(baseInput), decision, context);
+    const first = snapshot.results[0]!;
+    const reorderedBasis = Object.fromEntries(Object.entries(snapshot.inputs.work_time_basis).reverse());
+    const reorderedExact = Object.fromEntries(Object.entries(first.exact!).reverse());
+    const reorderedResult = Object.fromEntries(Object.entries({ ...first, exact: reorderedExact }).reverse());
+
+    expect(isPurchaseSnapshotV2({
+      ...snapshot,
+      inputs: { ...snapshot.inputs, work_time_basis: reorderedBasis },
+      results: [reorderedResult, ...snapshot.results.slice(1)],
+    })).toBe(true);
+    expect(isPurchaseSnapshotV2({ ...snapshot, results: [...snapshot.results].reverse() })).toBe(true);
   });
 
   it("keeps invalid inputs and insufficient results as an honest snapshot", () => {
@@ -123,23 +183,36 @@ describe("purchase snapshot v2", () => {
     expect(snapshot.inputs.work_time_basis.conversion).not.toBeNull();
   });
 
+  it.each([
+    ["monthly", { mode: "monthly" }],
+    ["five-day", { mode: "five-day" }],
+    ["six-day", { mode: "six-day" }],
+    ["custom", { mode: "custom", daysPerWeek: "4.5", hoursPerDay: "8" }],
+    ["unselected", { mode: "unselected" }],
+  ] as const)("retains supported %s work-time snapshots", (_mode, workTime) => {
+    const input = { ...baseInput, workTime } as DecisionInput;
+    const snapshot = createPurchaseSnapshot(input, calculateDecision(input), decision, context);
+
+    expect(isPurchaseSnapshotV2(snapshot)).toBe(true);
+  });
+
   it("retains a calendar basis only when its month, zone, and schedule structure agree", () => {
+    const workTime = calendarWorkTimeInput({
+      mode: "calendar",
+      comparisonMonth: "2026-09",
+      timeZone: "Asia/Shanghai",
+      workDays: [1, 2, 3, 4, 5],
+      periods: [
+        { start: "09:00", end: "12:00", endDayOffset: 0 },
+        { start: "13:00", end: "18:00", endDayOffset: 0 },
+      ],
+      exceptions: { "2026-09-30": "rest", "2026-10-01": "work" },
+      scheduleSource: "default",
+    });
     const input: DecisionInput = {
       ...baseInput,
       workHours: "",
-      workTime: {
-        mode: "calendar",
-        comparisonMonth: "2026-09",
-        timeZone: "Asia/Shanghai",
-        totalWorkSeconds: "288000",
-        workDays: [1, 2, 3, 4, 5],
-        periods: [
-          { start: "09:00", end: "12:00", endDayOffset: 0 },
-          { start: "13:00", end: "18:00", endDayOffset: 0 },
-        ],
-        exceptions: { "2026-09-30": "rest", "2026-10-01": "work" },
-        scheduleSource: "default",
-      },
+      workTime,
     };
     const output = calculateDecision(input);
     const snapshot = createPurchaseSnapshot(input, output, decision, context);
@@ -148,9 +221,14 @@ describe("purchase snapshot v2", () => {
       mode: "calendar",
       comparison_month: "2026-09",
       time_zone: "Asia/Shanghai",
-      total_work_seconds: "288000",
+      total_work_seconds: "604800",
     });
     expect(isPurchaseSnapshotV2(snapshot)).toBe(true);
+
+    const forgedWorkTime = { ...workTime, totalWorkSeconds: "608400" };
+    const forgedInput = { ...input, workTime: forgedWorkTime };
+    const forgedSnapshot = createPurchaseSnapshot(forgedInput, calculateDecision(forgedInput), decision, context);
+    expect(isPurchaseSnapshotV2(forgedSnapshot)).toBe(false);
     expect(isPurchaseSnapshotV2({
       ...snapshot,
       inputs: {
@@ -174,11 +252,10 @@ describe("purchase snapshot v2", () => {
     const exceptionOnlyInput: DecisionInput = {
       ...baseInput,
       workHours: "",
-      workTime: {
+      workTime: calendarWorkTimeInput({
         mode: "calendar",
         comparisonMonth: "2026-09",
         timeZone: "Asia/Shanghai",
-        totalWorkSeconds: "28800",
         workDays: [],
         periods: [
           { start: "09:00", end: "12:00", endDayOffset: 0 },
@@ -186,7 +263,7 @@ describe("purchase snapshot v2", () => {
         ],
         exceptions: { "2026-09-30": "work" },
         scheduleSource: "user-confirmed",
-      },
+      }),
     };
     const exceptionOnlySnapshot = createPurchaseSnapshot(exceptionOnlyInput, calculateDecision(exceptionOnlyInput), decision, context);
     expect(exceptionOnlySnapshot.inputs.work_time_basis).toMatchObject({ mode: "calendar", work_days: [], exceptions: { "2026-09-30": "work" } });
@@ -194,21 +271,74 @@ describe("purchase snapshot v2", () => {
 
     const emptyCalendarInput: DecisionInput = {
       ...exceptionOnlyInput,
-      workTime: {
+      workTime: calendarWorkTimeInput({
         mode: "calendar",
         comparisonMonth: "2026-09",
         timeZone: "Asia/Shanghai",
-        totalWorkSeconds: "0",
         workDays: [],
         periods: [],
         exceptions: {},
         scheduleSource: "user-confirmed",
-      },
+      }),
     };
     const emptyCalendarSnapshot = createPurchaseSnapshot(emptyCalendarInput, calculateDecision(emptyCalendarInput), decision, context);
     expect(emptyCalendarSnapshot.results.some((result) => result.availability === "insufficient-data")).toBe(true);
     expect(emptyCalendarSnapshot.inputs.work_time_basis).toMatchObject({ mode: "calendar", total_work_seconds: "0", work_days: [], periods: [] });
     expect(isPurchaseSnapshotV2(emptyCalendarSnapshot)).toBe(true);
+  });
+
+  it("preserves insufficient calendar snapshots when the saved income is invalid", () => {
+    const input: DecisionInput = {
+      ...baseInput,
+      income: "bad-income",
+      workHours: "",
+      workTime: calendarWorkTimeInput({
+        mode: "calendar",
+        comparisonMonth: "2026-09",
+        timeZone: "Asia/Shanghai",
+        workDays: [1, 2, 3, 4, 5],
+        periods: [{ start: "09:00", end: "18:00", endDayOffset: 0 }],
+        exceptions: {},
+        scheduleSource: "user-confirmed",
+      }),
+      evidence: { ...baseInput.evidence, income: "" },
+    };
+    const snapshot = createPurchaseSnapshot(input, calculateDecision(input), decision, context);
+
+    expect(snapshot.results.every((result) => result.availability === "insufficient-data")).toBe(true);
+    expect(isPurchaseSnapshotV2(snapshot)).toBe(true);
+  });
+
+  it("bounds calendar periods, exception entries, and work days", () => {
+    const input: DecisionInput = {
+      ...baseInput,
+      workHours: "",
+      workTime: calendarWorkTimeInput({
+        mode: "calendar",
+        comparisonMonth: "2026-09",
+        timeZone: "Asia/Shanghai",
+        workDays: [1, 2, 3, 4, 5],
+        periods: [{ start: "09:00", end: "18:00", endDayOffset: 0 }],
+        exceptions: {},
+        scheduleSource: "user-confirmed",
+      }),
+    };
+    const snapshot = createPurchaseSnapshot(input, calculateDecision(input), decision, context);
+    const basis = snapshot.inputs.work_time_basis;
+    if (basis.mode !== "calendar") throw new Error("expected-calendar-basis");
+
+    expect(isPurchaseSnapshotV2({
+      ...snapshot,
+      inputs: { ...snapshot.inputs, work_time_basis: { ...basis, periods: Array(MAX_INCOME_PERIODS + 1).fill(basis.periods?.[0]) } },
+    })).toBe(false);
+    expect(isPurchaseSnapshotV2({
+      ...snapshot,
+      inputs: { ...snapshot.inputs, work_time_basis: { ...basis, exceptions: Object.fromEntries(Array.from({ length: MAX_INCOME_EXCEPTIONS + 1 }, (_, index) => [String(index), "rest"])) } },
+    })).toBe(false);
+    expect(isPurchaseSnapshotV2({
+      ...snapshot,
+      inputs: { ...snapshot.inputs, work_time_basis: { ...basis, work_days: [1, 2, 3, 4, 5, 6, 7, 1] } },
+    })).toBe(false);
   });
 
   it("rejects unsupported formats and malformed dates, time zones, and exact values", () => {

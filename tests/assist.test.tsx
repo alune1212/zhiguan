@@ -213,7 +213,7 @@ describe("conversation assist flow", () => {
     expect(advanceAssistQuestion(blankInput, ambiguousFreeText.state, false).questionId).toBe("taxBasis");
   });
 
-  it("sends only the context relevant to a targeted question and uses manual draft context when resumed", () => {
+  it("does not send saved or resumed draft fields without current-session provenance", () => {
     expect(assistContextFor(blankInput, null, false, {})).toEqual({});
     const input = {
       ...blankInput,
@@ -224,10 +224,25 @@ describe("conversation assist flow", () => {
       fixedCostCoverage: "complete" as const,
       valueExpectation: "不发送的期待",
     };
-    expect(assistContextFor(input, "taxBasis", true, {})).toEqual({ income: { value: "8000", span: null } });
-    expect(assistContextFor(input, "purchaseIncluded", true, {})).toEqual({ purchaseAmount: { value: "3000", span: null } });
-    expect(assistContextFor(input, null, true, {})).not.toHaveProperty("valueExpectation");
-    expect(assistContextFor(input, null, true, {})).toHaveProperty("fixedExpenses", { value: "2000", span: null });
+    expect(assistContextFor(input, null, false, {})).toEqual({});
+    expect(assistContextFor(input, null, true, {})).toEqual({});
+    expect(assistContextFor(input, "taxBasis", true, {})).toEqual({});
+    expect(assistContextFor(input, "purchaseIncluded", true, {})).toEqual({});
+
+    const notes = {
+      income: answer("8000", "每月八千", "present"),
+      purchaseAmount: answer("3000", null, "present"),
+    };
+    expect(assistContextFor(input, null, false, notes)).toEqual({});
+    expect(assistContextFor(input, "taxBasis", true, notes)).toEqual({ income: { value: "8000", span: "每月八千" } });
+    expect(assistContextFor(input, "purchaseIncluded", true, notes)).toEqual({ purchaseAmount: { value: "3000", span: null } });
+    expect(assistContextFor(input, null, true, notes)).toEqual({
+      income: { value: "8000", span: "每月八千" },
+      purchaseAmount: { value: "3000", span: null },
+    });
+    const changedInput = { ...input, income: "9000" };
+    expect(assistContextFor(changedInput, null, true, notes)).not.toHaveProperty("income");
+    expect(assistContextFor(changedInput, "taxBasis", true, notes)).toEqual({});
   });
 
   it("does not ask for or send saved calendar work-time details", () => {

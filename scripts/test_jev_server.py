@@ -4,6 +4,7 @@ from http.client import HTTPConnection
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 from threading import Lock, Thread
 from types import SimpleNamespace
@@ -24,6 +25,33 @@ TEXT = "税后每月八千，想买三千元的相机。"
 
 
 class AmountTests(unittest.TestCase):
+    def test_numeric_candidate_search_is_bounded_and_preserves_supported_forms(self):
+        texts = [
+            "1" * 1999 + "A",
+            "1" * 1000 + "." + "1" * 998 + "A",
+            "1.1" * 100 + "A",
+            "+1万2千，−7千5百，负8,000.25，.5，八点五",
+        ]
+        expected = [
+            [],
+            [],
+            [],
+            ["+1万2千", "−7千5百", "负8,000.25", ".5", "八点五"],
+        ]
+        code = (
+            "from importlib import import_module; import json, sys; "
+            "state = [import_module(sys.argv[1]).prepare(text)[0] for text in json.loads(sys.argv[2])]; "
+            "print(json.dumps([[item['span'] for item in value.get('current_number_candidates', value.get('number_candidates', []))] "
+            "for value in state], ensure_ascii=False))"
+        )
+        for module in ("jev_conversation", "jev_experiment"):
+            with self.subTest(module=module):
+                result = subprocess.run(
+                    [sys.executable, "-c", code, module, json.dumps(texts, ensure_ascii=False)],
+                    cwd=SCRIPT_DIR, capture_output=True, text=True, timeout=3, check=True,
+                )
+                self.assertEqual(json.loads(result.stdout), expected)
+
     def test_supported_chinese_arabic_comma_and_myriad_amounts(self):
         cases = {
             "八千": "8000.00",

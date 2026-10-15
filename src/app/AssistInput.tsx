@@ -24,7 +24,6 @@ import {
   parseAssistResponse,
   restoreAssistMoneyFields,
   scheduleValues,
-  type AssistContext,
   type AssistEstimatedValues,
   type AssistField,
   type AssistFieldName,
@@ -137,10 +136,6 @@ function valueOf(input: DecisionInput, field: AssistFieldName): string {
 function statusForField(field: AssistField | undefined, value: string): AssistStatus {
   if (field && field.value === (value || null)) return field.status;
   return value ? "present" : "missing";
-}
-
-function questionContext(input: DecisionInput, questionId: AssistFieldName | null, notes: Partial<Record<AssistFieldName, AssistField>>): AssistContext {
-  return assistContextFor(input, questionId, inputHasAssistData(input), notes);
 }
 
 function useStopPendingRequest() {
@@ -292,7 +287,7 @@ export function AssistInput({
     const generation = generationRef.current;
     const requestRevision = draftRevision;
     const questionId = currentQuestion;
-    const context = questionContext(currentInput, questionId, notes);
+    const context = assistContextFor(currentInput, questionId, started, notes);
     let timedOut = false;
     controllerRef.current = controller;
     setStarted(true);

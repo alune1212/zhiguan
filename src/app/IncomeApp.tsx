@@ -20,6 +20,8 @@ import { isPausedIncomeCurrent, parseAnimatedAmount, shouldAnimateIncome, type I
 import {
   calculateIncome,
   defaultProfile,
+  MAX_INCOME_EXCEPTIONS,
+  MAX_INCOME_PERIODS,
   validateProfile,
   type IncomeCalculation,
   type IncomeException,
@@ -35,7 +37,7 @@ import {
   createLocalBackup,
   deleteFavorite,
   LOCAL_DATA_STORAGE_KEY,
-  parseLocalBackup,
+  parseLocalBackupFile,
   readLocalData,
   restoreInvalidLocalData,
   restoreLocalData,
@@ -88,11 +90,15 @@ function validationMessage(issue: IncomeProfileIssue): string {
   if (issue.field === "timeZone") return "时区无效，请填写有效的 IANA 时区，例如 Asia/Shanghai。";
   if (issue.field === "workDays") return "请检查每周工作日设置。";
   if (issue.field === "periods") {
+    if (issue.code === "out-of-range") return `每天最多支持 ${MAX_INCOME_PERIODS} 个工作时段。`;
     if (issue.code === "overlapping-periods") return "工作时段不能重叠，请调整开始或结束时间。";
     if (issue.code === "zero-length-period") return "每个工作时段都需要有实际时长。";
     return "请检查工作时段；跨日时需明确选择“次日”。";
   }
-  if (issue.field === "exceptions") return issue.date ? `${issue.date} 的特殊日期设置无效。` : "请检查特殊日期设置。";
+  if (issue.field === "exceptions") {
+    if (issue.code === "out-of-range") return `最多支持 ${MAX_INCOME_EXCEPTIONS} 个特殊日期。`;
+    return issue.date ? `${issue.date} 的特殊日期设置无效。` : "请检查特殊日期设置。";
+  }
   return "资料格式有误，请检查后再保存。";
 }
 
@@ -968,7 +974,7 @@ export function IncomeApp() {
     setBusy(true);
     const operation = ++operationGenerationRef.current;
     try {
-      const parsed = parseLocalBackup(await file.text());
+      const parsed = await parseLocalBackupFile(file);
       if (!mountedRef.current || operation !== operationGenerationRef.current) return;
       if (parsed.status === "invalid") {
         setNotice(parsed.reason === "unsupported-version"

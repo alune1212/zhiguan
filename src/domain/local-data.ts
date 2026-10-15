@@ -45,6 +45,9 @@ export type LocalBackupParseResult =
 
 const LOCK_NAME = "zhiguan-local-data";
 const MAX_DOCUMENT_LENGTH = 5_000_000;
+// UTF-8 uses at most three bytes per UTF-16 code unit.
+const MAX_BACKUP_FILE_BYTES = MAX_DOCUMENT_LENGTH * 3;
+const MAX_CALENDAR_VALIDATION_WORK = 512;
 const PROFILE_KEYS = ["income", "timeZone", "workDays", "periods", "exceptions", "updatedAt", "scheduleSource"] as const;
 
 export function readLocalData(): LocalDataReadResult {
@@ -164,6 +167,11 @@ export function createLocalBackup(document: LocalDataDocument, exportedAt = new 
   return `${JSON.stringify({ ...document, exported_at: exportedAt.toISOString() }, null, 2)}\n`;
 }
 
+export async function parseLocalBackupFile(file: Pick<File, "size" | "text">): Promise<LocalBackupParseResult> {
+  if (file.size > MAX_BACKUP_FILE_BYTES) return { status: "invalid", reason: "malformed" };
+  return parseLocalBackup(await file.text());
+}
+
 export function parseLocalBackup(raw: string): LocalBackupParseResult {
   if (raw.length > MAX_DOCUMENT_LENGTH) return { status: "invalid", reason: "malformed" };
   let value: unknown;
@@ -259,16 +267,28 @@ function contentForRestore(source: LocalDataContent | LocalDataDocument): LocalD
 function isContent(value: unknown): value is LocalDataContent {
   if (!hasExactKeys(value, ["profile", "favorites"])) return false;
   if (value.profile !== null && !isProfile(value.profile)) return false;
-  return Array.isArray(value.favorites)
-    && value.favorites.every(isFavorite)
+  if (!Array.isArray(value.favorites)) return false;
+  // Bound calendar preparation across the whole document before validating any favorite.
+  let calendarWork = 0;
+  for (const favorite of value.favorites) {
+    if (!isRecord(favorite) || !isRecord(favorite.snapshot) || !isRecord(favorite.snapshot.inputs)
+      || !isRecord(favorite.snapshot.inputs.work_time_basis)) return false;
+    const basis = favorite.snapshot.inputs.work_time_basis;
+    if (basis.mode === "calendar") {
+      if (!Array.isArray(basis.periods)) return false;
+      calendarWork += 1 + basis.periods.length;
+      if (calendarWork > MAX_CALENDAR_VALIDATION_WORK) return false;
+    }
+  }
+  return value.favorites.every(isFavorite)
     && new Set(value.favorites.map((favorite) => favorite.id)).size === value.favorites.length;
 }
 
 function isProfile(value: unknown): value is IncomeProfile {
   if (!hasExactKeys(value, PROFILE_KEYS)) return false;
-  if (!Array.isArray(value.periods) || !value.periods.every((period) => hasExactKeys(period, ["start", "end", "endDayOffset"]))) return false;
   const validation = validateProfile(value);
-  return validation.ok;
+  return validation.ok && Array.isArray(value.periods)
+    && value.periods.every((period) => hasExactKeys(period, ["start", "end", "endDayOffset"]));
 }
 
 function isFavorite(value: unknown): value is FavoriteSnapshot {

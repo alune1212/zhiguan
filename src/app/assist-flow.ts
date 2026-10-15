@@ -421,11 +421,11 @@ export function assistContextFor(
   const context: AssistContext = {};
   for (const field of fields) {
     const value = assistValue(input, field);
-    if (!value) continue;
     const note = notes[field];
+    if (!value || note?.value !== value) continue;
     context[field] = {
       value,
-      span: note?.value === value ? note.span : null,
+      span: note.span,
     };
   }
   return context;

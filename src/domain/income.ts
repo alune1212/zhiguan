@@ -9,6 +9,9 @@ import {
 export type IncomeProfileScheduleSource = "default" | "user-confirmed";
 export type IncomeException = "work" | "rest";
 
+export const MAX_INCOME_PERIODS = 48;
+export const MAX_INCOME_EXCEPTIONS = 3660;
+
 export interface IncomePeriod {
   readonly start: string;
   readonly end: string;
@@ -266,16 +269,17 @@ function profileHasOverlap(
   exceptions: Readonly<Record<string, IncomeException>>,
 ): boolean {
   if (periodsOverlapSameDay(periods)) return true;
+  if (!adjacentPeriodsOverlap(periods)) return false;
   for (let day = 1; day <= 7; day += 1) {
     const nextDay = day === 7 ? 1 : day + 1;
-    if (workDays.includes(day) && workDays.includes(nextDay) && adjacentPeriodsOverlap(periods)) return true;
+    if (workDays.includes(day) && workDays.includes(nextDay)) return true;
   }
   for (const date of Object.keys(exceptions)) {
     for (const previous of [addSupportedDays(date, -1), date]) {
       if (!previous) continue;
       const next = addSupportedDays(previous, 1);
       if (!next) continue;
-      if (worksOn(previous, workDays, exceptions) && worksOn(next, workDays, exceptions) && adjacentPeriodsOverlap(periods)) return true;
+      if (worksOn(previous, workDays, exceptions) && worksOn(next, workDays, exceptions)) return true;
     }
   }
   return false;
@@ -287,10 +291,12 @@ export function validateWorkTimeBasis(input: unknown): boolean {
   if (!isValidTimeZone(profile.timeZone)) return false;
 
   if (!Array.isArray(profile.workDays)) return false;
+  if (profile.workDays.length > 7) return false;
   if (!profile.workDays.every((day) => Number.isInteger(day) && (day as number) >= 1 && (day as number) <= 7)) return false;
   if (new Set(profile.workDays).size !== profile.workDays.length) return false;
 
   if (!Array.isArray(profile.periods)) return false;
+  if (profile.periods.length > MAX_INCOME_PERIODS) return false;
   const parsedPeriods: IncomePeriod[] = [];
   for (const value of profile.periods) {
     const period = asRecord(value);
@@ -305,6 +311,7 @@ export function validateWorkTimeBasis(input: unknown): boolean {
 
   const exceptionsRecord = asRecord(profile.exceptions);
   if (!exceptionsRecord) return false;
+  if (Object.keys(exceptionsRecord).length > MAX_INCOME_EXCEPTIONS) return false;
   for (const [date, value] of Object.entries(exceptionsRecord)) {
     if (!dateParts(date)) return false;
     if (value !== "work" && value !== "rest") return false;
@@ -325,7 +332,11 @@ export function validateProfile(input: unknown): IncomeProfileValidation {
   if (!isValidTimeZone(profile.timeZone)) issues.push({ field: "timeZone", code: "invalid-time-zone" });
 
   const workDays = Array.isArray(profile.workDays) ? profile.workDays : null;
-  if (!workDays || workDays.some((day) => !Number.isInteger(day) || (day as number) < 1 || (day as number) > 7)) {
+  if (!workDays) {
+    issues.push({ field: "workDays", code: "invalid-work-day" });
+  } else if (workDays.length > 7) {
+    issues.push({ field: "workDays", code: "out-of-range" });
+  } else if (workDays.some((day) => !Number.isInteger(day) || (day as number) < 1 || (day as number) > 7)) {
     issues.push({ field: "workDays", code: "invalid-work-day" });
   } else if (new Set(workDays).size !== workDays.length) {
     issues.push({ field: "workDays", code: "duplicate-work-day" });
@@ -335,6 +346,8 @@ export function validateProfile(input: unknown): IncomeProfileValidation {
   const periods: IncomePeriod[] = [];
   if (!rawPeriods) {
     issues.push({ field: "periods", code: "invalid-period" });
+  } else if (rawPeriods.length > MAX_INCOME_PERIODS) {
+    issues.push({ field: "periods", code: "out-of-range" });
   } else {
     for (const value of rawPeriods) {
       const period = asRecord(value);
@@ -359,6 +372,8 @@ export function validateProfile(input: unknown): IncomeProfileValidation {
   const exceptions: Record<string, IncomeException> = {};
   if (!exceptionsRecord) {
     issues.push({ field: "exceptions", code: "invalid-exception" });
+  } else if (Object.keys(exceptionsRecord).length > MAX_INCOME_EXCEPTIONS) {
+    issues.push({ field: "exceptions", code: "out-of-range" });
   } else {
     for (const [date, value] of Object.entries(exceptionsRecord)) {
       if (!dateParts(date)) issues.push({ field: "exceptions", code: "invalid-date", date });
@@ -375,7 +390,7 @@ export function validateProfile(input: unknown): IncomeProfileValidation {
     issues.push({ field: "scheduleSource", code: "invalid-schedule-source" });
   }
 
-  if (workDays && workDays.every((day) => Number.isInteger(day) && (day as number) >= 1 && (day as number) <= 7)
+  if (workDays && workDays.length <= 7 && workDays.every((day) => Number.isInteger(day) && (day as number) >= 1 && (day as number) <= 7)
     && rawPeriods && rawPeriods.length === periods.length && exceptionsRecord
     && !issues.some((issue) => issue.field === "workDays" || issue.field === "periods" || issue.field === "exceptions")) {
     if (profileHasOverlap(workDays as number[], periods, exceptions)) {

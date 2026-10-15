@@ -2,15 +2,20 @@ import {
   CURRENCY,
   PERIOD,
   WORK_TIME_ESTIMATE_RULE,
-  parseAmount,
-  parseWorkHours,
+  calculateDecision,
   type CalculationOutput,
   type DecisionInput,
   type EvidenceStatus,
   type ExactValue,
   type ResultId,
+  type WorkTimeInput,
 } from "./calculation";
-import { validateWorkTimeBasis } from "./income";
+import {
+  calculateIncome,
+  MAX_INCOME_EXCEPTIONS,
+  MAX_INCOME_PERIODS,
+  validateWorkTimeBasis,
+} from "./income";
 
 export const PURCHASE_SNAPSHOT_FORMAT = "zhiguan-purchase-decision@2" as const;
 export const PURCHASE_RULESET_VERSION = "zhiguan-income-calendar@1" as const;
@@ -96,19 +101,7 @@ export function createPurchaseSnapshot(
       value_expectation: input.valueExpectation,
       evidence: { ...input.evidence, workHours: output.workTime.evidence },
     },
-    results: output.results.map((item) => ({
-      id: item.id,
-      label: item.label,
-      availability: item.availability,
-      evidence_status: item.evidenceStatus,
-      exact: item.exact ? { ...item.exact } : null,
-      display: item.display,
-      unit: item.unit,
-      formula: item.formula,
-      dependencies: [...item.dependencyFieldIds],
-      reasons: [...item.reasonCodes],
-      source: item.source,
-    })),
+    results: snapshotResults(output),
     decision: {
       code: decision.code || null,
       rationale: decision.rationale || null,
@@ -143,27 +136,119 @@ export function isPurchaseSnapshotV2(value: unknown): value is PurchaseSnapshotV
   if (!Array.isArray(value.results) || value.results.length !== 5 || !value.results.every(isResult)) return false;
   const resultIds = new Set<unknown>(value.results.map((result) => isRecord(result) ? result.id : null));
   if (resultIds.size !== 5 || !["income-rate", "work-time-equivalent", "available-margin", "purchase-after-margin", "purchase-impact"].every((id) => resultIds.has(id))) return false;
-  const incomeReady = parseAmount(value.inputs.income, false).ok && value.inputs.evidence.income !== "";
-  const hoursReady = value.inputs.work_time_basis.mode === "calendar"
-    ? value.inputs.evidence.workHours === "estimated" && value.inputs.work_time_basis.total_work_seconds !== "0"
-    : value.inputs.work_time_basis.mode !== "unselected" && value.inputs.evidence.workHours !== "" && parseWorkHours(value.inputs.work_hours).ok;
-  const fixedReady = parseAmount(value.inputs.fixed_expenses).ok && value.inputs.evidence.fixedExpenses !== "";
-  const purchaseReady = parseAmount(value.inputs.purchase_amount, false).ok && value.inputs.evidence.purchaseAmount !== "";
-  const rateReady = incomeReady && hoursReady && value.inputs.tax_basis !== null;
-  const marginReady = incomeReady && fixedReady && value.inputs.tax_basis === "after-tax" && value.inputs.fixed_cost_coverage === "complete";
-  const afterReady = marginReady && purchaseReady && value.inputs.purchase_included === "included";
-  const resultReady: Record<ResultId, boolean> = {
-    "income-rate": rateReady,
-    "work-time-equivalent": rateReady && purchaseReady,
-    "available-margin": marginReady,
-    "purchase-after-margin": afterReady,
-    "purchase-impact": afterReady,
-  };
-  if (!value.results.every((result) => result.availability === "insufficient-data" || resultReady[result.id])) return false;
   if (!hasExactKeys(value.decision, ["code", "rationale", "review_condition"])) return false;
-  return isNullableEnum(value.decision.code, ["buy", "wait", "adjust-conditions", "do-not-buy", "undecided"])
+  if (!(isNullableEnum(value.decision.code, ["buy", "wait", "adjust-conditions", "do-not-buy", "undecided"])
     && isNullableString(value.decision.rationale)
-    && isNullableString(value.decision.review_condition);
+    && isNullableString(value.decision.review_condition))) return false;
+  const snapshot = value as unknown as PurchaseSnapshotV2;
+  if (snapshot.inputs.work_time_basis.mode === "calendar" && !isCalendarWorkSecondsConsistent(snapshot)) return false;
+  return isDerivedSnapshotConsistent(snapshot);
+}
+
+function snapshotResults(output: CalculationOutput): PurchaseSnapshotV2["results"] {
+  return output.results.map((item) => ({
+    id: item.id,
+    label: item.label,
+    availability: item.availability,
+    evidence_status: item.evidenceStatus,
+    exact: item.exact ? { ...item.exact } : null,
+    display: item.display,
+    unit: item.unit,
+    formula: item.formula,
+    dependencies: [...item.dependencyFieldIds],
+    reasons: [...item.reasonCodes],
+    source: item.source,
+  }));
+}
+
+function decisionInputFromSnapshot(snapshot: PurchaseSnapshotV2): DecisionInput {
+  const { inputs } = snapshot;
+  const basis = inputs.work_time_basis;
+  let workTime: WorkTimeInput;
+  switch (basis.mode) {
+    case "unselected":
+    case "monthly":
+    case "five-day":
+    case "six-day":
+      workTime = { mode: basis.mode };
+      break;
+    case "custom":
+      workTime = { mode: "custom", daysPerWeek: basis.days_per_week ?? "", hoursPerDay: basis.hours_per_day ?? "" };
+      break;
+    case "calendar":
+      workTime = {
+        mode: "calendar",
+        comparisonMonth: basis.comparison_month as string,
+        timeZone: basis.time_zone as string,
+        totalWorkSeconds: basis.total_work_seconds as string,
+        workDays: basis.work_days as readonly number[],
+        periods: basis.periods as NonNullable<typeof basis.periods>,
+        exceptions: basis.exceptions as NonNullable<typeof basis.exceptions>,
+        scheduleSource: basis.schedule_source as "default" | "user-confirmed",
+      };
+      break;
+  }
+  return {
+    income: inputs.income,
+    workHours: inputs.work_hours,
+    workTime,
+    fixedExpenses: inputs.fixed_expenses,
+    purchaseAmount: inputs.purchase_amount,
+    taxBasis: inputs.tax_basis ?? "",
+    fixedCostCoverage: inputs.fixed_cost_coverage ?? "",
+    purchaseIncluded: inputs.purchase_included ?? "",
+    valueExpectation: inputs.value_expectation,
+    evidence: {
+      income: inputs.evidence.income,
+      workHours: inputs.evidence.workHours,
+      fixedExpenses: inputs.evidence.fixedExpenses,
+      purchaseAmount: inputs.evidence.purchaseAmount,
+    },
+  };
+}
+
+function isDerivedSnapshotConsistent(snapshot: PurchaseSnapshotV2): boolean {
+  const output = calculateDecision(decisionInputFromSnapshot(snapshot));
+  const expectedResults = snapshotResults(output);
+  return snapshot.inputs.work_hours === output.workTime.workHours
+    && snapshot.inputs.evidence.workHours === output.workTime.evidence
+    && sameValue(snapshot.inputs.work_time_basis, output.workTime.basis)
+    && snapshot.results.every((result) => {
+      const expected = expectedResults.find((item) => item.id === result.id);
+      return expected !== undefined && sameValue(result, expected);
+    });
+}
+
+function isCalendarWorkSecondsConsistent(snapshot: PurchaseSnapshotV2): boolean {
+  const basis = snapshot.inputs.work_time_basis;
+  if (basis.mode !== "calendar") return true;
+  const calculation = calculateIncome({
+    income: "1",
+    timeZone: basis.time_zone,
+    workDays: basis.work_days,
+    periods: basis.periods,
+    exceptions: basis.exceptions,
+    updatedAt: snapshot.exported_at,
+    scheduleSource: basis.schedule_source,
+  }, new Date(`${basis.comparison_month}-15T12:00:00.000Z`));
+  if (calculation.comparisonMonth !== basis.comparison_month) return false;
+  return calculation.status === "available"
+    ? calculation.totalWorkSeconds === basis.total_work_seconds
+    : calculation.reason?.code === "no-working-time" && basis.total_work_seconds === "0";
+}
+
+function sameValue(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left) && Array.isArray(right)
+      && left.length === right.length
+      && left.every((value, index) => sameValue(value, right[index]));
+  }
+  if (!isRecord(left) || !isRecord(right)) return false;
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  return leftKeys.length === rightKeys.length
+    && leftKeys.every((key) => Object.hasOwn(right, key) && sameValue(left[key], right[key]));
 }
 
 function assertContext(context: PurchaseSnapshotContext, now: Date): void {
@@ -226,9 +311,9 @@ function isWorkTimeBasis(value: unknown, comparisonMonth: string, timeZone: stri
     return value.days_per_week === null && value.hours_per_day === null && value.conversion === null
       && value.comparison_month === comparisonMonth && value.time_zone === timeZone
       && isNonNegativeIntegerString(value.total_work_seconds) && BigInt(value.total_work_seconds) <= 32n * 24n * 60n * 60n
-      && Array.isArray(value.work_days) && value.work_days.every((day) => Number.isInteger(day) && day >= 1 && day <= 7)
+      && Array.isArray(value.work_days) && value.work_days.length <= 7 && value.work_days.every((day) => Number.isInteger(day) && day >= 1 && day <= 7)
       && new Set(value.work_days).size === value.work_days.length
-      && Array.isArray(value.periods) && value.periods.every(isPeriod)
+      && Array.isArray(value.periods) && value.periods.length <= MAX_INCOME_PERIODS && value.periods.every(isPeriod)
       && isExceptions(value.exceptions)
       && (value.schedule_source === "default" || value.schedule_source === "user-confirmed")
       && validateWorkTimeBasis({
@@ -270,7 +355,9 @@ function isTimeOfDay(value: unknown): value is string {
 
 function isExceptions(value: unknown): boolean {
   if (!isRecord(value)) return false;
-  return Object.entries(value).every(([date, kind]) => isCalendarDate(date) && (kind === "work" || kind === "rest"));
+  const dates = Object.keys(value);
+  return dates.length <= MAX_INCOME_EXCEPTIONS
+    && dates.every((date) => isCalendarDate(date) && (value[date] === "work" || value[date] === "rest"));
 }
 
 function isCalendarDate(value: string): boolean {
@@ -297,8 +384,8 @@ function isResult(value: unknown): value is PurchaseSnapshotV2["results"][number
   const valueAvailable = value.availability === "available";
   return (valueAvailable === (value.exact !== null)) && (valueAvailable === (value.display !== null))
     && (valueAvailable === (value.evidence_status !== "insufficient-data"))
-    && isString(value.unit) && isString(value.formula) && Array.isArray(value.dependencies) && value.dependencies.every(isString)
-    && Array.isArray(value.reasons) && value.reasons.every(isKnownReason)
+    && isString(value.unit) && isString(value.formula) && Array.isArray(value.dependencies) && value.dependencies.length <= 6 && value.dependencies.every(isString)
+    && Array.isArray(value.reasons) && value.reasons.length <= 11 && value.reasons.every(isKnownReason)
     && (valueAvailable || value.reasons.length > 0)
     && new Set(value.reasons).size === value.reasons.length && value.source === "ruleset-derived";
 }

@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  MAX_INCOME_EXCEPTIONS,
+  MAX_INCOME_PERIODS,
   calculateIncome,
   defaultProfile,
   validateProfile,
+  validateWorkTimeBasis,
   type IncomeProfile,
 } from "../src/domain/income";
 
@@ -15,7 +18,84 @@ function profile(overrides: Partial<IncomeProfile> = {}): IncomeProfile {
   };
 }
 
+function periods(count: number): IncomeProfile["periods"] {
+  const timeAt = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
+  return Array.from({ length: count }, (_, index) => ({
+    start: timeAt(index * 2),
+    end: timeAt(index * 2 + 1),
+    endDayOffset: 0,
+  }));
+}
+
+function exceptions(count: number, value: "work" | "rest" = "rest"): IncomeProfile["exceptions"] {
+  return Object.fromEntries(Array.from({ length: count }, (_, index) => [
+    new Date(Date.UTC(2020, 0, index + 1)).toISOString().slice(0, 10),
+    value,
+  ]));
+}
+
 describe("income profile", () => {
+  it("rejects period collections beyond the validation limit", () => {
+    const value = profile({ workDays: [], periods: periods(MAX_INCOME_PERIODS + 1) });
+
+    const result = validateProfile(value);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.issues).toContainEqual({ field: "periods", code: "out-of-range" });
+    expect(validateWorkTimeBasis(value)).toBe(false);
+  });
+
+  it("rejects exception collections beyond the validation limit", () => {
+    const value = profile({ workDays: [], exceptions: exceptions(MAX_INCOME_EXCEPTIONS + 1) });
+
+    const result = validateProfile(value);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.issues).toContainEqual({ field: "exceptions", code: "out-of-range" });
+    expect(validateWorkTimeBasis(value)).toBe(false);
+  });
+
+  it("rejects work-day collections beyond seven before accepting either validator", () => {
+    const value = profile({ workDays: [1, 2, 3, 4, 5, 6, 7, 1] });
+
+    const result = validateProfile(value);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.issues).toContainEqual({ field: "workDays", code: "out-of-range" });
+    expect(validateWorkTimeBasis(value)).toBe(false);
+  });
+
+  it("accepts valid control and schedules at both collection limits", () => {
+    const control = profile();
+    expect(validateProfile(control).ok).toBe(true);
+    expect(validateWorkTimeBasis(control)).toBe(true);
+
+    const maxPeriods = profile({ workDays: [], periods: periods(MAX_INCOME_PERIODS) });
+    expect(validateProfile(maxPeriods).ok).toBe(true);
+    expect(validateWorkTimeBasis(maxPeriods)).toBe(true);
+
+    const maxExceptions = profile({
+      workDays: [],
+      periods: [{ start: "09:00", end: "10:00", endDayOffset: 0 }],
+      exceptions: exceptions(MAX_INCOME_EXCEPTIONS),
+    });
+    expect(validateProfile(maxExceptions).ok).toBe(true);
+    expect(validateWorkTimeBasis(maxExceptions)).toBe(true);
+  });
+
+  it("keeps overlap checks across adjacent exception workdays", () => {
+    const value = profile({
+      workDays: [],
+      periods: [
+        { start: "22:00", end: "02:00", endDayOffset: 1 },
+        { start: "01:00", end: "09:00", endDayOffset: 0 },
+      ],
+      exceptions: { "2026-02-01": "work", "2026-02-02": "work" },
+    });
+
+    const result = validateProfile(value);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.issues).toContainEqual({ field: "periods", code: "overlapping-periods" });
+    expect(validateWorkTimeBasis(value)).toBe(false);
+  });
+
   it("defaults to five weekdays and eight working hours", () => {
     const value = defaultProfile(new Date("2026-01-01T00:00:00.000Z"), "Asia/Shanghai");
     expect(value).toMatchObject({
