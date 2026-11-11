@@ -39,6 +39,6 @@
 
 ## 后续文档边界
 
-讨论阶段曾要求将已确认术语写入 CONTEXT.md、按 RFC-0001 审阅宪法修订，并同步旧阶段的策略、路线图、架构和购买 PRD。此同步已完成；当前以 [PRODUCT.md 0.2.0](../../PRODUCT.md)、[产品策略](../../PRODUCT_STRATEGY.md)、[路线图](../../ROADMAP.md)、[架构](../../ARCHITECTURE.md) 和 [PRD-0001](../product/prd/PRD-0001-single-purchase-decision-workbench.md) 的现行说明为准。术语见 [CONTEXT.md](../../CONTEXT.md)，持久化及对话边界分别见 [ADR-0008](../adr/ADR-0008-local-profile-and-purchase-favorites.md) 与 [ADR-0007](../adr/ADR-0007-conversational-input.md)。
+讨论阶段曾要求将已确认术语写入 CONTEXT.md、按 RFC-0001 审阅宪法修订，并同步旧阶段的策略、路线图、架构和购买 PRD。此同步在 0.2.0 期间完成。PRODUCT.md 1.0.0（[RFC-0002](../product/rfc/RFC-0002-purchase-council.md)）已经替代 0.2.0；下面提到的「当前」是 2026-09-22 当时的边界，本段保留作历史记录。术语见 [CONTEXT.md](../../CONTEXT.md)，当时的持久化及对话边界分别见 [ADR-0008](../adr/ADR-0008-local-profile-and-purchase-favorites.md) 与 [ADR-0007](../adr/ADR-0007-conversational-input.md)。
 
 代码接入和合成数据检查不等于真实用户体验、回滚演练或正式发布已经完成；这些待验证项继续以 PRD-0003、RFC-0001 和 ADR-0008 的状态记录为准。
