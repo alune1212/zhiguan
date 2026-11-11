@@ -85,6 +85,8 @@ export function createDiscussionSaveGate() {
   let recordId: string | null = null;
   let hold = false;
   let generation = 0;
+  let deletedHoldGeneration = 0;
+  let clearHoldGeneration = 0;
   const deletedIds = new Set<string>();
   return {
     get generation() {
@@ -112,11 +114,13 @@ export function createDiscussionSaveGate() {
       recordId = null;
       hold = true;
       generation += 1;
+      deletedHoldGeneration = generation;
       return true;
     },
     undoBlock(id: string, wasCurrent: boolean) {
       deletedIds.delete(id);
-      if (!wasCurrent) return;
+      // 等待期间换了购买，generation 已经往前走，不能把旧编号套回去。
+      if (!wasCurrent || generation !== deletedHoldGeneration) return;
       recordId = id;
       hold = false;
     },
@@ -126,10 +130,12 @@ export function createDiscussionSaveGate() {
       recordId = null;
       hold = true;
       generation += 1;
+      clearHoldGeneration = generation;
       return previousId;
     },
     undoBlockAll(previousId: string | null) {
       if (previousId) deletedIds.delete(previousId);
+      if (generation !== clearHoldGeneration) return;
       recordId = previousId;
       hold = false;
     },
