@@ -472,17 +472,18 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
   const removeSaved = (id: string) => {
     const wasCurrent = gateRef.current.blockDeleted(id);
     if (wasCurrent) leaveFlushRef.current.forget();
+    const closeIfStillOpen = () => setOpenRecordId((current) => (current === id ? null : current));
     void writeQueue.current.enqueue(async () => {
       const result = await deleteDiscussion(id, revisionRef.current);
       if (result.status === "saved") {
         revisionRef.current = result.document.revision;
-        if (openRecordId === id) setOpenRecordId(null);
+        closeIfStillOpen();
         setLibrary({ status: "ready", document: result.document, raw: result.raw });
         setNotice("已删除这一条讨论。收入资料还在。");
         return;
       }
       if (result.status === "not-found") {
-        if (openRecordId === id) setOpenRecordId(null);
+        closeIfStillOpen();
         setLibrary(readDiscussions());
         setNotice("这条讨论已经不在了。");
         return;

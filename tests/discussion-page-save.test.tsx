@@ -306,4 +306,69 @@ describe("discussion page save", () => {
     expect(current.records.map((item) => item.id)).toEqual(["other-tab-record"]);
     expect(current.records.map((item) => item.id)).not.toContain(savedId);
   });
+
+  it("删除一条记录等待期间打开另一条，删除完成后仍保持打开", async () => {
+    const view = mount();
+    roots.push(view);
+    await preparePurchase();
+    await act(async () => {
+      click("#discussion-decision-wait");
+    });
+    await vi.waitFor(() => {
+      expect(storedRecords()).toHaveLength(1);
+    });
+    await act(async () => {
+      fill(document.querySelector("#purchase-category") as HTMLInputElement, "书籍");
+    });
+    await act(async () => {
+      click("#discussion-decision-wait");
+    });
+    await vi.waitFor(() => {
+      expect(document.querySelectorAll(".saved-discussions li")).toHaveLength(2);
+    });
+    const row = (category: string) => {
+      const item = [...document.querySelectorAll(".saved-discussions li")].find((entry) => entry.textContent?.includes(category));
+      if (!(item instanceof HTMLElement)) throw new Error(`missing ${category}`);
+      return item;
+    };
+    const press = (item: HTMLElement, label: string) => {
+      const button = [...item.querySelectorAll("button")].find((entry) => entry.textContent === label);
+      if (!(button instanceof HTMLElement)) throw new Error(`missing ${label}`);
+      button.click();
+    };
+    await act(async () => {
+      press(row("家电"), "查看这条讨论");
+    });
+    expect(document.querySelector(".saved-detail")?.textContent).toContain("家电");
+    let finishDelete: (() => Promise<unknown>) | undefined;
+    Object.defineProperty(navigator, "locks", {
+      configurable: true,
+      value: {
+        request: (_name: string, _options: unknown, callback: () => Promise<unknown>) => new Promise((resolve, reject) => {
+          finishDelete = () => Promise.resolve(callback()).then(resolve, reject);
+        }),
+      },
+    });
+    await act(async () => {
+      press(row("家电"), "删除这条讨论");
+    });
+    const confirm = [...document.querySelectorAll("button")].find((button) => button.textContent === "确认删除");
+    if (!confirm) throw new Error("missing confirm");
+    await act(async () => {
+      confirm.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    if (!finishDelete) throw new Error("delete did not request the lock");
+    await act(async () => {
+      press(row("书籍"), "查看这条讨论");
+    });
+    expect(document.querySelector(".saved-detail")?.textContent).toContain("书籍");
+    await act(async () => {
+      await finishDelete?.();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(document.body.textContent).toContain("已删除这一条讨论");
+    expect(document.querySelector(".saved-discussions")?.textContent).not.toContain("家电");
+    expect(document.querySelector(".saved-detail")?.textContent ?? "").toContain("书籍");
+  });
 });
