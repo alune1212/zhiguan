@@ -167,4 +167,39 @@ describe("discussion server", () => {
     expect(outbound).not.toContain("设定泄漏标记");
     expect(outbound).not.toContain(secret);
   });
+
+  it("does not accept a dissenter who gives no dissent", async () => {
+    const fetchImpl: typeof fetch = async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ personaId: "future-self", points: ["先看工时"] }) } }],
+    }), { status: 200, headers: { "content-type": "application/json" } });
+    const app = createApp({ env: { DEEPSEEK_API_KEY: secret }, fetchImpl, log: () => undefined });
+    const dissenter = defaultPersonas().find((persona) => persona.id === "future-self");
+    const response = await app.request("http://127.0.0.1:4174/api/discussion/persona", request("/api/discussion/persona", {
+      factCard: card(),
+      category: "家电",
+      reason: "旧的坏了",
+      persona: dissenter,
+      round: 1,
+    }));
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: "service_failed" });
+  });
+
+  it("rejects a declared body larger than the limit", async () => {
+    const fetchImpl = vi.fn();
+    const app = createApp({ env: { DEEPSEEK_API_KEY: secret }, fetchImpl, log: () => undefined });
+    const response = await app.request("http://127.0.0.1:4174/api/parse", request("/api/parse", { text: "吸尘器" }, { "content-length": "48001" }));
+    expect(response.status).toBe(413);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("rejects an oversized parse body before calling DeepSeek", async () => {
+    const fetchImpl = vi.fn();
+    const app = createApp({ env: { DEEPSEEK_API_KEY: secret }, fetchImpl, log: () => undefined });
+    const response = await app.request("http://127.0.0.1:4174/api/parse", request("/api/parse", {
+      text: "字".repeat(48_001),
+    }));
+    expect(response.status).toBe(400);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
 });

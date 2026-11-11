@@ -85,6 +85,9 @@ export function isPersona(value: unknown): value is Persona {
 }
 
 export function personaProblems(personas: readonly Persona[]): readonly string[] {
+  if (personas.some((persona) => [persona.name, persona.relationship, persona.personality, persona.caresAbout, persona.moneyAttitude].some((text) => characterLength(text) > PERSONA_TEXT_MAX))) {
+    return ["人物的每段文字最长 80 字。超过请改短，不会截断。"];
+  }
   if (personas.some((persona) => !isPersona(persona))) return ["有人物的设定还不能用。"];
   if (new Set(personas.map((persona) => persona.id)).size !== personas.length) return ["人物标识重复了。"];
   const enabled = personas.filter((persona) => persona.enabled);

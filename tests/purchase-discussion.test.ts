@@ -172,6 +172,10 @@ describe("citation and leaning checks", () => {
     expect(checkSentence("62.5 元", citations).numberMismatch).toBe(true);
     expect(checkSentence("相当于１０００元", citations).numberMismatch).toBe(false);
     expect(checkSentence("相当于１０００元", ["16.00"]).numberMismatch).toBe(true);
+    expect(checkSentence("１，０００元", citations).numberMismatch).toBe(false);
+    expect(checkSentence("相当于１６．００小时", citations).numberMismatch).toBe(false);
+    expect(checkSentence("大概３％", citations).numberMismatch).toBe(false);
+    expect(checkSentence("大概三五天", ["5"]).numberMismatch).toBe(true);
     expect(checkSentence("值不值得要看你用不用", citations).verdict).toBe(false);
     expect(checkSentence("别买", citations).verdict).toBe(true);
     expect(checkSentence("必须买", citations).verdict).toBe(true);
@@ -263,6 +267,7 @@ describe("discussion payloads", () => {
     expect(personaProblems(personas)).toEqual([]);
     expect(DEFAULT_PERSONAS.find((persona) => persona.name === "上司")?.enabled).toBe(false);
     expect(DEFAULT_PERSONAS.find((persona) => persona.name === "5 年后的你")?.stance).toBe("pushback");
+    expect(personaProblems([{ ...defaultPersonas()[0]!, name: "名".repeat(81) }]).join("")).toContain("请改短");
   });
 
   it("blocks preview until price, category, reason and a dissenter are ready", () => {

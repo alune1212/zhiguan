@@ -51,6 +51,7 @@ describe("App", () => {
     expect(html).not.toContain("TypeSafe");
     expect(html).toContain("详细修改这次的比较条件");
     expect(html).toContain("这一页的计算留在本地，不调用模型");
+    expect(html).toContain("DeepSeek");
     expect(html).toContain("清空重填不会删除已保存的收入资料");
     expect(html).not.toContain("Goal");
     expect(html).not.toContain("目标进度");

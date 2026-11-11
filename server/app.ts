@@ -34,6 +34,10 @@ export function createApp(options: ServerOptions): Hono {
     if (!HOSTS.has(host) || (c.req.method === "GET" ? origin !== undefined && !originMatches : !originMatches)) {
       return c.json({ error: "forbidden" }, 403);
     }
+    if (c.req.method !== "GET" && c.req.method !== "HEAD") {
+      const declared = c.req.header("content-length");
+      if (declared !== undefined && Number(declared) > MAX_BODY) return c.json({ error: "invalid_input" }, 413);
+    }
     await next();
   });
 

@@ -601,7 +601,7 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
                 ["moneyAttitude", "对钱的态度"],
               ] as const).map(([key, label]) => (
                 <label key={key} htmlFor={`${persona.id}-${key}`}>{label}
-                  <input id={`${persona.id}-${key}`} maxLength={80} value={persona[key]} onChange={(event) => setPersonas((current) => current.map((item) => item.id === persona.id ? { ...item, [key]: event.currentTarget.value } : item))} />
+                  <input id={`${persona.id}-${key}`} value={persona[key]} onChange={(event) => setPersonas((current) => current.map((item) => item.id === persona.id ? { ...item, [key]: event.currentTarget.value } : item))} />
                 </label>
               ))}
               <label htmlFor={`${persona.id}-stance`}>立场
@@ -669,7 +669,7 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
             ))}
           </ul>
         ) : <p>还没有已保存的讨论。</p>}
-        {openRecord ? <SavedDiscussionDetail record={openRecord} onDecision={(code) => void updateOpenDecision(openRecord, code, openRecord.decision?.rationale ?? "")} onRationale={(value) => { if (openRecord.decision) void updateOpenDecision(openRecord, openRecord.decision.code, value); }} onClose={() => setOpenRecordId(null)} /> : null}
+        {openRecord ? <SavedDiscussionDetail record={openRecord} onDecision={(code, typedRationale) => updateOpenDecision(openRecord, code, typedRationale)} onRationale={(value) => { if (openRecord.decision) updateOpenDecision(openRecord, openRecord.decision.code, value); }} onClose={() => setOpenRecordId(null)} /> : null}
         <Button type="button" variant="destructive" disabled={library.status === "empty"} onClick={() => setConfirming({ kind: "clear" })}>全部清除已保存的讨论</Button>
       </section>
       {notice ? <p className="income-notice" role="status">{notice}</p> : null}
@@ -710,7 +710,7 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
 
 export function SavedDiscussionDetail({ record, onDecision, onRationale, onClose }: {
   readonly record: DiscussionRecord;
-  readonly onDecision: (code: PurchaseDecisionCode) => void;
+  readonly onDecision: (code: PurchaseDecisionCode, rationale: string) => void;
   readonly onRationale: (value: string) => void;
   readonly onClose: () => void;
 }) {
@@ -733,7 +733,7 @@ export function SavedDiscussionDetail({ record, onDecision, onRationale, onClose
       <RoundViewSection title="保存的第一轮" round={storedRound(record.round1)} canRetry={false} onRetry={() => undefined} />
       {record.round2 ? <RoundViewSection title="保存的第二轮" round={storedRound(record.round2)} canRetry={false} onRetry={() => undefined} /> : null}
       <p>这是当时保存的内容。改决定会更新这一条，不会另存一条。</p>
-      <RadioGroup className="decision-options" name="saved-decision" value={record.decision?.code ?? ""} aria-labelledby="saved-detail-heading" onValueChange={(value) => onDecision(value as PurchaseDecisionCode)}>
+      <RadioGroup className="decision-options" name="saved-decision" value={record.decision?.code ?? ""} aria-labelledby="saved-detail-heading" onValueChange={(value) => onDecision(value as PurchaseDecisionCode, rationaleDraft)}>
         {DECISION_OPTIONS.map((option) => (
           <label key={option.code} htmlFor={`saved-decision-${option.code}`}>
             <RadioGroupItem id={`saved-decision-${option.code}`} value={option.code} />
