@@ -33,6 +33,7 @@ import {
   createWriteQueue,
   deleteDiscussion,
   readDiscussions,
+  storageFullNotice,
   upsertDiscussion,
   withUpdatedDecision,
   type DiscussionRecord,
@@ -459,5 +460,132 @@ describe("discussion storage and old backups", () => {
     }
     expect(await upsertDiscussion(record(cardFor(), "discussion-overflow"), revision)).toEqual({ status: "unavailable", reason: "too-many" });
     expect((await upsertDiscussion(record(cardFor(), "discussion-0"), revision)).status).toBe("saved");
+  });
+
+  it("空间写满时保留已有讨论，并说明可以删除旧讨论或导出备份", async () => {
+    const saved = await upsertDiscussion(record(cardFor(), "discussion-1"), null);
+    if (saved.status !== "saved") throw new Error("seed");
+    const oversized: DiscussionRecord = {
+      ...record(cardFor(), "discussion-1"),
+      round1: {
+        speeches: [{
+          personaId: "family",
+          name: "家人",
+          status: "done",
+          usableText: "字".repeat(2_000_000),
+          sentences: [],
+        }],
+        synthesis: null,
+      },
+    };
+    const failed = await upsertDiscussion(oversized, saved.document.revision);
+    if (failed.status !== "unavailable" || failed.reason !== "storage-full") {
+      throw new Error(`expected storage-full, got ${JSON.stringify(failed)}`);
+    }
+    expect(failed.records).toBe(1);
+    expect(failed.bytes).toBeGreaterThan(2_000_000);
+    expect(failed.bytes).toBeGreaterThan(new TextEncoder().encode("字".repeat(2_000_000)).length);
+    const notice = storageFullNotice(failed.records, failed.bytes);
+    expect(notice).toContain("1 条");
+    expect(notice).toContain("删除旧讨论");
+    expect(notice).toContain("导出备份");
+    expect(notice).toMatch(/MB|KB/);
+    const kept = readDiscussions();
+    expect(kept.status).toBe("ready");
+    if (kept.status === "ready") {
+      expect(kept.document.records).toHaveLength(1);
+      expect(kept.document.records[0]?.round1.speeches).toEqual([]);
+    }
+
+    storage.setItem = () => {
+      throw Object.assign(new Error("quota"), { name: "QuotaExceededError", code: 22 });
+    };
+    const quota = await upsertDiscussion(record(cardFor(), "discussion-quota"), saved.document.revision);
+    if (quota.status !== "unavailable" || quota.reason !== "storage-full") {
+      throw new Error(`expected quota storage-full, got ${JSON.stringify(quota)}`);
+    }
+    expect(quota.records).toBeGreaterThan(0);
+    expect(storageFullNotice(quota.records, quota.bytes)).toContain("删除旧讨论");
+    const afterQuota = readDiscussions();
+    expect(afterQuota.status).toBe("ready");
+    if (afterQuota.status === "ready") expect(afterQuota.document.records.map((item) => item.id)).toEqual(["discussion-1"]);
+
+    storage.setItem = () => {
+      throw new Error("blocked");
+    };
+    await expect(upsertDiscussion(record(cardFor(), "discussion-blocked"), saved.document.revision)).resolves.toEqual({
+      status: "unavailable",
+      reason: "write-failed",
+    });
+  });
+
+  it("汉字不到 200 万、UTF-8 超过 2MB 时也算写满，并且读不回超限文档", async () => {
+    const saved = await upsertDiscussion(record(cardFor(), "discussion-1"), null);
+    if (saved.status !== "saved") throw new Error("seed");
+    const text = "字".repeat(700_000);
+    const rawPreview = `${JSON.stringify({ usableText: text })}\n`;
+    expect(text.length).toBeLessThan(2_000_000);
+    expect(rawPreview.length).toBeLessThan(2_000_000);
+    expect(new TextEncoder().encode(text).length).toBeGreaterThan(2_000_000);
+    const failed = await upsertDiscussion({
+      ...record(cardFor(), "discussion-1"),
+      round1: {
+        speeches: [{
+          personaId: "family",
+          name: "家人",
+          status: "done",
+          usableText: text,
+          sentences: [],
+        }],
+        synthesis: null,
+      },
+    }, saved.document.revision);
+    if (failed.status !== "unavailable" || failed.reason !== "storage-full") {
+      throw new Error(`expected storage-full, got ${JSON.stringify(failed)}`);
+    }
+    expect(failed.bytes).toBeGreaterThan(2_000_000);
+    expect(failed.bytes).toBeGreaterThan(text.length);
+    const kept = readDiscussions();
+    expect(kept.status).toBe("ready");
+    if (kept.status === "ready") expect(kept.document.records[0]?.round1.speeches).toEqual([]);
+
+    const source = saved.document.records[0];
+    if (!source) throw new Error("seed record");
+    const bloated = {
+      ...saved.document,
+      records: [{
+        ...source,
+        round1: {
+          speeches: [{ personaId: "family", name: "家人", status: "done" as const, usableText: text, sentences: [] }],
+          synthesis: null,
+        },
+      }],
+    };
+    const raw = `${JSON.stringify(bloated)}\n`;
+    expect(raw.length).toBeLessThan(2_000_000);
+    expect(new TextEncoder().encode(raw).length).toBeGreaterThan(2_000_000);
+    storage.setItem(DISCUSSIONS_STORAGE_KEY, raw);
+    expect(readDiscussions().status).toBe("invalid");
+  });
+
+  it("拿到锁之前另一个标签页已经写过时，不覆盖那份讨论", async () => {
+    const saved = await upsertDiscussion(record(cardFor(), "discussion-1"), null);
+    if (saved.status !== "saved") throw new Error("seed");
+    vi.stubGlobal("navigator", {
+      locks: {
+        request: async (_name: string, _options: { mode: "exclusive" }, callback: () => Promise<unknown>) => {
+          const current = JSON.parse(storage.getItem(DISCUSSIONS_STORAGE_KEY) ?? "{}") as { revision: string; records: Array<{ reason: string }> };
+          current.revision = "other-tab";
+          current.records[0].reason = "另一个标签页留下的";
+          storage.setItem(DISCUSSIONS_STORAGE_KEY, JSON.stringify(current));
+          return callback();
+        },
+      },
+    });
+    const result = await upsertDiscussion({ ...record(cardFor(), "discussion-1"), reason: "本页刚完成的讨论" }, saved.document.revision);
+    expect(result).toEqual({ status: "conflict", currentRevision: "other-tab" });
+    const raw = storage.getItem(DISCUSSIONS_STORAGE_KEY) ?? "";
+    expect(raw).toContain("另一个标签页留下的");
+    expect(raw).not.toContain("本页刚完成的讨论");
   });
 });

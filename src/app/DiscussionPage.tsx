@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CATEGORY_SUGGESTIONS, holdingSuggestionFor } from "../domain/categories";
 import { parseAmount } from "../domain/calculation";
+import { bindDiscussionSaveFlush, createDiscussionLeaveFlush, createDiscussionSaveGate, createPendingDiscussionSave } from "../domain/discussion-autosave";
 import { cardForDiscussion, discussionFingerprint, discussionIsComplete, previewProblems, renderPreview, synthesisPayload, visibleDecision, type BoundDecision, type CitedSpeech } from "../domain/discussion-payload";
 import { isChangeCondition, leaningWording } from "../domain/model-output";
 import {
@@ -14,11 +15,13 @@ import {
   createWriteQueue,
   deleteDiscussion,
   readDiscussions,
+  storageFullNotice,
   upsertDiscussion,
   withUpdatedDecision,
   type DiscussionRecord,
   type DiscussionRound,
   type DiscussionsReadResult,
+  type DiscussionsWriteResult,
 } from "../domain/discussion-store";
 import { buildFactCard, factCardForModel, type FactCard, type FactEvidence, type FactField } from "../domain/fact-card";
 import { calculateIncome, type IncomeProfile } from "../domain/income";
@@ -163,13 +166,17 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
   const [parseNotice, setParseNotice] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<{ readonly kind: "delete" | "clear"; readonly id?: string } | null>(null);
   const generationRef = useRef(0);
-  const recordIdRef = useRef<string | null>(null);
+  const gateRef = useRef(createDiscussionSaveGate());
   const completedAtRef = useRef<string | null>(null);
   const savedSnapshotRef = useRef("");
   const revisionRef = useRef<string | null>(null);
   const confirmedRef = useRef<string | null>(null);
   const roundsFingerprintRef = useRef<string | null>(null);
   const writeQueue = useRef(createWriteQueue());
+  const leaveFlushRef = useRef(createDiscussionLeaveFlush(createPendingDiscussionSave({
+    set: (callback, delayMs) => window.setTimeout(callback, delayMs),
+    clear: (handle) => window.clearTimeout(handle as number),
+  })));
   const speechHeadingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -241,7 +248,8 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
     roundsFingerprintRef.current = null;
     setRound1(null);
     setRound2(null);
-    recordIdRef.current = null;
+    gateRef.current.resetForNewPurchase();
+    leaveFlushRef.current.forget();
     completedAtRef.current = null;
     savedSnapshotRef.current = "";
     confirmedRef.current = null;
@@ -273,41 +281,53 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
   const saveSnapshot = JSON.stringify({ fingerprint, round1, round2, decision, rationale, complete });
 
   useEffect(() => {
-    if (!complete || !card) return;
-    if ((round1 || round2) && roundsFingerprintRef.current !== fingerprint) return;
-    if (savedSnapshotRef.current === saveSnapshot) return;
+    const leaveFlush = leaveFlushRef.current;
+    if (!complete || !card || ((round1 || round2) && roundsFingerprintRef.current !== fingerprint) || savedSnapshotRef.current === saveSnapshot) {
+      leaveFlush.forget();
+      return;
+    }
     if ([...rationale].length > 2000) {
+      leaveFlush.forget();
       setNotice("依据超过 2000 字，请改短。这次没有写入。");
       return;
     }
+    const generation = gateRef.current.generation;
+    const id = gateRef.current.claim(() => globalThis.crypto.randomUUID());
+    if (!id) {
+      leaveFlush.forget();
+      if (gateRef.current.held) setNotice("这条讨论已删除，之后的修改不会保存。");
+      return;
+    }
     const snapshot = saveSnapshot;
-    const id = recordIdRef.current ?? globalThis.crypto.randomUUID();
-    recordIdRef.current = id;
     completedAtRef.current ??= new Date().toISOString();
     const completedAt = completedAtRef.current;
-    const handle = window.setTimeout(() => {
+    const persist = () => {
+      if (savedSnapshotRef.current === snapshot || !gateRef.current.stillCurrent(generation, id)) return;
+      const record = toRecord(id, completedAt, card, draft, personas, round1, round2, decision, rationale);
+      if (!record) {
+        setNotice("这次讨论还不能写入本地。");
+        return;
+      }
       void writeQueue.current.enqueue(async () => {
-        if (savedSnapshotRef.current === snapshot) return;
-        const record = toRecord(id, completedAt, card, draft, personas, round1, round2, decision, rationale);
-        if (!record) {
-          setNotice("这次讨论还不能写入本地。");
-          return;
-        }
+        if (savedSnapshotRef.current === snapshot || !gateRef.current.stillCurrent(generation, id)) return;
         const result = await upsertDiscussion(record, revisionRef.current);
         if (result.status === "saved") {
           savedSnapshotRef.current = snapshot;
           revisionRef.current = result.document.revision;
           setLibrary({ status: "ready", document: result.document, raw: result.raw });
           setNotice("这次讨论已保存在此浏览器。");
-        } else if (result.status === "unavailable" && result.reason === "too-many") {
-          setNotice("已保存的讨论已满 100 条。请先删除旧的，这次没有写入。");
-        } else {
-          setNotice("这次没有写入本地。页面上的内容还在，刷新后可能丢失。");
+          return;
         }
+        if (savedSnapshotRef.current === snapshot) return;
+        setNotice(discussionWriteFailureNotice(result, "这次没有写入本地。页面上的内容还在，刷新后可能丢失。"));
       });
-    }, 400);
-    return () => window.clearTimeout(handle);
+    };
+    leaveFlush.arm(persist, persist, 400);
+    return () => leaveFlush.disarm();
   }, [card, complete, draft, decision, fingerprint, personas, rationale, round1, round2, saveSnapshot]);
+
+  // 卸载、pagehide 和进入后台都进同一条带锁的队列，避免盖住另一个标签页。
+  useEffect(() => bindDiscussionSaveFlush(() => leaveFlushRef.current.leave(), { window, document }), []);
 
   const updateDraft = (patch: Partial<Draft>) => setDraft((current) => ({ ...current, ...patch }));
 
@@ -449,14 +469,21 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
     else setRound2(next);
   };
 
-  const removeSaved = async (id: string) => {
-    const result = await deleteDiscussion(id, revisionRef.current);
-    if (result.status === "saved") {
-      revisionRef.current = result.document.revision;
-      if (openRecordId === id) setOpenRecordId(null);
-      setLibrary({ status: "ready", document: result.document, raw: result.raw });
-      setNotice("已删除这一条讨论。收入资料还在。");
-    } else setNotice("没有删成。已保存的讨论还在。");
+  const removeSaved = (id: string) => {
+    const wasCurrent = gateRef.current.blockDeleted(id);
+    if (wasCurrent) leaveFlushRef.current.forget();
+    void writeQueue.current.enqueue(async () => {
+      const result = await deleteDiscussion(id, revisionRef.current);
+      if (result.status === "saved") {
+        revisionRef.current = result.document.revision;
+        if (openRecordId === id) setOpenRecordId(null);
+        setLibrary({ status: "ready", document: result.document, raw: result.raw });
+        setNotice("已删除这一条讨论。收入资料还在。");
+        return;
+      }
+      if (result.status !== "not-found") gateRef.current.undoBlock(id, wasCurrent);
+      setNotice("没有删成。已保存的讨论还在。");
+    });
   };
 
   const openRecord = library.status === "ready" ? library.document.records.find((item) => item.id === openRecordId) ?? null : null;
@@ -467,28 +494,37 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
       return;
     }
     void writeQueue.current.enqueue(async () => {
+      if (gateRef.current.isDeleted(record.id)) return;
       const result = await upsertDiscussion(withUpdatedDecision(record, { code, rationale: nextRationale }, new Date().toISOString()), revisionRef.current);
       if (result.status === "saved") {
         revisionRef.current = result.document.revision;
         setLibrary({ status: "ready", document: result.document, raw: result.raw });
         setNotice("这一条讨论的决定已更新。");
-      } else if (result.status === "unavailable" && result.reason === "too-many") {
-        setNotice("已保存的讨论已满 100 条。请先删除旧的，这次没有写入。");
-      } else setNotice("决定没有写入。原来的记录还在。");
+        return;
+      }
+      setNotice(discussionWriteFailureNotice(result, "决定没有写入。原来的记录还在。"));
     });
   };
 
-  const clearSaved = async () => {
-    const result = library.status === "invalid"
-      ? await clearInvalidDiscussions(library.raw)
-      : await clearDiscussions(revisionRef.current);
-    if (result.status === "cleared") {
-      revisionRef.current = null;
-      setLibrary({ status: "empty" });
-      setOpenRecordId(null);
-      setPersonas(defaultPersonas());
-      setNotice("已保存的讨论已全部清除。收入资料还在。");
-    } else setNotice("没有清除。已保存的讨论还在。");
+  const clearSaved = () => {
+    const previousId = gateRef.current.blockAll();
+    leaveFlushRef.current.forget();
+    const stored = library;
+    void writeQueue.current.enqueue(async () => {
+      const result = stored.status === "invalid"
+        ? await clearInvalidDiscussions(stored.raw)
+        : await clearDiscussions(revisionRef.current);
+      if (result.status === "cleared") {
+        revisionRef.current = null;
+        setLibrary({ status: "empty" });
+        setOpenRecordId(null);
+        setPersonas(defaultPersonas());
+        setNotice("已保存的讨论已全部清除。收入资料还在。");
+        return;
+      }
+      gateRef.current.undoBlockAll(previousId);
+      setNotice("没有清除。已保存的讨论还在。");
+    });
   };
 
   return (
@@ -823,6 +859,12 @@ function SentenceGroup({ label, sentences }: { readonly label: string; readonly 
       })}
     </div>
   );
+}
+
+function discussionWriteFailureNotice(result: DiscussionsWriteResult, fallback: string): string {
+  if (result.status === "unavailable" && result.reason === "storage-full") return storageFullNotice(result.records, result.bytes);
+  if (result.status === "unavailable" && result.reason === "too-many") return "已保存的讨论已满 100 条。请先删除旧的，这次没有写入。";
+  return fallback;
 }
 
 function isFactField(value: FactCard[keyof FactCard]): value is FactField {
