@@ -2,6 +2,8 @@
 
 状态：Accepted；本机实现完成；已核验并带一项非阻断警告归档（2026-09-22）。用户确认七项选择并授权实施，本决定取代 ADR-0006 的首版交互范围；具体结果和限制见[变更验证记录](../../openspec/changes/archive/2026-09-22-conversational-purchase-input/tasks.md)；[归档核验报告](../../openspec/changes/archive/2026-09-22-conversational-purchase-input/verification.md)记录了含糊改口的追问偏差。
 
+2026-11-11，负责人决定购买讨论仍保留 Jev，但把入口收成一句话：想买什么、多少钱、什么类别。解析后预填讨论表单，由用户确认。密钥和转发改由小型 Hono 服务承担，替代 `scripts/jev_server.py` 的角色。讨论功能实现前，本文件以下各条仍是当前代码的行为。实现后，Jev 的产品范围以 [PRD-0004](../product/prd/PRD-0004-purchase-council.md) 为准；最少上下文、不发送完整收入资料、不生成购买建议继续有效。
+
 与 ADR-0008 的配合范围：Jev 对话只在用户主动进入的购买分析中可用；收入看板、保存资料、收藏和备份不调用 Jev，也不发送其内容。购买单次覆盖的平均作息或直接月工时可按既有识别边界处理，仍保留原证据状态，不改写保存资料。
 
 ## 已确认的选择
