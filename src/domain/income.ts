@@ -60,6 +60,7 @@ export interface IncomeCalculation {
   readonly perSecondIncome: ExactValue | null;
   readonly todayIncome: ExactValue | null;
   readonly monthIncome: ExactValue | null;
+  readonly plannedWorkDayCount: string | null;
   readonly workState: "working" | "resting" | "insufficient-data";
   readonly workTimeInput: CalendarWorkTimeInput | null;
   readonly reason: IncomeCalculationReason | null;
@@ -500,6 +501,7 @@ function insufficient(
     perSecondIncome: null,
     todayIncome: null,
     monthIncome: null,
+    plannedWorkDayCount: null,
     workState: "insufficient-data",
     workTimeInput: null,
     reason,
@@ -661,6 +663,10 @@ export function calculateIncome(profileInput: unknown, now: Date): IncomeCalcula
   if (!parsedIncome.ok) return insufficient({ code: "invalid-profile", issues: [{ field: "income", code: parsedIncome.reasonCode }] }, month, localDate);
 
   const incomeCents = parsedIncome.value.cents;
+  let plannedWorkDayCount = 0;
+  for (const day of calendar.days.values()) {
+    if (day.totalSeconds > 0n) plannedWorkDayCount += 1;
+  }
   const perSecond = exactValueFromRatio(incomeCents, 100n * totalSeconds, 8);
   const todayIncome = exactValueFromRatio(incomeCents * todayElapsedSeconds, 100n * totalSeconds);
   const monthIncome = exactValueFromRatio(incomeCents * elapsedSeconds, 100n * totalSeconds);
@@ -687,6 +693,7 @@ export function calculateIncome(profileInput: unknown, now: Date): IncomeCalcula
     perSecondIncome: perSecond,
     todayIncome,
     monthIncome,
+    plannedWorkDayCount: String(plannedWorkDayCount),
     workState: today.intervals.some((interval) => now.getTime() >= interval.start && now.getTime() < interval.end) ? "working" : "resting",
     workTimeInput,
     reason: null,

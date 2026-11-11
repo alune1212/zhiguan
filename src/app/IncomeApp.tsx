@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { App as PurchaseWorkbench } from "./App";
+import { DiscussionPage } from "./DiscussionPage";
 import { downloadJson } from "./download";
 import { isPausedIncomeCurrent, parseAnimatedAmount, shouldAnimateIncome, type IncomeMotionFrame } from "./income-motion";
 import {
@@ -34,10 +35,8 @@ import {
   clearInvalidLocalData,
   clearLocalData,
   commitLocalData,
-  createLocalBackup,
   deleteFavorite,
   LOCAL_DATA_STORAGE_KEY,
-  parseLocalBackupFile,
   readLocalData,
   restoreInvalidLocalData,
   restoreLocalData,
@@ -47,9 +46,15 @@ import {
   type LocalDataReadResult,
 } from "../domain/local-data";
 import { parseAmount, type DecisionInput, type WorkTimeInput } from "../domain/calculation";
+import { clearDiscussions, clearInvalidDiscussions, readDiscussions, replaceDiscussions } from "../domain/discussion-store";
+import { createPortableBackup, parsePortableBackupFile } from "../domain/portable-backup";
 import type { PurchaseSnapshotV2 } from "../domain/purchase-snapshot";
 
-type Screen = "setup" | "dashboard" | "purchase" | "favorites";
+type Screen = "setup" | "discussion" | "dashboard" | "purchase" | "favorites";
+
+export function homeScreen(hasValidProfile: boolean): "discussion" | "setup" {
+  return hasValidProfile ? "discussion" : "setup";
+}
 
 type PausedIncome = { calculation: IncomeCalculation; profile: IncomeProfile; at: Date };
 
@@ -63,8 +68,8 @@ type PendingConfirmation = {
 
 const CONFIRM_COPY: Record<PendingConfirmation["kind"], { title: string; description: string; action: string }> = {
   save: { title: "保存并重算收入？", description: "今日和本月估算将按新资料重新计算；已收藏的结果保持原样。", action: "保存并重算" },
-  restore: { title: "用备份替换本地资料？", description: "此浏览器中的基础资料和全部收藏将被备份内容替换。文件只作为数据读取，不会执行。", action: "导入并替换" },
-  clear: { title: "清空本地资料？", description: "此浏览器中保存的基础资料、全部收藏和本页临时输入将被清空；已下载的备份文件不受影响。", action: "清空资料" },
+  restore: { title: "用备份替换本地资料？", description: "新版备份会替换收入资料、收藏和已保存的讨论。旧版备份只替换收入资料和收藏，不删除已保存的讨论。文件只作为数据读取，不会执行。", action: "导入并替换" },
+  clear: { title: "清空本地资料？", description: "此浏览器中保存的基础资料、全部收藏、已保存的讨论和本页临时输入将被清空；已下载的备份文件不受影响。", action: "清空资料" },
   delete: { title: "删除这条收藏？", description: "仅删除这条收藏，基础资料和其他收藏不会改变。", action: "删除收藏" },
   reload: { title: "重新载入最新资料？", description: "当前未保存的编辑将被放弃，改为浏览器中最新保存的内容。", action: "放弃编辑并载入" },
 };
@@ -636,7 +641,7 @@ export function IncomeApp() {
       setProfile(initial.document.profile);
       setDraft(initial.document.profile);
       setProfileSaved(true);
-      setView("dashboard");
+      setView(homeScreen(true));
     } else {
       setProfile(null);
       setDraft(defaultProfile());
@@ -702,8 +707,9 @@ export function IncomeApp() {
     if (previousViewRef.current === view) return;
     previousViewRef.current = view;
     const headingId = view === "purchase" ? "page-title"
-      : view === "dashboard" ? "income-today-heading"
-        : view === "favorites" ? "favorites-heading" : "setup-heading";
+      : view === "discussion" ? "discussion-heading"
+        : view === "dashboard" ? "income-today-heading"
+          : view === "favorites" ? "favorites-heading" : "setup-heading";
     document.getElementById(headingId)?.focus();
   }, [loaded, view]);
 
@@ -777,7 +783,7 @@ export function IncomeApp() {
       setProfile(next.document.profile);
       setDraft(next.document.profile);
       setProfileSaved(true);
-      setView("dashboard");
+      setView(homeScreen(true));
     } else {
       setProfile(null);
       setDraft(defaultProfile());
@@ -795,6 +801,7 @@ export function IncomeApp() {
   };
 
   const commitProfile = async (value: IncomeProfile) => {
+    const openingDiscussion = profile === null;
     setBusy(true);
     const operation = ++operationGenerationRef.current;
     const content: LocalDataContent = {
@@ -809,7 +816,7 @@ export function IncomeApp() {
         setProfile(result.document.profile);
         setDraft(result.document.profile ?? defaultProfile());
         setProfileSaved(true);
-        setView("dashboard");
+        setView(openingDiscussion ? "discussion" : "dashboard");
         setSettingsDrafting(false);
         setFormIssues([]);
         setNotice("资料已保存在此浏览器。今日和本月估算已按新资料重算。");
@@ -818,7 +825,7 @@ export function IncomeApp() {
           setProfile(value);
           setDraft(value);
           setProfileSaved(false);
-          setView("dashboard");
+          setView("discussion");
           setSettingsDrafting(false);
           setNotice("未保存，本次可以临时使用。浏览器里原有的资料没有被替换。");
         } else {
@@ -836,7 +843,7 @@ export function IncomeApp() {
           setProfile(value);
           setDraft(value);
           setProfileSaved(false);
-          setView("dashboard");
+          setView("discussion");
           setSettingsDrafting(false);
           setNotice("未保存，本次可以临时使用。浏览器里原有的资料没有被替换。");
         } else {
@@ -938,6 +945,12 @@ export function IncomeApp() {
         : await clearLocalData(expectedRevision);
       if (!mountedRef.current || operation !== operationGenerationRef.current) return;
       if (result.status === "cleared") {
+        const discussions = readDiscussions();
+        const discussionResult = discussions.status === "invalid"
+          ? await clearInvalidDiscussions(discussions.raw)
+          : discussions.status === "ready"
+            ? await clearDiscussions(discussions.document.revision)
+            : { status: "cleared" as const };
         const fresh = readLocalData();
         applyReadResult(fresh);
         setDraft(defaultProfile());
@@ -945,7 +958,12 @@ export function IncomeApp() {
         setProfileSaved(false);
         setPurchaseInput(undefined);
         setPurchaseKey((current) => current + 1);
-        setNotice("本地资料和收藏已清空。已下载的文件仍由你自行管理。");
+        const discussionsCleared = discussions.status === "empty" || discussionResult.status === "cleared";
+        setNotice(discussions.status === "unavailable"
+          ? "收入资料和收藏已清空。讨论记录暂时读不出来，没有确认是否删除。"
+          : discussionsCleared
+            ? "本地资料、收藏和已保存的讨论已清空。已下载的文件仍由你自行管理。"
+            : "收入资料和收藏已清空，讨论记录没有删掉。请再试一次。");
       } else if (result.status === "conflict") {
         setConflict(true);
         setNotice("另一个页面保存了更新，资料没有清空。请重新载入后再试。");
@@ -974,7 +992,7 @@ export function IncomeApp() {
     setBusy(true);
     const operation = ++operationGenerationRef.current;
     try {
-      const parsed = await parseLocalBackupFile(file);
+      const parsed = await parsePortableBackupFile(file);
       if (!mountedRef.current || operation !== operationGenerationRef.current) return;
       if (parsed.status === "invalid") {
         setNotice(parsed.reason === "unsupported-version"
@@ -1003,10 +1021,20 @@ export function IncomeApp() {
             setProfile(result.document.profile);
             setDraft(result.document.profile ?? defaultProfile());
             setProfileSaved(Boolean(result.document.profile));
-            setView(result.document.profile ? "dashboard" : "setup");
+            setView(result.document.profile ? "discussion" : "setup");
             setPurchaseInput(undefined);
             setPurchaseKey((current) => current + 1);
-            setNotice("备份已恢复；看板会按恢复的资料和当前时刻重新估算。");
+            if (parsed.kind === "v1") {
+              setNotice("旧备份已恢复收入资料和收藏。已保存的讨论还留在此浏览器。");
+            } else {
+              const currentDiscussions = readDiscussions();
+              const replaced = currentDiscussions.status === "invalid"
+                ? { status: "invalid" as const }
+                : await replaceDiscussions(parsed.discussions, currentDiscussions.status === "ready" ? currentDiscussions.document.revision : null);
+              setNotice(replaced.status === "saved" || replaced.status === "cleared"
+                ? "备份已恢复。新版备份里的讨论记录也已按文件替换。"
+                : "收入资料已恢复，讨论记录没有替换。");
+            }
           } else if (result.status === "conflict") {
             setConflict(true);
             setNotice("另一个页面保存了更新，备份没有导入。请重新载入后再试。");
@@ -1047,8 +1075,13 @@ export function IncomeApp() {
       setNotice("当前没有可导出的已保存资料。临时使用内容尚未写入浏览器。");
       return;
     }
+    const discussions = readDiscussions();
+    if (discussions.status === "invalid" || discussions.status === "unavailable") {
+      setNotice("讨论记录读不出来，这次没有导出，避免做成一份缺记录的备份。");
+      return;
+    }
     try {
-      downloadJson(createLocalBackup(stored.document), "zhiguan-local-backup-v1.json");
+      downloadJson(createPortableBackup(stored.document, discussions.status === "ready" ? discussions.document : null), "zhiguan-local-backup-v2.json");
       setNotice("已生成备份下载；是否保存到磁盘由浏览器决定。");
     } catch {
       setNotice("无法生成备份文件；浏览器中的资料没有变化。");
@@ -1102,9 +1135,10 @@ export function IncomeApp() {
   return (
     <>
       {view !== "purchase" ? <header className="app-shell topbar income-topbar">
-        <a className="brand" href="/" onClick={(event) => { event.preventDefault(); setView(profile ? "dashboard" : "setup"); }}>值观</a>
+        <a className="brand" href="/" onClick={(event) => { event.preventDefault(); setView(profile ? "discussion" : "setup"); }}>值观</a>
         <nav aria-label="主导航" className="income-navigation">
-          {profile && view !== "dashboard" ? <Button variant="ghost" type="button" onClick={() => setView("dashboard")}>返回首页</Button> : null}
+          {profile && view !== "discussion" ? <Button variant="ghost" type="button" onClick={() => setView("discussion")}>讨论这笔购买</Button> : null}
+          {profile && view !== "dashboard" ? <Button variant="ghost" type="button" onClick={() => setView("dashboard")}>收入资料</Button> : null}
           {view !== "favorites" ? <Button variant="ghost" type="button" onClick={() => setView("favorites")}>收藏{favorites.length > 0 ? `（${favorites.length}）` : ""}</Button> : null}
           {profile && view !== "setup" ? <Button variant="ghost" type="button" onClick={openSettings}><Settings2 aria-hidden="true" />设置</Button> : null}
         </nav>
@@ -1123,7 +1157,9 @@ export function IncomeApp() {
         />
       ) : (
         <main className="app-shell income-main">
-          {view === "setup" ? (
+          {view === "discussion" && profile ? (
+            <DiscussionPage profile={profile} now={now} unsaved={!profileSaved} />
+          ) : view === "setup" ? (
             <>
               <section className="intro income-intro income-setup-intro">
                 <p className="eyebrow">个人价值流</p>
@@ -1150,7 +1186,7 @@ export function IncomeApp() {
               />
               <section className="income-data-actions">
                 <h2>本地资料管理</h2>
-                <p>可导出备份，或导入之前保存的值观备份。导入会替换当前基础资料和收藏。</p>
+                <p>可导出备份，或导入之前保存的值观备份。新版备份会连同讨论记录一起替换；旧版备份只替换基础资料和收藏。</p>
                 <div className="income-form-actions">
                   <Button variant="secondary" type="button" onClick={exportBackup} disabled={busy || stored.status !== "ready"}>导出备份</Button>
                   <label className="secondary-button income-file-button">
@@ -1172,7 +1208,7 @@ export function IncomeApp() {
                 <p>这里展示当时保存的金额、依据和决定，不会随当前资料变化而重算。</p>
               </div>
               <div className="income-form-actions">
-                <Button variant="ghost" type="button" onClick={() => setView(profile ? "dashboard" : "setup")}>{profile ? "返回收入首页" : "返回基础设置"}</Button>
+                <Button variant="ghost" type="button" onClick={() => setView(profile ? "discussion" : "setup")}>{profile ? "返回讨论" : "返回基础设置"}</Button>
                 {favorites.length > 0 ? <Button variant="secondary" type="button" onClick={() => profile ? startPurchase() : setView("setup")}>{profile ? "算一笔购买" : "先填写收入资料"}</Button> : null}
               </div>
               {favorites.length > 0 ? sortedFavorites.map((favorite) => (
@@ -1276,7 +1312,7 @@ export function IncomeApp() {
                 />
                 <section className="income-data-actions income-data-actions-compact">
                   <h3>备份与删除</h3>
-                  <p>备份仅包含当前已保存资料和收藏；临时内容不会写入备份。</p>
+                  <p>备份包含已保存的收入资料、收藏和讨论记录。还没完成的讨论不会写入。</p>
                   <div className="income-form-actions">
                     <Button variant="secondary" type="button" onClick={exportBackup} disabled={busy || stored.status !== "ready"}>导出备份</Button>
                     <label className="secondary-button income-file-button">
@@ -1302,7 +1338,7 @@ export function IncomeApp() {
           </div> : null}
           <footer className="footer">
             <p>按当前设置估算，不代表工资单、实际到账或收入记录。</p>
-            <p>主动保存的收入资料与收藏只保存在此浏览器；清除浏览器数据可能丢失。导出、恢复或删除资料，请在看板展开“调整收入与作息”中的“备份与删除”；首次设置页也提供资料管理。未收藏的购买草稿与对话在离开或刷新后不保留；只有主动发送对话时，TypeSafe/Jev 才处理理解回答所需的内容。</p>
+            <p>主动保存的收入资料、收藏和已完成的讨论只保存在此浏览器；清除浏览器数据可能丢失。导出、恢复或删除资料，请在收入资料页展开“调整收入与作息”中的“备份与删除”。讨论这笔购买只有在预览并确认后，才会把这一次的事实卡发给 DeepSeek。未完成的讨论刷新后可能丢失。</p>
           </footer>
         </main>
       )}

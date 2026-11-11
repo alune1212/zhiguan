@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { AssistInput } from "./AssistInput";
 import {
   EMPTY_ASSIST_ESTIMATES,
   areNumericValuesEquivalent,
@@ -500,12 +499,10 @@ export function App({
   const [input, setInput] = useState<DecisionInput>(() => initialInput ?? EMPTY_INPUT);
   const [submittedInput, setSubmittedInput] = useState<DecisionInput | null>(null);
   const [decision, setDecision] = useState<DecisionForm>({ code: "", rationale: "", reviewCondition: "" });
-  const [assistResetKey, setAssistResetKey] = useState(0);
   const [assistEstimatedValues, setAssistEstimatedValues] = useState<AssistEstimateMap>({ ...EMPTY_ASSIST_ESTIMATES });
-  const [manualMode, setManualMode] = useState(false);
+  const [manualMode, setManualMode] = useState(true);
   const [marginRequested, setMarginRequested] = useState(false);
   const [approximateInput, setApproximateInput] = useState(false);
-  const [draftRevision, setDraftRevision] = useState(0);
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
   const [favoriteState, setFavoriteState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const calculated = submittedInput === input;
@@ -524,14 +521,12 @@ export function App({
     setInput(initialInput ?? EMPTY_INPUT);
     setSubmittedInput(null);
     setDecision({ code: "", rationale: "", reviewCondition: "" });
-    setAssistResetKey((current) => current + 1);
     setAssistEstimatedValues({ ...EMPTY_ASSIST_ESTIMATES });
-    setManualMode(false);
+    setManualMode(true);
     setMarginRequested(false);
     setApproximateInput(false);
     setDraftNotice(null);
     setFavoriteState("idle");
-    setDraftRevision((current) => current + 1);
   };
 
   const updateDraft = (next: DecisionInput, nextEstimates: AssistEstimateMap = assistEstimatedValues) => {
@@ -561,7 +556,6 @@ export function App({
     setAssistEstimatedValues(nextEstimates);
     setSubmittedInput(null);
     setDecision({ code: "", rationale: "", reviewCondition: "" });
-    setDraftRevision((current) => current + 1);
     setFavoriteState("idle");
     setDraftNotice(hadResultOrDecision ? "输入已更改，旧结果和决定理由已清除；重新确认后请再选择决定。" : null);
   };
@@ -607,7 +601,7 @@ export function App({
     const month = currentMonth();
     if (onAdoptMonth) onAdoptMonth(month, input);
     else if (onBack) onBack();
-    else setDraftNotice("请返回收入看板并重新打开购买分析；新页面会按当前月份的作息重新计算。此草稿尚未保存。");
+    else setDraftNotice("请返回收入资料并重新打开购买分析；新页面会按当前月份的作息重新计算。此草稿尚未保存。");
   };
 
   const favorite = async () => {
@@ -660,34 +654,18 @@ export function App({
   return (
     <main className="app-shell">
       <header className="topbar">
-        {onBack ? <Button variant="ghost" type="button" onClick={onBack}>{fromSavedProfile ? "返回收入看板" : "返回收藏"}</Button> : <a className="brand" href="#page-title">值观</a>}
+        {onBack ? <Button variant="ghost" type="button" onClick={onBack}>{fromSavedProfile ? "返回收入资料" : "返回收藏"}</Button> : <a className="brand" href="#page-title">值观</a>}
         <Button variant="ghost" type="button" onClick={clear}>清空重填</Button>
       </header>
 
       <section className="intro" aria-labelledby="page-title">
         <h1 id="page-title" tabIndex={-1}>这次购买要花多少工作时间？</h1>
-        <p>{initialInput ? fromSavedProfile ? "用一句话说说这次购买。月收入和本月作息沿用已保存资料；也可以随时手动填写。" : "已从旧收藏开启新草稿。请重新确认收入和工作时间；原收藏不会变化。也可以随时手动填写。" : "用一句话说说这次购买、收入和工作时间；也可以随时手动填写。"}</p>
+        <p>{initialInput ? fromSavedProfile ? "月收入和本月作息沿用已保存资料。这一页只手动计算工作时间。价格和类别的一句话识别在「讨论这笔购买」。" : "已从旧收藏开启新草稿。请重新确认收入和工作时间；原收藏不会变化。" : "填写收入、工作时间和购买价格，计算这笔钱相当于多少工作时间。"}</p>
       </section>
 
       {initialInput ? (
         <p className="field-hint purchase-profile-context">{fromSavedProfile ? "沿用每月到手收入" : "旧收藏中的月收入"} {input.income || "—"} 元 · {selectedMonth} {input.workTime?.mode === "unselected" ? "工作时间待确认" : "作息估算"} · {selectedTimeZone}</p>
       ) : null}
-
-      <AssistInput
-        key={assistResetKey}
-        currentInput={input}
-        estimatedValues={assistEstimatedValues}
-        draftRevision={draftRevision}
-        manualMode={manualMode}
-        marginRequested={marginRequested}
-        approximateInput={approximateInput}
-        onDraftChange={updateDraft}
-        onApproximateInputChange={changeApproximatePreference}
-        onMarginRequest={() => setMarginRequested(true)}
-        onConfirm={(draft, estimates) => confirmInput(draft, estimates)}
-        onSwitchManual={() => setManualMode(true)}
-        onSwitchChat={() => setManualMode(false)}
-      />
 
       {manualMode ? <form className="card form" onSubmit={submit} noValidate autoComplete="off">
         <div className="section-heading">
@@ -873,14 +851,14 @@ export function App({
         <section className="draft-notice" role="status">
           <p>当前已进入 {currentMonth()}，这份草稿仍按 {selectedMonth} 计算。旧月结果不会标成新月结果。</p>
           <Button variant="outline" type="button" onClick={adoptCurrentMonth}>
-            {onAdoptMonth ? `采用 ${currentMonth()} 并重新计算` : "返回收入看板后用新月份重新打开"}
+            {onAdoptMonth ? `采用 ${currentMonth()} 并重新计算` : "返回收入资料后用新月份重新打开"}
           </Button>
         </section>
       ) : null}
 
       <footer className="footer">
-        <p>购买试算留在本地；主动保存的收入资料与收藏只保存在此浏览器，清除浏览器数据可能丢失。未收藏的购买草稿与对话在离开或刷新后不保留。{fromSavedProfile ? "导出、恢复或删除资料，请返回收入看板，展开“调整收入与作息”中的“备份与删除”。" : "导出、恢复或删除资料，请返回收藏，再点左上角“值观”进入基础设置。"}</p>
-        <p>只有点击发送后，当前回答、问题和理解回答所需的少量相关字段才会发送给 TypeSafe/Jev；收入资料、日历排班、日期例外、价值期待和决定理由不会整体发送。对话服务是否留存内容以其服务说明为准。清空重填不会删除已保存的收入资料。</p>
+        <p>购买试算留在本地；主动保存的收入资料与收藏只保存在此浏览器，清除浏览器数据可能丢失。未收藏的购买草稿与对话在离开或刷新后不保留。{fromSavedProfile ? "导出、恢复或删除资料，请返回收入资料，展开“调整收入与作息”中的“备份与删除”。" : "导出、恢复或删除资料，请返回收藏，再点左上角“值观”进入基础设置。"}</p>
+        <p>这一页的计算留在本地，不调用模型。一句话识别在「讨论这笔购买」，由 DeepSeek 处理，确认前不会发送。清空重填不会删除已保存的收入资料。</p>
       </footer>
     </main>
   );

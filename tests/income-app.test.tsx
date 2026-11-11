@@ -5,7 +5,7 @@ import { calculateDecision, type DecisionInput } from "../src/domain/calculation
 import { calculateIncome, defaultProfile } from "../src/domain/income";
 import { LOCAL_DATA_FORMAT, type FavoriteSnapshot, type LocalDataReadResult } from "../src/domain/local-data";
 import { createPurchaseSnapshot } from "../src/domain/purchase-snapshot";
-import { FavoriteCard, favoriteRecalculationInput, IncomeApp, isSuccessfulLocalDataRead, rateDisplay } from "../src/app/IncomeApp";
+import { FavoriteCard, favoriteRecalculationInput, homeScreen, IncomeApp, isSuccessfulLocalDataRead, rateDisplay } from "../src/app/IncomeApp";
 
 const favoriteInput: DecisionInput = {
   income: "8000",
@@ -56,6 +56,8 @@ describe("IncomeApp first use", () => {
     expect(html).not.toContain('name="purchaseAmount"');
     expect(html).not.toContain('name="fixedExpenses"');
     expect(html).not.toContain("整理这句话");
+    expect(homeScreen(false)).toBe("setup");
+    expect(homeScreen(true)).toBe("discussion");
   });
 
   it("keeps small positive per-second rates visible without implying zero", () => {

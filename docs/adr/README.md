@@ -21,7 +21,7 @@ ADR-0009 自 2026-11-11 起扩展模型例外：购买讨论在预览确认后�
 
 ## 实施状态
 
-[ADR-0008](ADR-0008-local-profile-and-purchase-favorites.md)、[PRD-0003](../product/prd/PRD-0003-income-dashboard.md) 与 [RFC-0001](../product/rfc/RFC-0001-income-understanding.md) 的范围已获批准并接入代码，自动检查及合成数据下的浏览器主路径验收通过。真实用户体验、回滚演练与正式发布仍待完成。收入看板为当前代码里的入口。产品已决定首页改为「讨论这笔购买」，看板降为收入资料页，代码尚未改。旧 @1 文件语义继续保留。
+[ADR-0008](ADR-0008-local-profile-and-purchase-favorites.md)、[PRD-0003](../product/prd/PRD-0003-income-dashboard.md) 与 [RFC-0001](../product/rfc/RFC-0001-income-understanding.md) 的范围已获批准并接入代码。购买讨论阶段一也已接入：首页是「讨论这笔购买」，秒薪看板在收入资料页。真实用户体验、回滚演练与正式发布仍待完成。旧 @1 文件语义继续保留。
 
 ## 退役记录
 
