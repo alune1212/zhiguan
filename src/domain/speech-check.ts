@@ -20,7 +20,7 @@ const PRESSURE_PHRASES = [
   "你这种收入",
 ] as const;
 
-const VERDICT_PHRASES = ["应该买", "应该不买", "不该买", "值得买", "建议购买", "建议买", "不值得"] as const;
+const VERDICT_PHRASES = ["应该买", "应该不买", "不该买", "值得买", "建议购买", "建议买", "不值得", "别买", "不要买", "必须买", "赶紧买"] as const;
 
 const ARABIC_NUMBER = /[¥￥]?-?\d{1,3}(?:[,，]\d{3})+(?:\.\d+)?|[¥￥]?-?\d+(?:\.\d+)?/gu;
 const CHINESE_NUMBER = /[零〇一二两三四五六七八九十百千万亿]+(?=\s*(?:元|块|小时|天|次|%))/gu;
@@ -49,7 +49,7 @@ export interface SpeechSentence {
 }
 
 export function normalizeNumericLiteral(raw: string): string {
-  return raw.replace(/[¥￥]/gu, "").replace(/[,，]/gu, "");
+  return raw.normalize("NFKC").replace(/[¥￥]/gu, "").replace(/[,，]/gu, "");
 }
 
 export function parseChineseInteger(raw: string): string | null {
@@ -58,12 +58,17 @@ export function parseChineseInteger(raw: string): string | null {
   let section = 0;
   let number = 0;
   let seenNumber = false;
+  let previousNonZeroDigit = false;
   for (const character of raw) {
     if (Object.hasOwn(DIGITS, character)) {
+      const nonZero = character !== "零" && character !== "〇";
+      if (previousNonZeroDigit && nonZero) return null;
+      previousNonZeroDigit = nonZero;
       number = DIGITS[character] ?? 0;
       seenNumber = true;
       continue;
     }
+    previousNonZeroDigit = false;
     if (Object.hasOwn(SMALL_UNITS, character)) {
       section += (seenNumber ? number : 1) * (SMALL_UNITS[character] ?? 1);
       number = 0;
@@ -85,18 +90,24 @@ export function parseChineseInteger(raw: string): string | null {
   return String(total);
 }
 
+function hasVerdict(text: string): boolean {
+  const masked = text.replaceAll("值不值得", "");
+  return VERDICT_PHRASES.some((phrase) => masked.includes(phrase));
+}
+
 export function splitSentences(text: string): string[] {
   return text.split(/[。！？!?；;\n]+/u).map((sentence) => sentence.trim()).filter((sentence) => sentence.length > 0);
 }
 
 export function checkSentence(text: string, citations: readonly string[]): SpeechSentence {
+  const normalized = text.normalize("NFKC");
   const allowed = new Set(citations);
   let numberMismatch = false;
-  for (const match of text.matchAll(ARABIC_NUMBER)) {
+  for (const match of normalized.matchAll(ARABIC_NUMBER)) {
     const literal = match[0];
     if (!literal || !allowed.has(normalizeNumericLiteral(literal))) numberMismatch = true;
   }
-  for (const match of text.matchAll(CHINESE_NUMBER)) {
+  for (const match of normalized.matchAll(CHINESE_NUMBER)) {
     const parsed = match[0] ? parseChineseInteger(match[0]) : null;
     if (parsed === null || !allowed.has(parsed)) numberMismatch = true;
   }
@@ -104,7 +115,7 @@ export function checkSentence(text: string, citations: readonly string[]): Speec
     text,
     numberMismatch,
     pressure: PRESSURE_PHRASES.some((phrase) => text.includes(phrase)),
-    verdict: VERDICT_PHRASES.some((phrase) => text.includes(phrase)),
+    verdict: hasVerdict(text),
   };
 }
 

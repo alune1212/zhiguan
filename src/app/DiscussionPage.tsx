@@ -7,9 +7,11 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CATEGORY_SUGGESTIONS, holdingSuggestionFor } from "../domain/categories";
 import { parseAmount } from "../domain/calculation";
 import { cardForDiscussion, discussionFingerprint, discussionIsComplete, previewProblems, renderPreview, synthesisPayload, visibleDecision, type BoundDecision, type CitedSpeech } from "../domain/discussion-payload";
+import { isChangeCondition, leaningWording } from "../domain/model-output";
 import {
   clearDiscussions,
   clearInvalidDiscussions,
+  createWriteQueue,
   deleteDiscussion,
   readDiscussions,
   upsertDiscussion,
@@ -20,10 +22,9 @@ import {
 } from "../domain/discussion-store";
 import { buildFactCard, factCardForModel, type FactCard, type FactEvidence, type FactField } from "../domain/fact-card";
 import { calculateIncome, type IncomeProfile } from "../domain/income";
-import { leaningWording } from "../domain/model-output";
 import { defaultPersonas, personaProblems, type Persona } from "../domain/personas";
 import type { PurchaseDecisionCode } from "../domain/purchase-snapshot";
-import { checkSpeech, sentenceNote, usableText, type SpeechSentence } from "../domain/speech-check";
+import { checkSpeech, isUsableSentence, sentenceNote, usableText, type SpeechSentence } from "../domain/speech-check";
 import { DECISION_OPTIONS } from "./App";
 import { loadProvider, parsePurchaseSentence, requestPersona, requestSynthesis, type ProviderStatus } from "./discussion-client";
 
@@ -168,6 +169,7 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
   const revisionRef = useRef<string | null>(null);
   const confirmedRef = useRef<string | null>(null);
   const roundsFingerprintRef = useRef<string | null>(null);
+  const writeQueue = useRef(createWriteQueue());
   const speechHeadingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -274,28 +276,38 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
     if (!complete || !card) return;
     if ((round1 || round2) && roundsFingerprintRef.current !== fingerprint) return;
     if (savedSnapshotRef.current === saveSnapshot) return;
+    if ([...rationale].length > 2000) {
+      setNotice("依据超过 2000 字，请改短。这次没有写入。");
+      return;
+    }
+    const snapshot = saveSnapshot;
     const id = recordIdRef.current ?? globalThis.crypto.randomUUID();
     recordIdRef.current = id;
     completedAtRef.current ??= new Date().toISOString();
-    const record = toRecord(id, completedAtRef.current, card, draft, personas, round1, round2, decision, rationale);
-    if (!record) {
-      setNotice("这次讨论还不能写入本地。");
-      return;
-    }
-    let cancelled = false;
-    void upsertDiscussion(record, revisionRef.current).then((result) => {
-      if (cancelled) return;
-      if (result.status === "saved") {
-        savedSnapshotRef.current = saveSnapshot;
-        revisionRef.current = result.document.revision;
-        setLibrary({ status: "ready", document: result.document, raw: result.raw });
-        setNotice("这次讨论已保存在此浏览器。");
-      } else {
-        setNotice("这次没有写入本地。页面上的内容还在，刷新后可能丢失。");
-      }
-    });
-    return () => { cancelled = true; };
-  }, [card, complete, draft, decision, personas, rationale, round1, round2, saveSnapshot]);
+    const completedAt = completedAtRef.current;
+    const handle = window.setTimeout(() => {
+      void writeQueue.current.enqueue(async () => {
+        if (savedSnapshotRef.current === snapshot) return;
+        const record = toRecord(id, completedAt, card, draft, personas, round1, round2, decision, rationale);
+        if (!record) {
+          setNotice("这次讨论还不能写入本地。");
+          return;
+        }
+        const result = await upsertDiscussion(record, revisionRef.current);
+        if (result.status === "saved") {
+          savedSnapshotRef.current = snapshot;
+          revisionRef.current = result.document.revision;
+          setLibrary({ status: "ready", document: result.document, raw: result.raw });
+          setNotice("这次讨论已保存在此浏览器。");
+        } else if (result.status === "unavailable" && result.reason === "too-many") {
+          setNotice("已保存的讨论已满 100 条。请先删除旧的，这次没有写入。");
+        } else {
+          setNotice("这次没有写入本地。页面上的内容还在，刷新后可能丢失。");
+        }
+      });
+    }, 400);
+    return () => window.clearTimeout(handle);
+  }, [card, complete, draft, decision, fingerprint, personas, rationale, round1, round2, saveSnapshot]);
 
   const updateDraft = (patch: Partial<Draft>) => setDraft((current) => ({ ...current, ...patch }));
 
@@ -449,13 +461,21 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
 
   const openRecord = library.status === "ready" ? library.document.records.find((item) => item.id === openRecordId) ?? null : null;
 
-  const updateOpenDecision = async (record: DiscussionRecord, code: PurchaseDecisionCode, nextRationale: string) => {
-    const result = await upsertDiscussion(withUpdatedDecision(record, { code, rationale: nextRationale }, new Date().toISOString()), revisionRef.current);
-    if (result.status === "saved") {
-      revisionRef.current = result.document.revision;
-      setLibrary({ status: "ready", document: result.document, raw: result.raw });
-      setNotice("这一条讨论的决定已更新。");
-    } else setNotice("决定没有写入。原来的记录还在。");
+  const updateOpenDecision = (record: DiscussionRecord, code: PurchaseDecisionCode, nextRationale: string) => {
+    if ([...nextRationale].length > 2000) {
+      setNotice("依据超过 2000 字，请改短。这一条没有改。");
+      return;
+    }
+    void writeQueue.current.enqueue(async () => {
+      const result = await upsertDiscussion(withUpdatedDecision(record, { code, rationale: nextRationale }, new Date().toISOString()), revisionRef.current);
+      if (result.status === "saved") {
+        revisionRef.current = result.document.revision;
+        setLibrary({ status: "ready", document: result.document, raw: result.raw });
+        setNotice("这一条讨论的决定已更新。");
+      } else if (result.status === "unavailable" && result.reason === "too-many") {
+        setNotice("已保存的讨论已满 100 条。请先删除旧的，这次没有写入。");
+      } else setNotice("决定没有写入。原来的记录还在。");
+    });
   };
 
   const clearSaved = async () => {
@@ -478,15 +498,15 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
         <p className="eyebrow">购买决策讨论</p>
         <h1 id="discussion-heading" tabIndex={-1}>讨论这笔购买</h1>
         <p>写下价格、类别和为什么想买。事实卡先在本地算好；人物讨论要等你看完即将发送的全文并确认。买不买仍然由你选择。</p>
-        <p>还没完成的讨论不会自动保存，刷新后可能丢失。完成后会留在此浏览器，可以删除单条或全部清除。</p>
+        <p>还没完成的讨论不会自动保存，刷新后可能丢失，人物设定的改动也一样。完成后会留在此浏览器，可以再打开、更正决定、删除单条或全部清除。全部清除会把人物恢复成最初的设置。</p>
       </section>
 
       <section className="card" aria-labelledby="parse-heading">
         <h2 id="parse-heading">用一句话说明</h2>
-        <p>可以跳过。这句话只用来预填物品、价格和类别，不会发送收入资料，也不会生成购买建议。</p>
+        <p>可以跳过。识别会把这一句话发给 DeepSeek（{provider?.host ?? "api.deepseek.com"}）。不会发送收入资料，也不会生成购买建议。</p>
         <label htmlFor="purchase-sentence">想买什么、多少钱、什么类别</label>
         <textarea id="purchase-sentence" rows={3} value={draft.sentence} onChange={(event) => updateDraft({ sentence: event.currentTarget.value })} />
-        <Button type="button" variant="secondary" onClick={() => void applyParse()} disabled={draft.sentence.trim().length === 0}>识别价格和类别</Button>
+        <Button type="button" variant="secondary" onClick={() => void applyParse()} disabled={draft.sentence.trim().length === 0 || !serviceAvailable}>识别价格和类别</Button>
         {parseNotice ? <p role="status">{parseNotice}</p> : null}
       </section>
 
@@ -503,11 +523,11 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
         </div>
         <div className="field">
           <label htmlFor="purchase-category">类别</label>
-          <input id="purchase-category" maxLength={40} value={draft.category} aria-describedby="category-hint" onChange={(event) => {
+          <input id="purchase-category" value={draft.category} aria-describedby="category-hint" onChange={(event) => {
             const category = event.currentTarget.value;
             updateDraft({ category, categoryPending: draft.categoryPending !== null && category !== draft.categoryPending ? null : draft.categoryPending });
           }} />
-          <p id="category-hint">自由填写，最长 40 字。快捷项会写入同一个字段，之后仍可修改。</p>
+          <p id="category-hint">自由填写，最长 40 字，当前 {[...draft.category].length} 字。超过 40 字不能预览，页面不会截断。</p>
           <div className="discussion-picks" role="group" aria-label="常用类别">
             {CATEGORY_SUGGESTIONS.map((item) => (
               <Button key={item.label} type="button" variant="outline" onClick={() => updateDraft({ category: item.label, categoryPending: null })}>{item.label}</Button>
@@ -518,8 +538,8 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
         </div>
         <div className="field">
           <label htmlFor="purchase-reason">为什么想买</label>
-          <textarea id="purchase-reason" rows={4} maxLength={500} value={draft.reason} aria-describedby="reason-hint" onChange={(event) => updateDraft({ reason: event.currentTarget.value })} />
-          <p id="reason-hint">{draft.parsedItem ? `请写下为什么想买。只留下「${draft.parsedItem}」或「想买：${draft.parsedItem}」还不能预览。` : "最长 500 字。超长时请改短，不会截断后发送。"}</p>
+          <textarea id="purchase-reason" rows={4} value={draft.reason} aria-describedby="reason-hint" onChange={(event) => updateDraft({ reason: event.currentTarget.value })} />
+          <p id="reason-hint">{draft.parsedItem ? `请写下为什么想买。只留下「${draft.parsedItem}」或「想买：${draft.parsedItem}」还不能预览。当前 ${[...draft.reason].length} 字，超过 500 字不能预览。` : `最长 500 字，当前 ${[...draft.reason].length} 字。超长时请改短，不会截断后发送。`}</p>
         </div>
         <fieldset>
           <legend>使用频率（可选）</legend>
@@ -567,7 +587,7 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
 
       <section className="card" aria-labelledby="persona-heading">
         <h2 id="persona-heading">人物</h2>
-        <p>启用 1 到 5 位，其中至少一位反对这笔开销。出厂时上司关闭，「5 年后的你」负责反对。这些句子都可以改。</p>
+        <p>启用 1 到 5 位，其中至少一位反对这笔开销。出厂时上司关闭，「5 年后的你」负责反对。这些句子都可以改。人物设定要等这次讨论完成后才保存。</p>
         {personaProblems(personas).map((problem) => <p key={problem} role="status">{problem}</p>)}
         <div className="discussion-people">
           {personas.map((persona) => (
@@ -631,7 +651,8 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
           ))}
         </RadioGroup>
         <label htmlFor="decision-note">自己的依据（可选，只留在本地）</label>
-        <textarea id="decision-note" rows={3} maxLength={2000} value={rationale} onChange={(event) => setBoundDecision({ fingerprint, decision, rationale: event.currentTarget.value })} />
+        <textarea id="decision-note" rows={3} value={rationale} aria-describedby="decision-note-hint" onChange={(event) => setBoundDecision({ fingerprint, decision, rationale: event.currentTarget.value })} />
+        <p id="decision-note-hint">当前 {[...rationale].length} 字，超过 2000 字不会写入。</p>
       </section>
 
       <section className="card" aria-labelledby="saved-heading">
@@ -694,7 +715,16 @@ export function SavedDiscussionDetail({ record, onDecision, onRationale, onClose
   readonly onClose: () => void;
 }) {
   const detailRef = useRef<HTMLHeadingElement>(null);
+  const onRationaleRef = useRef(onRationale);
+  onRationaleRef.current = onRationale;
+  const [rationaleDraft, setRationaleDraft] = useState(record.decision?.rationale ?? "");
   useEffect(() => { detailRef.current?.focus(); }, [record.id]);
+  useEffect(() => { setRationaleDraft(record.decision?.rationale ?? ""); }, [record.id]);
+  useEffect(() => {
+    if (!record.decision || rationaleDraft === record.decision.rationale || [...rationaleDraft].length > 2000) return;
+    const handle = window.setTimeout(() => onRationaleRef.current(rationaleDraft), 400);
+    return () => window.clearTimeout(handle);
+  }, [rationaleDraft, record.decision, record.id]);
   return (
     <div className="saved-detail">
       <h3 id="saved-detail-heading" tabIndex={-1} ref={detailRef}>这条已保存的讨论</h3>
@@ -712,7 +742,7 @@ export function SavedDiscussionDetail({ record, onDecision, onRationale, onClose
         ))}
       </RadioGroup>
       <label htmlFor="saved-decision-note">自己的依据</label>
-      <textarea id="saved-decision-note" rows={3} maxLength={2000} value={record.decision?.rationale ?? ""} disabled={record.decision === null} onChange={(event) => onRationale(event.currentTarget.value)} />
+      <textarea id="saved-decision-note" rows={3} value={rationaleDraft} disabled={record.decision === null} onChange={(event) => setRationaleDraft(event.currentTarget.value)} onBlur={() => { if (record.decision && rationaleDraft !== record.decision.rationale && [...rationaleDraft].length <= 2000) onRationale(rationaleDraft); }} />
       <Button type="button" variant="ghost" onClick={onClose}>收起这条讨论</Button>
     </div>
   );
@@ -783,7 +813,14 @@ function SentenceGroup({ label, sentences }: { readonly label: string; readonly 
   return (
     <div>
       <h4>{label}</h4>
-      {sentences.map((sentence, index) => <p key={`${label}-${index}`}>{sentence.text}{sentenceNote(sentence) ? <span className="speech-note"> {sentenceNote(sentence)}</span> : null}</p>)}
+      {sentences.map((sentence, index) => {
+        const note = sentenceNote(sentence);
+        const condition = label === "改变条件" && isUsableSentence(sentence) && !isChangeCondition(sentence.text)
+          ? "这句没有同时写出「如果」和「就买」「就等」「就先不买」或「就换条件」，不参与后续讨论"
+          : null;
+        const combined = [note, condition].filter(Boolean).join("。");
+        return <p key={`${label}-${index}`}>{sentence.text}{combined ? <span className="speech-note"> {combined}</span> : null}</p>;
+      })}
     </div>
   );
 }

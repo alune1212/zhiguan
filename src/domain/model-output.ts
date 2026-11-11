@@ -10,8 +10,10 @@ export const LEANING_WORDING: Readonly<Record<LeaningCode, string>> = {
 };
 
 const CHANGE_TAILS = ["就买", "就等", "就先不买", "就换条件"] as const;
-const MAX_ITEMS = 8;
-const MAX_TEXT = 400;
+export const MAX_MODEL_ITEMS = 8;
+export const MAX_MODEL_TEXT = 400;
+const MAX_ITEMS = MAX_MODEL_ITEMS;
+const MAX_TEXT = MAX_MODEL_TEXT;
 
 export interface PersonaModelOutput {
   readonly personaId: string;
@@ -35,14 +37,20 @@ export function isChangeCondition(text: string): boolean {
   return text.includes("如果") && CHANGE_TAILS.some((tail) => text.includes(tail));
 }
 
-export function parsePersonaOutput(value: unknown, expectedPersonaId: string): PersonaModelOutput | null {
+export function parsePersonaOutput(
+  value: unknown,
+  expectedPersonaId: string,
+  stance: "ordinary" | "pushback",
+): PersonaModelOutput | null {
   if (!isRecord(value)) return null;
   if (value.personaId !== expectedPersonaId) return null;
   const points = stringList(value.points);
   if (!points) return null;
-  if (value.pushback === undefined || value.pushback === null) return { personaId: expectedPersonaId, points, pushback: null };
-  if (typeof value.pushback !== "string" || value.pushback.trim().length === 0 || [...value.pushback].length > MAX_TEXT) return null;
-  return { personaId: expectedPersonaId, points, pushback: value.pushback.trim() };
+  const pushback = value.pushback;
+  const empty = pushback === undefined || pushback === null || (typeof pushback === "string" && pushback.trim().length === 0);
+  if (empty) return stance === "pushback" ? null : { personaId: expectedPersonaId, points, pushback: null };
+  if (stance === "ordinary" || typeof pushback !== "string" || [...pushback].length > MAX_TEXT) return null;
+  return { personaId: expectedPersonaId, points, pushback: pushback.trim() };
 }
 
 export function parseSynthesisOutput(value: unknown): SynthesisModelOutput | null {
@@ -51,7 +59,7 @@ export function parseSynthesisOutput(value: unknown): SynthesisModelOutput | nul
   const risks = stringList(value.risks);
   const changeConditions = stringList(value.changeConditions);
   const disagreements = stringList(value.disagreements);
-  if (!reasons || !risks || !changeConditions || !disagreements || changeConditions.length === 0) return null;
+  if (!reasons || !risks || !changeConditions || !disagreements || !changeConditions.some(isChangeCondition)) return null;
   return { leaning: value.leaning, reasons, risks, changeConditions, disagreements };
 }
 

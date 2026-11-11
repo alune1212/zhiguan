@@ -40,19 +40,17 @@ function resultFor(output: CalculationOutput, id: CalculationResult["id"]): Calc
 }
 
 describe("App", () => {
-  it("starts with one-sentence input and keeps manual entry immediately available", () => {
+  it("starts with the manual purchase form", () => {
     const html = renderToStaticMarkup(<App />);
     expect(html).toContain("这次购买要花多少工作时间？");
     expect(html).toContain("清空重填");
-    expect(html).toContain("先说说这次购买");
-    expect(html).toContain("手动填写");
-    expect(html).toContain('id="assist-text"');
-    expect(html).toContain("发送并整理");
-    expect(html).toContain("点击发送后");
-    expect(html).toContain("已发出的请求无法靠取消或清空撤回");
-    expect(html).not.toContain('name="purchaseAmount"');
-    expect(html).not.toContain("详细修改这次的比较条件");
-    expect(html).toContain("收入资料、日历排班、日期例外、价值期待和决定理由不会整体发送");
+    expect(html).toContain("讨论这笔购买");
+    expect(html).toContain('name="purchaseAmount"');
+    expect(html).not.toContain('id="assist-text"');
+    expect(html).not.toContain("发送并整理");
+    expect(html).not.toContain("TypeSafe");
+    expect(html).toContain("详细修改这次的比较条件");
+    expect(html).toContain("这一页的计算留在本地，不调用模型");
     expect(html).toContain("清空重填不会删除已保存的收入资料");
     expect(html).not.toContain("Goal");
     expect(html).not.toContain("目标进度");
@@ -86,11 +84,9 @@ describe("App", () => {
     );
     expect(html).toContain("沿用每月到手收入 8000 元 · 2026-09 作息估算 · Asia/Shanghai");
     expect(html).toContain("月收入和本月作息沿用已保存资料");
-    expect(html).toContain('id="assist-summary-income"');
-    expect(html).toContain('id="assist-summary-purchaseAmount"');
-    expect(html).toContain("我整理的信息");
     expect(html).toContain("确认并查看结果");
-    expect(html).not.toContain('name="purchaseAmount"');
+    expect(html).toContain('name="purchaseAmount"');
+    expect(html).not.toContain('id="assist-text"');
     expect(html).toContain("返回收入资料");
   });
 

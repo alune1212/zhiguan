@@ -36,7 +36,8 @@ export async function parsePurchaseSentence(text: string, signal?: AbortSignal):
 export async function requestPersona(body: unknown, signal?: AbortSignal): Promise<PersonaModelOutput | "failed"> {
   const response = await postJson("/api/discussion/persona", body, signal);
   if (!response || !isRecord(response) || typeof response.personaId !== "string") return "failed";
-  return parsePersonaOutput(response, response.personaId) ?? "failed";
+  const stance = isRecord(body) && isRecord(body.persona) && body.persona.stance === "pushback" ? "pushback" : "ordinary";
+  return parsePersonaOutput(response, response.personaId, stance) ?? "failed";
 }
 
 export async function requestSynthesis(body: unknown, signal?: AbortSignal): Promise<SynthesisModelOutput | "failed"> {

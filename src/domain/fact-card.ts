@@ -137,8 +137,8 @@ export function buildFactCard(request: FactCardRequest): FactCardResult {
     : missingField("元", "税后月收入 − 月固定支出", MISSING_MARGIN);
   const afterReady = Boolean(request.fixedExpenses?.complete) && afterResult?.availability === "available" && afterResult.exact;
   const purchaseAfterMargin = afterReady && afterResult?.exact
-    ? fieldFromExact(afterResult.exact, "元", "forecast", "税后月收入 − 月固定支出 − 购买金额", null)
-    : missingField("元", "税后月收入 − 月固定支出 − 购买金额", MISSING_MARGIN);
+    ? fieldFromExact(afterResult.exact, "元", "forecast", "税后月收入 − 月固定支出 − 购买金额（按本月付款计算）", null)
+    : missingField("元", "税后月收入 − 月固定支出 − 购买金额（按本月付款计算）", MISSING_MARGIN);
 
   const priceField = moneyField(parsedPrice.value.cents, "元", request.priceEvidence, "本页填写的购买价格", null);
   const frequency = frequencyField(request.frequency);

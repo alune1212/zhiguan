@@ -26,10 +26,11 @@ import {
   synthesisPayload,
   visibleDecision,
 } from "../src/domain/discussion-payload";
-import { leaningWording } from "../src/domain/model-output";
+import { leaningWording, parsePersonaOutput, parseSynthesisOutput } from "../src/domain/model-output";
 import {
   DISCUSSIONS_STORAGE_KEY,
   clearDiscussions,
+  createWriteQueue,
   deleteDiscussion,
   readDiscussions,
   upsertDiscussion,
@@ -154,6 +155,9 @@ describe("citation and leaning checks", () => {
     expect(parseChineseInteger("两万")).toBe("20000");
     expect(parseChineseInteger("十")).toBe("10");
     expect(parseChineseInteger("两亿")).toBeNull();
+    expect(parseChineseInteger("三五")).toBeNull();
+    expect(parseChineseInteger("一两")).toBeNull();
+    expect(parseChineseInteger("一千零五")).toBe("1005");
   });
 
   it("accepts cited literals and blocks invented or pressuring sentences", () => {
@@ -166,6 +170,11 @@ describe("citation and leaning checks", () => {
     expect(checkSentence("5 年后的你", citations).numberMismatch).toBe(false);
     expect(checkSentence("大概两万块", citations).numberMismatch).toBe(true);
     expect(checkSentence("62.5 元", citations).numberMismatch).toBe(true);
+    expect(checkSentence("相当于１０００元", citations).numberMismatch).toBe(false);
+    expect(checkSentence("相当于１０００元", ["16.00"]).numberMismatch).toBe(true);
+    expect(checkSentence("值不值得要看你用不用", citations).verdict).toBe(false);
+    expect(checkSentence("别买", citations).verdict).toBe(true);
+    expect(checkSentence("必须买", citations).verdict).toBe(true);
     expect(checkSentence("这很浪费", citations).pressure).toBe(true);
     expect(checkSentence("你应该买", citations).verdict).toBe(true);
     const checked = checkSpeech("大概两万块。相当于 16.00 小时。这很浪费。", citations);
@@ -184,6 +193,23 @@ describe("citation and leaning checks", () => {
     expect(leaningWording("lean-adjust")).toBe("更倾向先换个条件");
     expect(leaningWording("unclear")).toBe("这轮没有形成倾向");
     expect(leaningWording("应该买")).toBeNull();
+    expect(parseSynthesisOutput({
+      leaning: "lean-wait",
+      reasons: ["再看一次"],
+      risks: ["可能用不上"],
+      changeConditions: ["随便"],
+      disagreements: ["还没对齐"],
+    })).toBeNull();
+    expect(parseSynthesisOutput({
+      leaning: "lean-wait",
+      reasons: ["再看一次"],
+      risks: ["可能用不上"],
+      changeConditions: ["随便", "如果余量够就等"],
+      disagreements: ["还没对齐"],
+    })?.changeConditions).toEqual(["随便", "如果余量够就等"]);
+    expect(parsePersonaOutput({ personaId: "future-self", points: ["先等"] }, "future-self", "pushback")).toBeNull();
+    expect(parsePersonaOutput({ personaId: "family", points: ["先看余量"], pushback: "别买" }, "family", "ordinary")).toBeNull();
+    expect(parsePersonaOutput({ personaId: "family", points: ["先看余量"] }, "family", "ordinary")?.pushback).toBeNull();
     expect(Object.values({
       "lean-buy": leaningWording("lean-buy"),
       "lean-wait": leaningWording("lean-wait"),
@@ -381,5 +407,52 @@ describe("discussion storage and old backups", () => {
     expect(parsed).toMatchObject({ status: "valid", kind: "v2" });
     expect(parseLocalBackup(exported)).toEqual({ status: "invalid", reason: "unsupported-version" });
     expect(exported).not.toContain(secret);
+  });
+
+  it("stores a speech split into more sentences than the old twelve-sentence cap", async () => {
+    const split = Array.from({ length: 8 }, () => checkSpeech("先看余量。再看工时", [])).flat();
+    expect(split).toHaveLength(16);
+    const saved = await upsertDiscussion({
+      ...record(cardFor(), "discussion-many"),
+      round1: {
+        speeches: [{
+          personaId: "family",
+          name: "家人",
+          status: "done",
+          usableText: split.map((sentence) => sentence.text).join("。"),
+          sentences: split,
+        }],
+        synthesis: null,
+      },
+    }, null);
+    expect(saved.status).toBe("saved");
+  });
+
+  it("writes one revision at a time and refuses a 101st record", async () => {
+    const queue = createWriteQueue();
+    const seen: Array<string | null> = [];
+    let current: string | null = null;
+    const first = queue.enqueue(async () => {
+      seen.push(current);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      current = "r1";
+    });
+    const second = queue.enqueue(async () => {
+      seen.push(current);
+      current = "r2";
+    });
+    await first;
+    await second;
+    expect(seen).toEqual([null, "r1"]);
+    expect(current).toBe("r2");
+
+    let revision: string | null = null;
+    for (let index = 0; index < 100; index += 1) {
+      const saved = await upsertDiscussion(record(cardFor(), `discussion-${index}`), revision);
+      expect(saved.status).toBe("saved");
+      if (saved.status === "saved") revision = saved.document.revision;
+    }
+    expect(await upsertDiscussion(record(cardFor(), "discussion-overflow"), revision)).toEqual({ status: "unavailable", reason: "too-many" });
+    expect((await upsertDiscussion(record(cardFor(), "discussion-0"), revision)).status).toBe("saved");
   });
 });

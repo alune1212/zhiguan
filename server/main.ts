@@ -27,6 +27,7 @@ const FILE_TYPES: Readonly<Record<string, string>> = {
 
 loadEnvFile(".env");
 
+const MAX_REQUEST_BYTES = 48_000;
 const port = 4174;
 const hostname = process.env.ZHIGUAN_BIND_HOST || "127.0.0.1";
 const app = createApp({
@@ -46,7 +47,19 @@ const server = createServer(async (req, res) => {
       return;
     }
     const chunks: Buffer[] = [];
-    for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    let received = 0;
+    for await (const chunk of req) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      received += buffer.length;
+      if (received > MAX_REQUEST_BYTES) {
+        res.statusCode = 413;
+        res.setHeader("content-type", "application/json; charset=utf-8");
+        res.end(JSON.stringify({ error: "invalid_input" }));
+        req.destroy();
+        return;
+      }
+      chunks.push(buffer);
+    }
     const body = Buffer.concat(chunks);
     const headers = new Headers();
     for (const [key, value] of Object.entries(req.headers)) {

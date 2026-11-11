@@ -1,5 +1,5 @@
 import { isFactCard, type FactCard } from "./fact-card";
-import { leaningWording } from "./model-output";
+import { leaningWording, MAX_MODEL_ITEMS, MAX_MODEL_TEXT } from "./model-output";
 import { isPersona, type Persona } from "./personas";
 import type { PurchaseDecisionCode } from "./purchase-snapshot";
 
@@ -9,6 +9,8 @@ export const DISCUSSIONS_STORAGE_KEY = "zhiguan.discussions@1";
 const LOCK_NAME = "zhiguan-discussions";
 const MAX_DOCUMENT_LENGTH = 2_000_000;
 const MAX_RECORDS = 100;
+const MAX_SPEECH_SENTENCES = (MAX_MODEL_ITEMS + 1) * MAX_MODEL_TEXT;
+const MAX_SYNTHESIS_SENTENCES = MAX_MODEL_ITEMS * MAX_MODEL_TEXT;
 const MAX_RATIONALE = 2000;
 const DECISION_CODES = ["buy", "wait", "adjust-conditions", "do-not-buy", "undecided"] as const;
 
@@ -78,7 +80,18 @@ export type DiscussionsWriteResult =
   | { readonly status: "conflict"; readonly currentRevision: string | null }
   | { readonly status: "not-found" }
   | { readonly status: "invalid"; readonly reason: "malformed" | "unsupported-version" | "invalid-document" }
-  | { readonly status: "unavailable"; readonly reason: "storage-unavailable" | "locks-unavailable" | "write-failed" };
+  | { readonly status: "unavailable"; readonly reason: "storage-unavailable" | "locks-unavailable" | "write-failed" | "too-many" };
+
+export function createWriteQueue(): { enqueue(task: () => Promise<void>): Promise<void> } {
+  let chain = Promise.resolve();
+  return {
+    enqueue(task) {
+      const run = chain.then(task, task);
+      chain = run.then(() => undefined, () => undefined);
+      return run;
+    },
+  };
+}
 
 export function readDiscussions(): DiscussionsReadResult {
   try {
@@ -118,8 +131,8 @@ export async function upsertDiscussion(record: DiscussionRecord, expectedRevisio
     const records = existing ? [...existing.records] : [];
     const index = records.findIndex((item) => item.id === record.id);
     if (index >= 0) records[index] = record;
+    else if (records.length >= MAX_RECORDS) return { status: "unavailable", reason: "too-many" };
     else records.push(record);
-    if (records.length > MAX_RECORDS) return { status: "unavailable", reason: "write-failed" };
     return writeDocument({ personas: [...record.personas], records });
   });
 }
@@ -266,7 +279,7 @@ function isSpeech(value: unknown): value is StoredSpeech {
   if (!hasExactKeys(value, ["personaId", "name", "status", "usableText", "sentences"])) return false;
   if (typeof value.personaId !== "string" || typeof value.name !== "string" || typeof value.usableText !== "string") return false;
   if (value.status !== "done" && value.status !== "failed") return false;
-  return Array.isArray(value.sentences) && value.sentences.length <= 12 && value.sentences.every(isSentence);
+  return Array.isArray(value.sentences) && value.sentences.length <= MAX_SPEECH_SENTENCES && value.sentences.every(isSentence);
 }
 
 function isSynthesis(value: unknown): value is StoredSynthesis {
@@ -275,7 +288,7 @@ function isSynthesis(value: unknown): value is StoredSynthesis {
   if (!(value.leaning === null || (typeof value.leaning === "string" && leaningWording(value.leaning) !== null))) return false;
   if (typeof value.pushbackMissing !== "boolean") return false;
   return [value.reasons, value.risks, value.changeConditions, value.disagreements].every((list) =>
-    Array.isArray(list) && list.length <= 8 && list.every(isSentence));
+    Array.isArray(list) && list.length <= MAX_SYNTHESIS_SENTENCES && list.every(isSentence));
 }
 
 function isSentence(value: unknown): value is StoredSentence {
