@@ -2,12 +2,14 @@ import { isFactCard, type FactCard } from "./fact-card";
 import { leaningWording, MAX_MODEL_ITEMS, MAX_MODEL_TEXT } from "./model-output";
 import { isPersona, type Persona } from "./personas";
 import type { PurchaseDecisionCode } from "./purchase-snapshot";
+import { storageBytes } from "./storage-bytes";
 
 export const DISCUSSIONS_FORMAT = "zhiguan-discussions@1" as const;
 export const DISCUSSIONS_STORAGE_KEY = "zhiguan.discussions@1";
 
 const LOCK_NAME = "zhiguan-discussions";
-const MAX_DOCUMENT_LENGTH = 2_000_000;
+/** 浏览器按 UTF-16 码元×2 计入 localStorage 配额；4_000_000 字节等于改成 UTF-8 之前的 200 万码元。 */
+const MAX_STORAGE_BYTES = 4_000_000;
 const MAX_RECORDS = 100;
 const MAX_SPEECH_SENTENCES = (MAX_MODEL_ITEMS + 1) * MAX_MODEL_TEXT;
 const MAX_SYNTHESIS_SENTENCES = MAX_MODEL_ITEMS * MAX_MODEL_TEXT;
@@ -197,7 +199,7 @@ export async function replaceDiscussions(document: DiscussionsDocument | null, e
 }
 
 function parseStored(raw: string): DiscussionsReadResult {
-  if (utf8ByteLength(raw) > MAX_DOCUMENT_LENGTH) return { status: "invalid", raw, reason: "malformed" };
+  if (storageBytes(raw) > MAX_STORAGE_BYTES) return { status: "invalid", raw, reason: "malformed" };
   let value: unknown;
   try {
     value = JSON.parse(raw);
@@ -244,8 +246,8 @@ function writeDocument(content: { personas: readonly Persona[]; records: readonl
     };
     if (!isDiscussionsDocument(document)) return { status: "invalid", reason: "invalid-document" };
     const raw = `${JSON.stringify(document)}\n`;
-    const bytes = utf8ByteLength(raw);
-    if (bytes > MAX_DOCUMENT_LENGTH) return storageFull(document.records.length, bytes);
+    const bytes = storageBytes(raw);
+    if (bytes > MAX_STORAGE_BYTES) return storageFull(document.records.length, bytes);
     try {
       globalThis.localStorage.setItem(DISCUSSIONS_STORAGE_KEY, raw);
     } catch (error) {
@@ -256,10 +258,6 @@ function writeDocument(content: { personas: readonly Persona[]; records: readonl
   } catch {
     return { status: "unavailable", reason: "write-failed" };
   }
-}
-
-function utf8ByteLength(value: string): number {
-  return new TextEncoder().encode(value).length;
 }
 
 function storageFull(records: number, bytes: number): DiscussionsWriteResult {

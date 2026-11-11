@@ -1,10 +1,12 @@
 import { LOCAL_DATA_FORMAT, parseLocalBackup, type LocalDataDocument } from "./local-data";
 import { isDiscussionsDocument, type DiscussionsDocument } from "./discussion-store";
+import { storageBytes } from "./storage-bytes";
 
 export const PORTABLE_BACKUP_FORMAT = "zhiguan-local-backup@2" as const;
 
-const MAX_DOCUMENT_LENGTH = 5_000_000;
-const MAX_BACKUP_FILE_BYTES = MAX_DOCUMENT_LENGTH * 3;
+const MAX_DOCUMENT_CODE_UNITS = 5_000_000;
+const MAX_DOCUMENT_STORAGE_BYTES = MAX_DOCUMENT_CODE_UNITS * 2;
+const MAX_BACKUP_FILE_BYTES = MAX_DOCUMENT_CODE_UNITS * 3;
 
 export type PortableBackup =
   | { readonly status: "valid"; readonly kind: "v1"; readonly document: LocalDataDocument }
@@ -34,7 +36,7 @@ export async function parsePortableBackupFile(file: Pick<File, "size" | "text">)
 }
 
 export function parsePortableBackup(raw: string): PortableBackup {
-  if (raw.length > MAX_DOCUMENT_LENGTH) return { status: "invalid", reason: "malformed" };
+  if (storageBytes(raw) > MAX_DOCUMENT_STORAGE_BYTES) return { status: "invalid", reason: "malformed" };
   let value: unknown;
   try {
     value = JSON.parse(raw);

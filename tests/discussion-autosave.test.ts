@@ -104,6 +104,23 @@ describe("deleted discussion identity", () => {
     expect(gate.stillCurrent(gate.generation, "discussion-1")).toBe(true);
   });
 
+  it("删除或清除还在等待时换了一笔购买，失败后的撤销不会把旧编号套回去", () => {
+    const gate = createDiscussionSaveGate();
+    expect(gate.claim(() => "discussion-1")).toBe("discussion-1");
+    expect(gate.blockDeleted("discussion-1")).toBe(true);
+    gate.resetForNewPurchase();
+    gate.undoBlock("discussion-1", true);
+    expect(gate.isDeleted("discussion-1")).toBe(false);
+    expect(gate.claim(() => "discussion-2")).toBe("discussion-2");
+
+    const cleared = createDiscussionSaveGate();
+    expect(cleared.claim(() => "discussion-1")).toBe("discussion-1");
+    const previousId = cleared.blockAll();
+    cleared.resetForNewPurchase();
+    cleared.undoBlockAll(previousId);
+    expect(cleared.claim(() => "discussion-2")).toBe("discussion-2");
+  });
+
   it("删除别的讨论或换一笔购买时，不会挡住当前讨论以后的保存", () => {
     const gate = createDiscussionSaveGate();
     expect(gate.claim(() => "current")).toBe("current");
