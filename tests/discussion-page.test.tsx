@@ -1,9 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { DiscussionPage, FactCardView } from "../src/app/DiscussionPage";
+import { DiscussionPage, FactCardView, SavedDiscussionDetail } from "../src/app/DiscussionPage";
 import { buildFactCard } from "../src/domain/fact-card";
+import type { DiscussionRecord } from "../src/domain/discussion-store";
 import { defaultProfile } from "../src/domain/income";
+import { defaultPersonas } from "../src/domain/personas";
 
 const now = new Date("2026-09-23T01:00:00.000Z");
 
@@ -40,5 +42,42 @@ describe("discussion page markup", () => {
     expect(html).toContain('id="purchase-price"');
     expect(html).toContain('for="purchase-price"');
     expect(html).not.toContain("每秒收入");
+  });
+
+  it("shows a saved discussion as text and keeps its decision editable", () => {
+    const result = buildFactCard({
+      profile: { ...defaultProfile(now), income: "10000", timeZone: "Asia/Shanghai" },
+      now,
+      price: "1000",
+      priceEvidence: "user-confirmed",
+      frequency: null,
+      holdingDays: null,
+      fixedExpenses: null,
+      emergencyFund: null,
+      otherSavings: null,
+    });
+    if (!result.ok) throw new Error(result.reason);
+    const record: DiscussionRecord = {
+      id: "discussion-1",
+      completedAt: "2026-09-23T01:00:00.000Z",
+      updatedAt: "2026-09-23T01:00:00.000Z",
+      factCard: result.card,
+      category: "家电",
+      reason: "旧的坏了",
+      personas: defaultPersonas(),
+      round1: {
+        speeches: [{ personaId: "family", name: "家人", status: "done", usableText: "先看余量", sentences: [{ text: "先看余量", numberMismatch: false, pressure: false, verdict: false }] }],
+        synthesis: null,
+      },
+      round2: null,
+      decision: { code: "wait", rationale: "再看看" },
+    };
+    const html = renderToStaticMarkup(<SavedDiscussionDetail record={record} onDecision={() => undefined} onRationale={() => undefined} onClose={() => undefined} />);
+    expect(html).toContain("这条已保存的讨论");
+    expect(html).toContain("旧的坏了");
+    expect(html).toContain("先看余量");
+    expect(html).toContain("再看看");
+    expect(html).toContain("改决定会更新这一条");
+    expect(html).not.toContain("<img");
   });
 });

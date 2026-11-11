@@ -18,11 +18,13 @@ import {
 } from "../src/domain/speech-check";
 import {
   PROVIDER_NAME,
+  discussionFingerprint,
   discussionIsComplete,
   personaTurnPayload,
   previewProblems,
   renderPreview,
   synthesisPayload,
+  visibleDecision,
 } from "../src/domain/discussion-payload";
 import { leaningWording } from "../src/domain/model-output";
 import {
@@ -31,6 +33,7 @@ import {
   deleteDiscussion,
   readDiscussions,
   upsertDiscussion,
+  withUpdatedDecision,
   type DiscussionRecord,
 } from "../src/domain/discussion-store";
 import { LOCAL_DATA_STORAGE_KEY, commitLocalData, parseLocalBackup, readLocalData } from "../src/domain/local-data";
@@ -281,6 +284,11 @@ describe("discussion payloads", () => {
       synthesisFailed: false,
       hasDecision: true,
     })).toBe(true);
+    const same = { calendarStamp: "2026-09|633600|22", price: "1000", category: "家电", reason: "旧的坏了" };
+    expect(discussionFingerprint(same)).toBe(discussionFingerprint(same));
+    expect(discussionFingerprint(same)).not.toBe(discussionFingerprint({ ...same, calendarStamp: "2026-10|576000|20" }));
+    expect(visibleDecision({ fingerprint: "a", decision: "wait", rationale: "再看看" }, "b")).toEqual({ decision: "", rationale: "" });
+    expect(visibleDecision({ fingerprint: "a", decision: "wait", rationale: "再看看" }, "a").decision).toBe("wait");
   });
 });
 
@@ -348,6 +356,11 @@ describe("discussion storage and old backups", () => {
     expect(cleared.status).toBe("cleared");
     expect(readDiscussions().status).toBe("empty");
     expect(readLocalData().status).toBe("ready");
+    const updated = withUpdatedDecision(record(cardFor()), { code: "buy", rationale: "改成现在买" }, "2026-09-24T00:00:00.000Z");
+    expect(updated.id).toBe("discussion-1");
+    expect(updated.completedAt).toBe("2026-09-23T01:00:00.000Z");
+    expect(updated.factCard).toEqual(record(cardFor()).factCard);
+    expect(updated.decision).toEqual({ code: "buy", rationale: "改成现在买" });
   });
 
   it("imports an old v1 backup without dropping the saved discussion", async () => {

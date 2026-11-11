@@ -6,13 +6,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CATEGORY_SUGGESTIONS, holdingSuggestionFor } from "../domain/categories";
 import { parseAmount } from "../domain/calculation";
-import { cardForDiscussion, discussionIsComplete, previewProblems, renderPreview, synthesisPayload, type CitedSpeech } from "../domain/discussion-payload";
+import { cardForDiscussion, discussionFingerprint, discussionIsComplete, previewProblems, renderPreview, synthesisPayload, visibleDecision, type BoundDecision, type CitedSpeech } from "../domain/discussion-payload";
 import {
   clearDiscussions,
   clearInvalidDiscussions,
   deleteDiscussion,
   readDiscussions,
   upsertDiscussion,
+  withUpdatedDecision,
   type DiscussionRecord,
   type DiscussionRound,
   type DiscussionsReadResult,
@@ -120,10 +121,10 @@ const EMPTY_DRAFT: Draft = {
   savingsApproximate: false,
 };
 
-export function FactCardView({ card }: { readonly card: FactCard }) {
+export function FactCardView({ card, headingId = "fact-card-heading" }: { readonly card: FactCard; readonly headingId?: string }) {
   return (
     <div className="fact-card">
-      <h2 id="fact-card-heading">事实卡</h2>
+      <h2 id={headingId}>事实卡</h2>
       <p>这些数字由已保存的收入资料和本页已确认的输入算出。模型不参与计算。看板上随时变化的累计和速率不在这张卡上。</p>
       <dl className="fact-list">
         {FACT_ROWS.map((row) => {
@@ -153,8 +154,8 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
   const [providerKnown, setProviderKnown] = useState(false);
   const [round1, setRound1] = useState<RoundView | null>(null);
   const [round2, setRound2] = useState<RoundView | null>(null);
-  const [decision, setDecision] = useState<PurchaseDecisionCode | "">("");
-  const [rationale, setRationale] = useState("");
+  const [boundDecision, setBoundDecision] = useState<BoundDecision>({ fingerprint: "", decision: "", rationale: "" });
+  const [openRecordId, setOpenRecordId] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ readonly round: 1 | 2; readonly text: string } | null>(null);
   const [library, setLibrary] = useState<DiscussionsReadResult>({ status: "empty" });
   const [notice, setNotice] = useState<string | null>(null);
@@ -166,6 +167,7 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
   const savedSnapshotRef = useRef("");
   const revisionRef = useRef<string | null>(null);
   const confirmedRef = useRef<string | null>(null);
+  const roundsFingerprintRef = useRef<string | null>(null);
   const speechHeadingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -211,7 +213,8 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
     otherSavings: draft.otherSavings.trim() ? { amount: draft.otherSavings, evidence: draft.savingsApproximate ? "estimated" : "user-confirmed" } : null,
   }) : { ok: false as const, reason: "invalid-price" as const }, [calendarStamp, draft, frequency, priceReady, profile]);
 
-  const fingerprint = JSON.stringify({
+  const fingerprint = discussionFingerprint({
+    calendarStamp,
     income: profile.income,
     updatedAt: profile.updatedAt,
     timeZone: profile.timeZone,
@@ -229,15 +232,18 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
     savings: draft.otherSavings.trim() ? [draft.otherSavings, draft.savingsApproximate] : null,
     personas,
   });
+  const { decision, rationale } = visibleDecision(boundDecision, fingerprint);
 
   useEffect(() => {
     generationRef.current += 1;
+    roundsFingerprintRef.current = null;
     setRound1(null);
     setRound2(null);
     recordIdRef.current = null;
     completedAtRef.current = null;
     savedSnapshotRef.current = "";
     confirmedRef.current = null;
+    setBoundDecision((current) => current.fingerprint === fingerprint ? current : { fingerprint, decision: "", rationale: "" });
   }, [fingerprint]);
 
   const card = fact.ok ? fact.card : null;
@@ -266,6 +272,7 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
 
   useEffect(() => {
     if (!complete || !card) return;
+    if ((round1 || round2) && roundsFingerprintRef.current !== fingerprint) return;
     if (savedSnapshotRef.current === saveSnapshot) return;
     const id = recordIdRef.current ?? globalThis.crypto.randomUUID();
     recordIdRef.current = id;
@@ -376,6 +383,7 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
       synthesis = result === "failed" ? synthesis : doneSynthesis(result, payload.factCard.citations, !payload.pushbackAvailable);
     }
     const next = { speeches: settled, synthesis };
+    roundsFingerprintRef.current = fingerprint;
     if (round === 1) setRound1(next);
     else setRound2(next);
     speechHeadingRef.current?.focus();
@@ -424,6 +432,7 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
       ? { status: "failed" as const, leaning: null, reasons: [], risks: [], changeConditions: [], disagreements: [], pushbackMissing: !payload.pushbackAvailable }
       : doneSynthesis(result, payload.factCard.citations, !payload.pushbackAvailable);
     const next = { speeches, synthesis };
+    roundsFingerprintRef.current = fingerprint;
     if (round === 1) setRound1(next);
     else setRound2(next);
   };
@@ -432,9 +441,21 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
     const result = await deleteDiscussion(id, revisionRef.current);
     if (result.status === "saved") {
       revisionRef.current = result.document.revision;
+      if (openRecordId === id) setOpenRecordId(null);
       setLibrary({ status: "ready", document: result.document, raw: result.raw });
       setNotice("已删除这一条讨论。收入资料还在。");
     } else setNotice("没有删成。已保存的讨论还在。");
+  };
+
+  const openRecord = library.status === "ready" ? library.document.records.find((item) => item.id === openRecordId) ?? null : null;
+
+  const updateOpenDecision = async (record: DiscussionRecord, code: PurchaseDecisionCode, nextRationale: string) => {
+    const result = await upsertDiscussion(withUpdatedDecision(record, { code, rationale: nextRationale }, new Date().toISOString()), revisionRef.current);
+    if (result.status === "saved") {
+      revisionRef.current = result.document.revision;
+      setLibrary({ status: "ready", document: result.document, raw: result.raw });
+      setNotice("这一条讨论的决定已更新。");
+    } else setNotice("决定没有写入。原来的记录还在。");
   };
 
   const clearSaved = async () => {
@@ -444,6 +465,7 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
     if (result.status === "cleared") {
       revisionRef.current = null;
       setLibrary({ status: "empty" });
+      setOpenRecordId(null);
       setPersonas(defaultPersonas());
       setNotice("已保存的讨论已全部清除。收入资料还在。");
     } else setNotice("没有清除。已保存的讨论还在。");
@@ -600,7 +622,7 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
       <section className="card" aria-labelledby="decision-title">
         <h2 id="decision-title">你的决定</h2>
         {synthesisShown ? <p>这是倾向，不是决定。</p> : <p>讨论没有替你勾选。你可以直接选择。</p>}
-        <RadioGroup className="decision-options" name="purchase-decision" value={decision} aria-labelledby="decision-title" onValueChange={(value) => setDecision(value as PurchaseDecisionCode)}>
+        <RadioGroup className="decision-options" name="purchase-decision" value={decision} aria-labelledby="decision-title" onValueChange={(value) => setBoundDecision({ fingerprint, decision: value as PurchaseDecisionCode, rationale })}>
           {DECISION_OPTIONS.map((option) => (
             <label key={option.code} htmlFor={`discussion-decision-${option.code}`}>
               <RadioGroupItem id={`discussion-decision-${option.code}`} value={option.code} />
@@ -609,7 +631,7 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
           ))}
         </RadioGroup>
         <label htmlFor="decision-note">自己的依据（可选，只留在本地）</label>
-        <textarea id="decision-note" rows={3} maxLength={2000} value={rationale} onChange={(event) => setRationale(event.currentTarget.value)} />
+        <textarea id="decision-note" rows={3} maxLength={2000} value={rationale} onChange={(event) => setBoundDecision({ fingerprint, decision, rationale: event.currentTarget.value })} />
       </section>
 
       <section className="card" aria-labelledby="saved-heading">
@@ -620,11 +642,13 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
             {library.document.records.map((item) => (
               <li key={item.id}>
                 <p>{item.category} · {item.factCard.purchasePrice.display ?? "价格未显示"} 元 · {item.decision ? DECISION_OPTIONS.find((option) => option.code === item.decision?.code)?.label : "还没有选择"}</p>
+                <Button type="button" variant="secondary" onClick={() => setOpenRecordId(item.id)} aria-expanded={openRecordId === item.id}>查看这条讨论</Button>
                 <Button type="button" variant="destructive" onClick={() => setConfirming({ kind: "delete", id: item.id })}>删除这条讨论</Button>
               </li>
             ))}
           </ul>
         ) : <p>还没有已保存的讨论。</p>}
+        {openRecord ? <SavedDiscussionDetail record={openRecord} onDecision={(code) => void updateOpenDecision(openRecord, code, openRecord.decision?.rationale ?? "")} onRationale={(value) => { if (openRecord.decision) void updateOpenDecision(openRecord, openRecord.decision.code, value); }} onClose={() => setOpenRecordId(null)} /> : null}
         <Button type="button" variant="destructive" disabled={library.status === "empty"} onClick={() => setConfirming({ kind: "clear" })}>全部清除已保存的讨论</Button>
       </section>
       {notice ? <p className="income-notice" role="status">{notice}</p> : null}
@@ -661,6 +685,58 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
       </AlertDialog>
     </div>
   );
+}
+
+export function SavedDiscussionDetail({ record, onDecision, onRationale, onClose }: {
+  readonly record: DiscussionRecord;
+  readonly onDecision: (code: PurchaseDecisionCode) => void;
+  readonly onRationale: (value: string) => void;
+  readonly onClose: () => void;
+}) {
+  const detailRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { detailRef.current?.focus(); }, [record.id]);
+  return (
+    <div className="saved-detail">
+      <h3 id="saved-detail-heading" tabIndex={-1} ref={detailRef}>这条已保存的讨论</h3>
+      <p>{record.category}。理由：{record.reason}</p>
+      <FactCardView card={record.factCard} headingId="saved-fact-card-heading" />
+      <RoundViewSection title="保存的第一轮" round={storedRound(record.round1)} canRetry={false} onRetry={() => undefined} />
+      {record.round2 ? <RoundViewSection title="保存的第二轮" round={storedRound(record.round2)} canRetry={false} onRetry={() => undefined} /> : null}
+      <p>这是当时保存的内容。改决定会更新这一条，不会另存一条。</p>
+      <RadioGroup className="decision-options" name="saved-decision" value={record.decision?.code ?? ""} aria-labelledby="saved-detail-heading" onValueChange={(value) => onDecision(value as PurchaseDecisionCode)}>
+        {DECISION_OPTIONS.map((option) => (
+          <label key={option.code} htmlFor={`saved-decision-${option.code}`}>
+            <RadioGroupItem id={`saved-decision-${option.code}`} value={option.code} />
+            {option.label}
+          </label>
+        ))}
+      </RadioGroup>
+      <label htmlFor="saved-decision-note">自己的依据</label>
+      <textarea id="saved-decision-note" rows={3} maxLength={2000} value={record.decision?.rationale ?? ""} disabled={record.decision === null} onChange={(event) => onRationale(event.currentTarget.value)} />
+      <Button type="button" variant="ghost" onClick={onClose}>收起这条讨论</Button>
+    </div>
+  );
+}
+
+function storedRound(round: DiscussionRound): RoundView {
+  return {
+    speeches: round.speeches.map((speech) => ({
+      personaId: speech.personaId,
+      name: speech.name,
+      status: speech.status,
+      usableText: speech.usableText,
+      sentences: speech.sentences.map((sentence) => ({ ...sentence })),
+    })),
+    synthesis: round.synthesis ? {
+      status: round.synthesis.status,
+      leaning: round.synthesis.leaning,
+      reasons: round.synthesis.reasons.map((sentence) => ({ ...sentence })),
+      risks: round.synthesis.risks.map((sentence) => ({ ...sentence })),
+      changeConditions: round.synthesis.changeConditions.map((sentence) => ({ ...sentence })),
+      disagreements: round.synthesis.disagreements.map((sentence) => ({ ...sentence })),
+      pushbackMissing: round.synthesis.pushbackMissing,
+    } : null,
+  };
 }
 
 function RoundViewSection({ title, round, canRetry, onRetry, headingRef }: {

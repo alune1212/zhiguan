@@ -97,6 +97,14 @@ export function isDiscussionsDocument(value: unknown): value is DiscussionsDocum
   return new Set(value.records.map((record) => record.id)).size === value.records.length;
 }
 
+export function withUpdatedDecision(record: DiscussionRecord, decision: DiscussionDecision, updatedAt: string): DiscussionRecord {
+  return {
+    ...record,
+    updatedAt,
+    decision,
+  };
+}
+
 export async function upsertDiscussion(record: DiscussionRecord, expectedRevision: string | null): Promise<DiscussionsWriteResult> {
   if (!isRecordValue(record)) return { status: "invalid", reason: "invalid-document" };
   return withLock(async () => {

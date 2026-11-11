@@ -1,4 +1,5 @@
 import type { FactCard } from "./fact-card";
+import type { PurchaseDecisionCode } from "./purchase-snapshot";
 import { citationsWithPersonas, factCardForModel } from "./fact-card";
 import type { Persona } from "./personas";
 import { personaProblems } from "./personas";
@@ -164,6 +165,22 @@ export function renderPreview(input: {
     "综合将收到这些部分：事实卡、类别、理由、启用人物的设定，以及本轮通过校验的发言。",
     JSON.stringify(synthesis, null, 2),
   ].join("\n\n");
+}
+
+export interface BoundDecision {
+  readonly fingerprint: string;
+  readonly decision: PurchaseDecisionCode | "";
+  readonly rationale: string;
+}
+
+export function discussionFingerprint(parts: { readonly calendarStamp: string } & Record<string, unknown>): string {
+  return JSON.stringify(parts);
+}
+
+export function visibleDecision(bound: BoundDecision, fingerprint: string): Pick<BoundDecision, "decision" | "rationale"> {
+  return bound.fingerprint === fingerprint
+    ? { decision: bound.decision, rationale: bound.rationale }
+    : { decision: "", rationale: "" };
 }
 
 export function discussionIsComplete(input: {
