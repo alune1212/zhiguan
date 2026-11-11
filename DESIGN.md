@@ -2,7 +2,7 @@
 
 **版本：** 0.1.0 · **日期：** 2026-09-23
 
-**状态：** Apple-inspired 视觉方案、[概念稿](docs/design/frontend-concepts.html)和现有 React/Vite 应用中的 shadcn/ui + Tailwind CSS v4 界面均已交付。preview 与临时 Docker 容器的验收记录及边界见[前端验收记录](docs/design/frontend-acceptance.md)；真实用户验证与正式发布尚未完成。
+**状态：** Apple-inspired 视觉方案、[概念稿](docs/design/frontend-concepts.html)和现有 React/Vite 应用中的 shadcn/ui + Tailwind CSS v4 界面均已交付。preview 与临时 Docker 容器的验收记录及边界见[前端验收记录](docs/design/frontend-acceptance.md)；真实用户验证与正式发布尚未完成。本文件描述已实现界面。产品任务以 [PRODUCT.md](PRODUCT.md) 1.0.0 为准；购买讨论的界面还没有设计，不在本规范里。
 
 本规范服从 [PRODUCT.md](PRODUCT.md)、[产品策略](PRODUCT_STRATEGY.md)、[路线图](ROADMAP.md)、[架构约束](ARCHITECTURE.md) 与 [品牌指南](docs/design/brand.md)。页面视觉统一遵循本文件；后续调整集中更新规范，不逐页更换主题。设计调整不改变计算、证据状态、存储或外部服务边界。
 
@@ -34,7 +34,7 @@
 | 购买分析 | 一句话输入与手动切换；复用已有基础资料 | 按需追问、摘要确认、工作时间等价结果、可选决定、收藏与下载；显示本次比较口径及临时覆盖 |
 | 收藏 | 可扫描的纵向列表；购买对象、当时结果、收藏时间与证据状态 | 详情展开当时的输入和依据；保留重新试算与删除；空列表说明如何主动收藏 |
 
-主金额附近始终保留“估算”与简短依据；详细公式可以折叠。收入理解本身就是完整任务，不把购买、收藏或决定包装成必做步骤。不为凑齐看板添加账户、资产余额、排行榜、目标、订阅、趋势图或虚构历史。
+主金额附近始终保留“估算”与简短依据；详细公式可以折叠。这里描述的是已实现的看板：看懂收入估算可以单独用完这一页，不把购买、收藏或决定包装成看板的必做步骤。产品任务以 PRODUCT.md 1.0.0 为准，收入理解不再是现行北极星。不为凑齐看板添加账户、资产余额、排行榜、目标、订阅、趋势图或虚构历史。
 
 ## Tokens · 语义变量
 
