@@ -33,8 +33,10 @@ import {
   createWriteQueue,
   deleteDiscussion,
   readDiscussions,
+  storageFullNotice,
   upsertDiscussion,
   withUpdatedDecision,
+  writeDiscussionImmediately,
   type DiscussionRecord,
 } from "../src/domain/discussion-store";
 import { LOCAL_DATA_STORAGE_KEY, commitLocalData, parseLocalBackup, readLocalData } from "../src/domain/local-data";
@@ -459,5 +461,72 @@ describe("discussion storage and old backups", () => {
     }
     expect(await upsertDiscussion(record(cardFor(), "discussion-overflow"), revision)).toEqual({ status: "unavailable", reason: "too-many" });
     expect((await upsertDiscussion(record(cardFor(), "discussion-0"), revision)).status).toBe("saved");
+  });
+
+  it("空间写满时保留已有讨论，并说明可以删除旧讨论或导出备份", async () => {
+    const saved = await upsertDiscussion(record(cardFor(), "discussion-1"), null);
+    if (saved.status !== "saved") throw new Error("seed");
+    const oversized: DiscussionRecord = {
+      ...record(cardFor(), "discussion-1"),
+      round1: {
+        speeches: [{
+          personaId: "family",
+          name: "家人",
+          status: "done",
+          usableText: "字".repeat(2_000_000),
+          sentences: [],
+        }],
+        synthesis: null,
+      },
+    };
+    const failed = await upsertDiscussion(oversized, saved.document.revision);
+    if (failed.status !== "unavailable" || failed.reason !== "storage-full") {
+      throw new Error(`expected storage-full, got ${JSON.stringify(failed)}`);
+    }
+    expect(failed.records).toBe(1);
+    expect(failed.bytes).toBeGreaterThan(2_000_000);
+    const notice = storageFullNotice(failed.records, failed.bytes);
+    expect(notice).toContain("1 条");
+    expect(notice).toContain("删除旧讨论");
+    expect(notice).toContain("导出备份");
+    expect(notice).toMatch(/MB|KB/);
+    const kept = readDiscussions();
+    expect(kept.status).toBe("ready");
+    if (kept.status === "ready") {
+      expect(kept.document.records).toHaveLength(1);
+      expect(kept.document.records[0]?.round1.speeches).toEqual([]);
+    }
+
+    storage.setItem = () => {
+      throw Object.assign(new Error("quota"), { name: "QuotaExceededError", code: 22 });
+    };
+    const quota = await upsertDiscussion(record(cardFor(), "discussion-quota"), saved.document.revision);
+    if (quota.status !== "unavailable" || quota.reason !== "storage-full") {
+      throw new Error(`expected quota storage-full, got ${JSON.stringify(quota)}`);
+    }
+    expect(quota.records).toBeGreaterThan(0);
+    expect(storageFullNotice(quota.records, quota.bytes)).toContain("删除旧讨论");
+    const afterQuota = readDiscussions();
+    expect(afterQuota.status).toBe("ready");
+    if (afterQuota.status === "ready") expect(afterQuota.document.records.map((item) => item.id)).toEqual(["discussion-1"]);
+
+    storage.setItem = () => {
+      throw new Error("blocked");
+    };
+    await expect(upsertDiscussion(record(cardFor(), "discussion-blocked"), saved.document.revision)).resolves.toEqual({
+      status: "unavailable",
+      reason: "write-failed",
+    });
+  });
+
+  it("离开页面时可以不经过异步锁把已完成的讨论写进去", () => {
+    vi.stubGlobal("navigator", {});
+    const saved = writeDiscussionImmediately(record(cardFor(), "discussion-leave"), null);
+    expect(saved.status).toBe("saved");
+    expect(readDiscussions().status).toBe("ready");
+    return expect(upsertDiscussion(record(cardFor(), "discussion-later"), saved.status === "saved" ? saved.document.revision : null)).resolves.toEqual({
+      status: "unavailable",
+      reason: "locks-unavailable",
+    });
   });
 });

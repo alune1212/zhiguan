@@ -80,7 +80,15 @@ export type DiscussionsWriteResult =
   | { readonly status: "conflict"; readonly currentRevision: string | null }
   | { readonly status: "not-found" }
   | { readonly status: "invalid"; readonly reason: "malformed" | "unsupported-version" | "invalid-document" }
-  | { readonly status: "unavailable"; readonly reason: "storage-unavailable" | "locks-unavailable" | "write-failed" | "too-many" };
+  | { readonly status: "unavailable"; readonly reason: "storage-unavailable" | "locks-unavailable" | "write-failed" | "too-many" }
+  | { readonly status: "unavailable"; readonly reason: "storage-full"; readonly records: number; readonly bytes: number };
+
+export function storageFullNotice(records: number, bytes: number): string {
+  const size = bytes >= 1_000_000
+    ? `${(bytes / 1_000_000).toFixed(bytes >= 10_000_000 ? 0 : 1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1000))} KB`;
+  return `本地讨论空间已满，这次没能写入（${records} 条，约 ${size}）。可以删除旧讨论，或到收入资料页导出备份后再清除，腾出空间。页面上的内容还在，刷新后可能丢失。`;
+}
 
 export function createWriteQueue(): { enqueue(task: () => Promise<void>): Promise<void> } {
   let chain = Promise.resolve();
@@ -120,21 +128,17 @@ export function withUpdatedDecision(record: DiscussionRecord, decision: Discussi
 
 export async function upsertDiscussion(record: DiscussionRecord, expectedRevision: string | null): Promise<DiscussionsWriteResult> {
   if (!isRecordValue(record)) return { status: "invalid", reason: "invalid-document" };
-  return withLock(async () => {
-    const current = readInsideLock();
-    if (current.status === "unavailable" || current.status === "invalid") return current.status === "invalid"
-      ? { status: "invalid", reason: current.reason }
-      : { status: "unavailable", reason: current.reason };
-    const revision = current.status === "ready" ? current.document.revision : null;
-    if (revision !== expectedRevision) return { status: "conflict", currentRevision: revision };
-    const existing = current.status === "ready" ? current.document : null;
-    const records = existing ? [...existing.records] : [];
-    const index = records.findIndex((item) => item.id === record.id);
-    if (index >= 0) records[index] = record;
-    else if (records.length >= MAX_RECORDS) return { status: "unavailable", reason: "too-many" };
-    else records.push(record);
-    return writeDocument({ personas: [...record.personas], records });
-  });
+  return withLock(async () => commitUpsert(record, expectedRevision));
+}
+
+/** pagehide 不会等异步锁，离开页面时要在事件里同步写完。 */
+export function writeDiscussionImmediately(record: DiscussionRecord, expectedRevision: string | null): DiscussionsWriteResult {
+  if (!isRecordValue(record)) return { status: "invalid", reason: "invalid-document" };
+  try {
+    return commitUpsert(record, expectedRevision);
+  } catch {
+    return { status: "unavailable", reason: "write-failed" };
+  }
 }
 
 export async function deleteDiscussion(id: string, expectedRevision: string | null): Promise<DiscussionsWriteResult> {
@@ -225,6 +229,21 @@ function readInsideLock(): DiscussionsReadResult {
   }
 }
 
+function commitUpsert(record: DiscussionRecord, expectedRevision: string | null): DiscussionsWriteResult {
+  const current = readInsideLock();
+  if (current.status === "unavailable") return { status: "unavailable", reason: current.reason };
+  if (current.status === "invalid") return { status: "invalid", reason: current.reason };
+  const revision = current.status === "ready" ? current.document.revision : null;
+  if (revision !== expectedRevision) return { status: "conflict", currentRevision: revision };
+  const existing = current.status === "ready" ? current.document : null;
+  const records = existing ? [...existing.records] : [];
+  const index = records.findIndex((item) => item.id === record.id);
+  if (index >= 0) records[index] = record;
+  else if (records.length >= MAX_RECORDS) return { status: "unavailable", reason: "too-many" };
+  else records.push(record);
+  return writeDocument({ personas: [...record.personas], records });
+}
+
 function writeDocument(content: { personas: readonly Persona[]; records: readonly DiscussionRecord[] }): DiscussionsWriteResult {
   try {
     const document: DiscussionsDocument = {
@@ -235,12 +254,28 @@ function writeDocument(content: { personas: readonly Persona[]; records: readonl
     };
     if (!isDiscussionsDocument(document)) return { status: "invalid", reason: "invalid-document" };
     const raw = `${JSON.stringify(document)}\n`;
-    if (raw.length > MAX_DOCUMENT_LENGTH) return { status: "unavailable", reason: "write-failed" };
-    globalThis.localStorage.setItem(DISCUSSIONS_STORAGE_KEY, raw);
+    if (raw.length > MAX_DOCUMENT_LENGTH) return storageFull(document.records.length, raw.length);
+    try {
+      globalThis.localStorage.setItem(DISCUSSIONS_STORAGE_KEY, raw);
+    } catch (error) {
+      if (isQuotaExceeded(error)) return storageFull(document.records.length, raw.length);
+      return { status: "unavailable", reason: "write-failed" };
+    }
     return { status: "saved", document, raw };
   } catch {
     return { status: "unavailable", reason: "write-failed" };
   }
+}
+
+function storageFull(records: number, bytes: number): DiscussionsWriteResult {
+  return { status: "unavailable", reason: "storage-full", records, bytes };
+}
+
+function isQuotaExceeded(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const name = "name" in error ? error.name : "";
+  const code = "code" in error ? error.code : undefined;
+  return name === "QuotaExceededError" || name === "NS_ERROR_DOM_QUOTA_REACHED" || code === 22 || code === 1014;
 }
 
 async function withLock<T extends DiscussionsWriteResult | { readonly status: "cleared" }>(operation: () => Promise<T>): Promise<T> {
