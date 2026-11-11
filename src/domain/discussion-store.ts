@@ -2,6 +2,7 @@ import { isFactCard, type FactCard } from "./fact-card";
 import { leaningWording, MAX_MODEL_ITEMS, MAX_MODEL_TEXT } from "./model-output";
 import { isPersona, type Persona } from "./personas";
 import type { PurchaseDecisionCode } from "./purchase-snapshot";
+import { storageBytes } from "./storage-bytes";
 
 export const DISCUSSIONS_FORMAT = "zhiguan-discussions@1" as const;
 export const DISCUSSIONS_STORAGE_KEY = "zhiguan.discussions@1";
@@ -257,10 +258,6 @@ function writeDocument(content: { personas: readonly Persona[]; records: readonl
   } catch {
     return { status: "unavailable", reason: "write-failed" };
   }
-}
-
-function storageBytes(value: string): number {
-  return value.length * 2;
 }
 
 function storageFull(records: number, bytes: number): DiscussionsWriteResult {

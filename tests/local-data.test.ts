@@ -20,6 +20,8 @@ import {
   type LocalDataContent,
 } from "../src/domain/local-data";
 import { calculateIncome, defaultProfile, type IncomeProfile } from "../src/domain/income";
+import { parsePortableBackup } from "../src/domain/portable-backup";
+import { storageBytes } from "../src/domain/storage-bytes";
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
@@ -88,6 +90,8 @@ describe("backup file read boundary", () => {
     const text = vi.fn(async () => " ".repeat(5_000_001));
     expect(await parseLocalBackupFile({ size: 5_000_001, text })).toEqual({ status: "invalid", reason: "malformed" });
     expect(text).toHaveBeenCalledOnce();
+    expect(storageBytes(" ".repeat(5_000_001))).toBe(10_000_002);
+    expect(parsePortableBackup(" ".repeat(5_000_001))).toEqual({ status: "invalid", reason: "malformed" });
   });
 
   it("accepts a valid UTF-8 backup with multibyte text", async () => {
@@ -125,6 +129,37 @@ function writeRaw(value: unknown): string {
   storage.setItem(LOCAL_DATA_STORAGE_KEY, raw);
   return raw;
 }
+
+describe("local document size", () => {
+  beforeEach(resetEnvironment);
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("仍能读回 500 万码元以内的资料，哪怕 UTF-8 已经超过 1000 万字节", () => {
+    const id = "字".repeat(3_400_000);
+    const raw = JSON.stringify({
+      format: LOCAL_DATA_FORMAT,
+      revision: "rev-large",
+      profile: null,
+      favorites: [{ id, savedAt: "2026-09-22T10:00:00.000Z", snapshot }],
+    });
+    expect(raw.length).toBeLessThanOrEqual(5_000_000);
+    expect(storageBytes(raw)).toBeLessThanOrEqual(10_000_000);
+    expect(new TextEncoder().encode(raw).length).toBeGreaterThan(10_000_000);
+    expect(parseLocalBackup(raw).status).toBe("valid");
+    expect(parsePortableBackup(raw)).toMatchObject({ status: "valid", kind: "v1" });
+    storage.setItem(LOCAL_DATA_STORAGE_KEY, raw);
+    const read = readLocalData();
+    expect(read.status).toBe("ready");
+    if (read.status === "ready") expect(read.document.favorites[0]?.id).toBe(id);
+
+    const core = JSON.stringify({ format: LOCAL_DATA_FORMAT, revision: "rev-boundary", profile: null, favorites: [] });
+    const atLimit = `${core}${" ".repeat(5_000_000 - core.length)}`;
+    expect(atLimit.length).toBe(5_000_000);
+    expect(storageBytes(atLimit)).toBe(10_000_000);
+    expect(parseLocalBackup(atLimit).status).toBe("valid");
+    expect(parsePortableBackup(`${atLimit} `)).toEqual({ status: "invalid", reason: "malformed" });
+  });
+});
 
 describe("local data and backups", () => {
   beforeEach(resetEnvironment);

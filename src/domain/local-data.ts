@@ -1,5 +1,6 @@
 import { validateProfile, type IncomeProfile } from "./income";
 import { isPurchaseSnapshotV2, type PurchaseSnapshotV2 } from "./purchase-snapshot";
+import { storageBytes } from "./storage-bytes";
 
 export const LOCAL_DATA_FORMAT = "zhiguan-local-backup@1" as const;
 export const LOCAL_DATA_STORAGE_KEY = "zhiguan.local-data@1";
@@ -44,9 +45,10 @@ export type LocalBackupParseResult =
   | { readonly status: "invalid"; readonly reason: "malformed" | "unsupported-version" };
 
 const LOCK_NAME = "zhiguan-local-data";
-const MAX_DOCUMENT_LENGTH = 5_000_000;
-// UTF-8 uses at most three bytes per UTF-16 code unit.
-const MAX_BACKUP_FILE_BYTES = MAX_DOCUMENT_LENGTH * 3;
+const MAX_DOCUMENT_CODE_UNITS = 5_000_000;
+const MAX_DOCUMENT_STORAGE_BYTES = MAX_DOCUMENT_CODE_UNITS * 2;
+// UTF-8 文件最多每个码元 3 字节，所以读文件的字节上限仍是 15_000_000。
+const MAX_BACKUP_FILE_BYTES = MAX_DOCUMENT_CODE_UNITS * 3;
 const MAX_CALENDAR_VALIDATION_WORK = 512;
 const PROFILE_KEYS = ["income", "timeZone", "workDays", "periods", "exceptions", "updatedAt", "scheduleSource"] as const;
 
@@ -173,7 +175,7 @@ export async function parseLocalBackupFile(file: Pick<File, "size" | "text">): P
 }
 
 export function parseLocalBackup(raw: string): LocalBackupParseResult {
-  if (raw.length > MAX_DOCUMENT_LENGTH) return { status: "invalid", reason: "malformed" };
+  if (storageBytes(raw) > MAX_DOCUMENT_STORAGE_BYTES) return { status: "invalid", reason: "malformed" };
   let value: unknown;
   try {
     value = JSON.parse(raw);
@@ -194,7 +196,7 @@ export function parseLocalBackup(raw: string): LocalBackupParseResult {
 }
 
 function parseStoredDocument(raw: string): LocalDataReadResult {
-  if (raw.length > MAX_DOCUMENT_LENGTH) return { status: "invalid", document: null, raw, reason: "malformed" };
+  if (storageBytes(raw) > MAX_DOCUMENT_STORAGE_BYTES) return { status: "invalid", document: null, raw, reason: "malformed" };
   let value: unknown;
   try {
     value = JSON.parse(raw);
@@ -245,7 +247,7 @@ function writeDocument(content: LocalDataContent): LocalDataWriteResult {
       favorites: content.favorites,
     };
     const raw = `${JSON.stringify(document)}\n`;
-    if (raw.length > MAX_DOCUMENT_LENGTH) return { status: "unavailable", reason: "write-failed" };
+    if (storageBytes(raw) > MAX_DOCUMENT_STORAGE_BYTES) return { status: "unavailable", reason: "write-failed" };
     globalThis.localStorage.setItem(LOCAL_DATA_STORAGE_KEY, raw);
     return { status: "saved", document, raw };
   } catch {
