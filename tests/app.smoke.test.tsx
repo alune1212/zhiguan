@@ -91,7 +91,7 @@ describe("App", () => {
     expect(html).toContain("我整理的信息");
     expect(html).toContain("确认并查看结果");
     expect(html).not.toContain('name="purchaseAmount"');
-    expect(html).toContain("返回收入看板");
+    expect(html).toContain("返回收入资料");
   });
 
   it("puts the work-time conclusion first and keeps income rate as a supplement", () => {
