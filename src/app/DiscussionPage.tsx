@@ -481,7 +481,13 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
         setNotice("已删除这一条讨论。收入资料还在。");
         return;
       }
-      if (result.status !== "not-found") gateRef.current.undoBlock(id, wasCurrent);
+      if (result.status === "not-found") {
+        if (openRecordId === id) setOpenRecordId(null);
+        setLibrary(readDiscussions());
+        setNotice("这条讨论已经不在了。");
+        return;
+      }
+      gateRef.current.undoBlock(id, wasCurrent);
       setNotice("没有删成。已保存的讨论还在。");
     });
   };
