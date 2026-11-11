@@ -295,6 +295,7 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
     const id = gateRef.current.claim(() => globalThis.crypto.randomUUID());
     if (!id) {
       leaveFlush.forget();
+      if (gateRef.current.held) setNotice("这条讨论已删除，之后的修改不会保存。");
       return;
     }
     const snapshot = saveSnapshot;

@@ -197,7 +197,7 @@ export async function replaceDiscussions(document: DiscussionsDocument | null, e
 }
 
 function parseStored(raw: string): DiscussionsReadResult {
-  if (raw.length > MAX_DOCUMENT_LENGTH) return { status: "invalid", raw, reason: "malformed" };
+  if (utf8ByteLength(raw) > MAX_DOCUMENT_LENGTH) return { status: "invalid", raw, reason: "malformed" };
   let value: unknown;
   try {
     value = JSON.parse(raw);
@@ -244,17 +244,22 @@ function writeDocument(content: { personas: readonly Persona[]; records: readonl
     };
     if (!isDiscussionsDocument(document)) return { status: "invalid", reason: "invalid-document" };
     const raw = `${JSON.stringify(document)}\n`;
-    if (raw.length > MAX_DOCUMENT_LENGTH) return storageFull(document.records.length, raw.length);
+    const bytes = utf8ByteLength(raw);
+    if (bytes > MAX_DOCUMENT_LENGTH) return storageFull(document.records.length, bytes);
     try {
       globalThis.localStorage.setItem(DISCUSSIONS_STORAGE_KEY, raw);
     } catch (error) {
-      if (isQuotaExceeded(error)) return storageFull(document.records.length, raw.length);
+      if (isQuotaExceeded(error)) return storageFull(document.records.length, bytes);
       return { status: "unavailable", reason: "write-failed" };
     }
     return { status: "saved", document, raw };
   } catch {
     return { status: "unavailable", reason: "write-failed" };
   }
+}
+
+function utf8ByteLength(value: string): number {
+  return new TextEncoder().encode(value).length;
 }
 
 function storageFull(records: number, bytes: number): DiscussionsWriteResult {

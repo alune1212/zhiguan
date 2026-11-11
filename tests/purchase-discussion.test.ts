@@ -484,6 +484,7 @@ describe("discussion storage and old backups", () => {
     }
     expect(failed.records).toBe(1);
     expect(failed.bytes).toBeGreaterThan(2_000_000);
+    expect(failed.bytes).toBeGreaterThan(new TextEncoder().encode("字".repeat(2_000_000)).length);
     const notice = storageFullNotice(failed.records, failed.bytes);
     expect(notice).toContain("1 条");
     expect(notice).toContain("删除旧讨论");
@@ -516,6 +517,55 @@ describe("discussion storage and old backups", () => {
       status: "unavailable",
       reason: "write-failed",
     });
+  });
+
+  it("汉字不到 200 万、UTF-8 超过 2MB 时也算写满，并且读不回超限文档", async () => {
+    const saved = await upsertDiscussion(record(cardFor(), "discussion-1"), null);
+    if (saved.status !== "saved") throw new Error("seed");
+    const text = "字".repeat(700_000);
+    const rawPreview = `${JSON.stringify({ usableText: text })}\n`;
+    expect(text.length).toBeLessThan(2_000_000);
+    expect(rawPreview.length).toBeLessThan(2_000_000);
+    expect(new TextEncoder().encode(text).length).toBeGreaterThan(2_000_000);
+    const failed = await upsertDiscussion({
+      ...record(cardFor(), "discussion-1"),
+      round1: {
+        speeches: [{
+          personaId: "family",
+          name: "家人",
+          status: "done",
+          usableText: text,
+          sentences: [],
+        }],
+        synthesis: null,
+      },
+    }, saved.document.revision);
+    if (failed.status !== "unavailable" || failed.reason !== "storage-full") {
+      throw new Error(`expected storage-full, got ${JSON.stringify(failed)}`);
+    }
+    expect(failed.bytes).toBeGreaterThan(2_000_000);
+    expect(failed.bytes).toBeGreaterThan(text.length);
+    const kept = readDiscussions();
+    expect(kept.status).toBe("ready");
+    if (kept.status === "ready") expect(kept.document.records[0]?.round1.speeches).toEqual([]);
+
+    const source = saved.document.records[0];
+    if (!source) throw new Error("seed record");
+    const bloated = {
+      ...saved.document,
+      records: [{
+        ...source,
+        round1: {
+          speeches: [{ personaId: "family", name: "家人", status: "done" as const, usableText: text, sentences: [] }],
+          synthesis: null,
+        },
+      }],
+    };
+    const raw = `${JSON.stringify(bloated)}\n`;
+    expect(raw.length).toBeLessThan(2_000_000);
+    expect(new TextEncoder().encode(raw).length).toBeGreaterThan(2_000_000);
+    storage.setItem(DISCUSSIONS_STORAGE_KEY, raw);
+    expect(readDiscussions().status).toBe("invalid");
   });
 
   it("拿到锁之前另一个标签页已经写过时，不覆盖那份讨论", async () => {

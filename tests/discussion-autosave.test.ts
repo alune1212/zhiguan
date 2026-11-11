@@ -55,6 +55,20 @@ describe("discussion autosave leave flush", () => {
     expect(writes).toEqual(["now"]);
   });
 
+  it("延迟保存已经触发后再离开，不会再写一次", () => {
+    const { pending, fire } = pendingSaver();
+    const leaveFlush = createDiscussionLeaveFlush(pending);
+    const writes: string[] = [];
+    leaveFlush.arm(
+      () => writes.push("now"),
+      () => writes.push("later"),
+      400,
+    );
+    fire();
+    expect(() => leaveFlush.leave()).not.toThrow();
+    expect(writes).toEqual(["later"]);
+  });
+
   it("pagehide、进入后台和卸载会立刻保存，页面仍可见时不会提前写", () => {
     const { pending } = pendingSaver();
     const leaveFlush = createDiscussionLeaveFlush(pending);

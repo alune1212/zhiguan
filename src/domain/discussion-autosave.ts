@@ -34,8 +34,15 @@ export function createDiscussionLeaveFlush(pending: PendingDiscussionSave) {
   let saveNow: (() => void) | null = null;
   return {
     arm(saveNowFn: () => void, saveLater: () => void, delayMs: number) {
-      saveNow = saveNowFn;
-      pending.schedule(saveLater, delayMs);
+      let spent = false;
+      const run = (fn: () => void) => {
+        if (spent) return;
+        spent = true;
+        saveNow = null;
+        fn();
+      };
+      saveNow = () => run(saveNowFn);
+      pending.schedule(() => run(saveLater), delayMs);
     },
     /** 只取消定时器。卸载清理若先跑到这里，离开页面仍要能写完。 */
     disarm() {
@@ -82,6 +89,9 @@ export function createDiscussionSaveGate() {
   return {
     get generation() {
       return generation;
+    },
+    get held() {
+      return hold;
     },
     claim(createId: () => string) {
       if (hold) return null;
