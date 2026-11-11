@@ -1,8 +1,8 @@
 # 值观 · Zhiguan
 
-值观帮助你直观看见时间与收入，也可以按需理解一次购买选择。
+值观要帮你在一笔购买前看清自己的数字，听完不同说法，再自己决定。
 
-**状态：开发中的本机应用。** 当前已实现收入看板、同浏览器资料与收藏、备份恢复和单次购买分析；尚未正式发布，真实用户体验与回滚演练仍待验证。[PRODUCT.md](PRODUCT.md) 描述长期产品愿景，其中订阅、物品使用、目标等对象不代表当前已提供对应功能；当前范围以本页、[产品策略](PRODUCT_STRATEGY.md) 和 [路线图](ROADMAP.md) 为准。
+**状态：开发中的本机应用。** 现行方向见 [产品宪法](PRODUCT.md) 1.0.0 和 [RFC-0002](docs/product/rfc/RFC-0002-purchase-council.md)。购买讨论尚未开发。当前已实现的是收入看板、同浏览器资料与收藏、备份恢复和单次购买分析；尚未正式发布，真实用户体验与回滚演练仍待验证。已实现范围以本页为准，接下来做什么见 [路线图](ROADMAP.md)。
 
 ## 当前实现
 
@@ -94,12 +94,12 @@ uv run --locked --env-file .env scripts/jev_conversation_experiment.py --run --o
 
 Jev 对话输入的当前接入边界见 [ADR-0007](docs/adr/ADR-0007-conversational-input.md)；[ADR-0006](docs/adr/ADR-0006-jev-integration.md) 和虚构样本实验仅记录首版历史。金额计算复用确定性逻辑；收入看板与本地保存边界见 [PRD-0003](docs/product/prd/PRD-0003-income-dashboard.md) 和 [ADR-0008](docs/adr/ADR-0008-local-profile-and-purchase-favorites.md)。旧导出格式保留历史含义，新结果与备份使用不同格式。
 
-- 长期产品定义见 [产品宪法](PRODUCT.md)，当前优先级见 [产品策略](PRODUCT_STRATEGY.md) 和 [路线图](ROADMAP.md)，实现边界见 [架构](ARCHITECTURE.md)。
-- 购买功能短规格见 [PRD-0001](docs/product/prd/PRD-0001-single-purchase-decision-workbench.md)；[PRD-0002](docs/product/prd/PRD-0002-goal-progress.md) 已于 2026-09-01 按回滚条件退役，仅保留历史记录。
-- 当前不可逆技术决定见 [ADR 索引](docs/adr/README.md)。
+- 产品宪法见 [PRODUCT.md](PRODUCT.md)。购买讨论的提案是 [RFC-0002](docs/product/rfc/RFC-0002-purchase-council.md)、[PRD-0004](docs/product/prd/PRD-0004-purchase-council.md) 和 [ADR-0009](docs/adr/ADR-0009-llm-purchase-discussion.md)。当前优先级见 [产品策略](PRODUCT_STRATEGY.md) 和 [路线图](ROADMAP.md)，已实现代码的边界见 [架构](ARCHITECTURE.md)。
+- 已实现的购买计算见 [PRD-0001](docs/product/prd/PRD-0001-single-purchase-decision-workbench.md)，收入看板见 [PRD-0003](docs/product/prd/PRD-0003-income-dashboard.md)。[PRD-0002](docs/product/prd/PRD-0002-goal-progress.md) 已于 2026-09-01 按回滚条件退役，仅保留历史记录。
+- 技术决定见 [ADR 索引](docs/adr/README.md)。
 - [术语](docs/product/glossary.md)、[指标](docs/product/metrics.md)、[数据原则](docs/product/data-principles.md) 和 [品牌边界](docs/design/brand.md) 说明产品用语与限制。
 
-不在当前范围内：独立 Goal 进度、账户、完整记账、数据库、同步、提醒、研究招募、公开发布、排名、人生总分和替用户做决定。当前实现与使用反馈不构成研究或市场结论；研究招募暂停，也不是当前开发前置条件。
+当前代码尚不包括：购买讨论、购后回访、公开分享、独立 Goal 进度、账户、完整记账、数据库、同步、提醒、研究招募、公开发布、排名、人生总分和替用户做决定。购买讨论的阶段一见路线图。当前实现与使用反馈不构成研究或市场结论；研究招募暂停，也不是当前开发前置条件。
 
 本地数据可先导出备份，再通过页面确认清空；下载到设备的文件需自行管理。回退旧应用前应保留备份，旧版不会读取或转换新数据。浏览器验证不等于真实用户体验反馈或生产发布，回滚演练仍需另行验证。
 

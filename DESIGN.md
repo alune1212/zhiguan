@@ -2,7 +2,7 @@
 
 **版本：** 0.1.0 · **日期：** 2026-09-23
 
-**状态：** Apple-inspired 视觉方案、[概念稿](docs/design/frontend-concepts.html)和现有 React/Vite 应用中的 shadcn/ui + Tailwind CSS v4 界面均已交付。preview 与临时 Docker 容器的验收记录及边界见[前端验收记录](docs/design/frontend-acceptance.md)；真实用户验证与正式发布尚未完成。
+**状态：** Apple-inspired 视觉方案、[概念稿](docs/design/frontend-concepts.html)和现有 React/Vite 应用中的 shadcn/ui + Tailwind CSS v4 界面均已交付。preview 与临时 Docker 容器的验收记录及边界见[前端验收记录](docs/design/frontend-acceptance.md)；真实用户验证与正式发布尚未完成。本文件描述已实现界面。产品任务以 [PRODUCT.md](PRODUCT.md) 1.0.0 为准；购买讨论的界面还没有设计，不在本规范里。
 
 本规范服从 [PRODUCT.md](PRODUCT.md)、[产品策略](PRODUCT_STRATEGY.md)、[路线图](ROADMAP.md)、[架构约束](ARCHITECTURE.md) 与 [品牌指南](docs/design/brand.md)。页面视觉统一遵循本文件；后续调整集中更新规范，不逐页更换主题。设计调整不改变计算、证据状态、存储或外部服务边界。
 

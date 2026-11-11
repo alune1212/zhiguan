@@ -4,6 +4,8 @@
 
 当前实现是本机使用的 React 单页应用，包含浏览器本地保存和可选的购买对话辅助。不提供账户、应用数据库、Cookie 登录、云端同步、分析或自动行为上报；公开部署和多人服务不在当前范围。收入计算、手动购买分析及本地资料管理不依赖 Jev 或私人 API 密钥。
 
+[ADR-0009](docs/adr/ADR-0009-llm-purchase-discussion.md) 提出另一条尚未实现的路径：购买讨论可以在全文预览并确认后，把收入绝对值发给模型。下面的表格描述的是今天正在运行的边界。讨论代码接入之前，收入资料仍然不会整份离开浏览器。
+
 已批准的数据边界见 [ADR-0008：本地资料与收藏](docs/adr/ADR-0008-local-profile-and-purchase-favorites.md)、[ADR-0007：购买对话的最少上下文](docs/adr/ADR-0007-conversational-input.md) 和[当前架构](ARCHITECTURE.md)。
 
 ## 数据、触发与接收方
