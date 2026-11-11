@@ -483,19 +483,27 @@ describe("discussion storage and old backups", () => {
       throw new Error(`expected storage-full, got ${JSON.stringify(failed)}`);
     }
     expect(failed.records).toBe(1);
-    expect(failed.bytes).toBeGreaterThan(2_000_000);
-    expect(failed.bytes).toBeGreaterThan(new TextEncoder().encode("字".repeat(2_000_000)).length);
+    // 2_000_000 个汉字本身是 4_000_000 字节的 UTF-16 存储；整份文档只应再多出一小段 JSON。
+    expect(failed.bytes).toBeGreaterThan(4_000_000);
+    expect(failed.bytes).toBeLessThan(4_200_000);
+    expect(failed.bytes % 2).toBe(0);
     const notice = storageFullNotice(failed.records, failed.bytes);
+    const shown = (failed.bytes / 1_000_000).toFixed(failed.bytes >= 10_000_000 ? 0 : 1);
     expect(notice).toContain("1 条");
+    expect(notice).toContain(`约 ${shown} MB`);
     expect(notice).toContain("删除旧讨论");
     expect(notice).toContain("导出备份");
-    expect(notice).toMatch(/MB|KB/);
     const kept = readDiscussions();
     expect(kept.status).toBe("ready");
     if (kept.status === "ready") {
       expect(kept.document.records).toHaveLength(1);
       expect(kept.document.records[0]?.round1.speeches).toEqual([]);
     }
+    const oversizedRaw = `${JSON.stringify({ ...saved.document, records: [oversized] })}\n`;
+    expect(oversizedRaw.length * 2).toBeGreaterThan(4_000_000);
+    storage.setItem(DISCUSSIONS_STORAGE_KEY, oversizedRaw);
+    expect(readDiscussions().status).toBe("invalid");
+    storage.setItem(DISCUSSIONS_STORAGE_KEY, saved.raw);
 
     storage.setItem = () => {
       throw Object.assign(new Error("quota"), { name: "QuotaExceededError", code: 22 });
@@ -519,36 +527,13 @@ describe("discussion storage and old backups", () => {
     });
   });
 
-  it("汉字不到 200 万、UTF-8 超过 2MB 时也算写满，并且读不回超限文档", async () => {
+  it("之前按字符数存下、UTF-8 超过 2MB 的中文文档，读回仍然有效，也能继续写入", async () => {
     const saved = await upsertDiscussion(record(cardFor(), "discussion-1"), null);
     if (saved.status !== "saved") throw new Error("seed");
     const text = "字".repeat(700_000);
-    const rawPreview = `${JSON.stringify({ usableText: text })}\n`;
     expect(text.length).toBeLessThan(2_000_000);
-    expect(rawPreview.length).toBeLessThan(2_000_000);
+    expect(text.length * 2).toBeLessThanOrEqual(4_000_000);
     expect(new TextEncoder().encode(text).length).toBeGreaterThan(2_000_000);
-    const failed = await upsertDiscussion({
-      ...record(cardFor(), "discussion-1"),
-      round1: {
-        speeches: [{
-          personaId: "family",
-          name: "家人",
-          status: "done",
-          usableText: text,
-          sentences: [],
-        }],
-        synthesis: null,
-      },
-    }, saved.document.revision);
-    if (failed.status !== "unavailable" || failed.reason !== "storage-full") {
-      throw new Error(`expected storage-full, got ${JSON.stringify(failed)}`);
-    }
-    expect(failed.bytes).toBeGreaterThan(2_000_000);
-    expect(failed.bytes).toBeGreaterThan(text.length);
-    const kept = readDiscussions();
-    expect(kept.status).toBe("ready");
-    if (kept.status === "ready") expect(kept.document.records[0]?.round1.speeches).toEqual([]);
-
     const source = saved.document.records[0];
     if (!source) throw new Error("seed record");
     const bloated = {
@@ -562,10 +547,31 @@ describe("discussion storage and old backups", () => {
       }],
     };
     const raw = `${JSON.stringify(bloated)}\n`;
-    expect(raw.length).toBeLessThan(2_000_000);
+    expect(raw.length * 2).toBeLessThanOrEqual(4_000_000);
     expect(new TextEncoder().encode(raw).length).toBeGreaterThan(2_000_000);
     storage.setItem(DISCUSSIONS_STORAGE_KEY, raw);
-    expect(readDiscussions().status).toBe("invalid");
+    const read = readDiscussions();
+    expect(read.status).toBe("ready");
+    if (read.status === "ready") expect(read.document.records[0]?.round1.speeches[0]?.usableText).toBe(text);
+
+    const written = await upsertDiscussion({
+      ...record(cardFor(), "discussion-1"),
+      round1: {
+        speeches: [{
+          personaId: "family",
+          name: "家人",
+          status: "done",
+          usableText: text,
+          sentences: [],
+        }],
+        synthesis: null,
+      },
+    }, saved.document.revision);
+    expect(written.status).toBe("saved");
+    if (written.status === "saved") {
+      expect(new TextEncoder().encode(written.raw).length).toBeGreaterThan(2_000_000);
+      expect(written.raw.length * 2).toBeLessThanOrEqual(4_000_000);
+    }
   });
 
   it("拿到锁之前另一个标签页已经写过时，不覆盖那份讨论", async () => {
