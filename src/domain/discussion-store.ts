@@ -131,16 +131,6 @@ export async function upsertDiscussion(record: DiscussionRecord, expectedRevisio
   return withLock(async () => commitUpsert(record, expectedRevision));
 }
 
-/** pagehide 不会等异步锁，离开页面时要在事件里同步写完。 */
-export function writeDiscussionImmediately(record: DiscussionRecord, expectedRevision: string | null): DiscussionsWriteResult {
-  if (!isRecordValue(record)) return { status: "invalid", reason: "invalid-document" };
-  try {
-    return commitUpsert(record, expectedRevision);
-  } catch {
-    return { status: "unavailable", reason: "write-failed" };
-  }
-}
-
 export async function deleteDiscussion(id: string, expectedRevision: string | null): Promise<DiscussionsWriteResult> {
   return withLock(async () => {
     const current = readInsideLock();

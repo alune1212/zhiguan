@@ -18,7 +18,6 @@ import {
   storageFullNotice,
   upsertDiscussion,
   withUpdatedDecision,
-  writeDiscussionImmediately,
   type DiscussionRecord,
   type DiscussionRound,
   type DiscussionsReadResult,
@@ -301,14 +300,16 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
     const snapshot = saveSnapshot;
     completedAtRef.current ??= new Date().toISOString();
     const completedAt = completedAtRef.current;
-    const persist = (immediate: boolean) => {
+    const persist = () => {
       if (savedSnapshotRef.current === snapshot || !gateRef.current.stillCurrent(generation, id)) return;
       const record = toRecord(id, completedAt, card, draft, personas, round1, round2, decision, rationale);
       if (!record) {
         setNotice("这次讨论还不能写入本地。");
         return;
       }
-      const apply = (result: DiscussionsWriteResult) => {
+      void writeQueue.current.enqueue(async () => {
+        if (savedSnapshotRef.current === snapshot || !gateRef.current.stillCurrent(generation, id)) return;
+        const result = await upsertDiscussion(record, revisionRef.current);
         if (result.status === "saved") {
           savedSnapshotRef.current = snapshot;
           revisionRef.current = result.document.revision;
@@ -318,20 +319,13 @@ export function DiscussionPage({ profile, now, unsaved }: { readonly profile: In
         }
         if (savedSnapshotRef.current === snapshot) return;
         setNotice(discussionWriteFailureNotice(result, "这次没有写入本地。页面上的内容还在，刷新后可能丢失。"));
-      };
-      if (immediate) {
-        apply(writeDiscussionImmediately(record, revisionRef.current));
-        return;
-      }
-      void writeQueue.current.enqueue(async () => {
-        if (savedSnapshotRef.current === snapshot || !gateRef.current.stillCurrent(generation, id)) return;
-        apply(await upsertDiscussion(record, revisionRef.current));
       });
     };
-    leaveFlush.arm(() => persist(true), () => persist(false), 400);
+    leaveFlush.arm(persist, persist, 400);
     return () => leaveFlush.disarm();
   }, [card, complete, draft, decision, fingerprint, personas, rationale, round1, round2, saveSnapshot]);
 
+  // 卸载、pagehide 和进入后台都进同一条带锁的队列，避免盖住另一个标签页。
   useEffect(() => bindDiscussionSaveFlush(() => leaveFlushRef.current.leave(), { window, document }), []);
 
   const updateDraft = (patch: Partial<Draft>) => setDraft((current) => ({ ...current, ...patch }));

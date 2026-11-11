@@ -36,7 +36,6 @@ import {
   storageFullNotice,
   upsertDiscussion,
   withUpdatedDecision,
-  writeDiscussionImmediately,
   type DiscussionRecord,
 } from "../src/domain/discussion-store";
 import { LOCAL_DATA_STORAGE_KEY, commitLocalData, parseLocalBackup, readLocalData } from "../src/domain/local-data";
@@ -519,14 +518,24 @@ describe("discussion storage and old backups", () => {
     });
   });
 
-  it("离开页面时可以不经过异步锁把已完成的讨论写进去", () => {
-    vi.stubGlobal("navigator", {});
-    const saved = writeDiscussionImmediately(record(cardFor(), "discussion-leave"), null);
-    expect(saved.status).toBe("saved");
-    expect(readDiscussions().status).toBe("ready");
-    return expect(upsertDiscussion(record(cardFor(), "discussion-later"), saved.status === "saved" ? saved.document.revision : null)).resolves.toEqual({
-      status: "unavailable",
-      reason: "locks-unavailable",
+  it("拿到锁之前另一个标签页已经写过时，不覆盖那份讨论", async () => {
+    const saved = await upsertDiscussion(record(cardFor(), "discussion-1"), null);
+    if (saved.status !== "saved") throw new Error("seed");
+    vi.stubGlobal("navigator", {
+      locks: {
+        request: async (_name: string, _options: { mode: "exclusive" }, callback: () => Promise<unknown>) => {
+          const current = JSON.parse(storage.getItem(DISCUSSIONS_STORAGE_KEY) ?? "{}") as { revision: string; records: Array<{ reason: string }> };
+          current.revision = "other-tab";
+          current.records[0].reason = "另一个标签页留下的";
+          storage.setItem(DISCUSSIONS_STORAGE_KEY, JSON.stringify(current));
+          return callback();
+        },
+      },
     });
+    const result = await upsertDiscussion({ ...record(cardFor(), "discussion-1"), reason: "本页刚完成的讨论" }, saved.document.revision);
+    expect(result).toEqual({ status: "conflict", currentRevision: "other-tab" });
+    const raw = storage.getItem(DISCUSSIONS_STORAGE_KEY) ?? "";
+    expect(raw).toContain("另一个标签页留下的");
+    expect(raw).not.toContain("本页刚完成的讨论");
   });
 });
