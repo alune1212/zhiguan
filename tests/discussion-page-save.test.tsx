@@ -181,6 +181,7 @@ describe("discussion page save", () => {
     });
     await vi.waitFor(() => {
       expect(storedRecords().length).toBe(1);
+      expect([...document.querySelectorAll("button")].some((button) => button.textContent === "删除这条讨论")).toBe(true);
     });
     const workingLocks = navigator.locks;
     Object.defineProperty(navigator, "locks", {
@@ -220,6 +221,7 @@ describe("discussion page save", () => {
     });
     await vi.waitFor(() => {
       expect(storedRecords().length).toBe(1);
+      expect([...document.querySelectorAll("button")].some((button) => button.textContent === "删除这条讨论")).toBe(true);
     });
     const savedId = storedRecords()[0]?.id;
     if (!savedId) throw new Error("missing saved id");
