@@ -25,7 +25,7 @@ React + TypeScript + Vite 单页应用：
 
 ## 快速开始：无需密钥的基础功能
 
-准备 Git 和 **Bun 1.4.0**（版本由 `package.json` 固定；安装方式见 [Bun 官方文档](https://bun.com/docs/installation#installing-older-versions)）。基础功能不需要 Python、TypeSafe 密钥或 `.env`，无需另装 Node.js/npm。
+准备 Git 和 **Bun 1.4.2**（版本由 `package.json` 固定；安装方式见 [Bun 官方文档](https://bun.com/docs/installation#installing-older-versions)）。基础功能不需要 Python、TypeSafe 密钥或 `.env`，无需另装 Node.js/npm。
 
 ```sh
 git clone https://github.com/alune1212/zhiguan.git
@@ -45,7 +45,7 @@ bun run check
 bun run preview --strictPort
 ```
 
-先停止开发服务，再在同一地址 <http://127.0.0.1:4173> 预览 `dist/` 构建产物。也可单独运行 `bun run build` 或 `bun run test`；`bun test` 是 Bun 自带的另一套测试运行器，不是本项目的 Vitest 检查。无密钥 CI 在每次 main 推送和面向 main 的 PR 中执行 `bun ci`、`bun run check`，见 [检查工作流](.github/workflows/check.yml)。
+先停止开发服务，再在同一地址 <http://127.0.0.1:4173> 预览 `dist/` 构建产物。也可单独运行 `bun run build` 或 `bun run test`；`bun test` 是 Bun 自带的另一套测试运行器，不是本项目的 Vitest 检查。无密钥 CI 在每次 main 推送和面向 main 的 PR 中使用 `package.json` 指定的 Bun 执行 `bun ci`、`bun run check`，并用锁定的 Python 3.14 依赖运行历史实验脚本的离线单元测试和虚构样本自检，不调用 DeepSeek，见 [检查工作流](.github/workflows/check.yml)。
 
 ### 备份、恢复与删除
 

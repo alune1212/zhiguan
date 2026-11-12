@@ -5,6 +5,8 @@ import { calculateDecision, type DecisionInput } from "../src/domain/calculation
 import { calculateIncome, defaultProfile } from "../src/domain/income";
 import { LOCAL_DATA_FORMAT, type FavoriteSnapshot, type LocalDataReadResult } from "../src/domain/local-data";
 import { createPurchaseSnapshot } from "../src/domain/purchase-snapshot";
+import { assistEstimatesFromInput, finalizeAssistInput } from "../src/app/assist-flow";
+import { App as PurchaseWorkbench } from "../src/app/App";
 import { FavoriteCard, favoriteRecalculationInput, homeScreen, IncomeApp, isSuccessfulLocalDataRead, rateDisplay } from "../src/app/IncomeApp";
 
 const favoriteInput: DecisionInput = {
@@ -91,6 +93,31 @@ describe("IncomeApp favorites and reload guards", () => {
       workHours: "160",
       evidence: { income: "user-confirmed", workHours: "user-confirmed" },
     });
+  });
+
+  it("keeps estimated favorite inputs estimated when the purchase page is reopened", () => {
+    const snapshot = favoriteSnapshot({
+      ...favoriteInput,
+      fixedExpenses: "2400",
+      evidence: {
+        ...favoriteInput.evidence,
+        workHours: "estimated",
+        fixedExpenses: "estimated",
+        purchaseAmount: "estimated",
+      },
+    });
+    const profile = { ...defaultProfile(), income: "9000" };
+    const draft = favoriteRecalculationInput(snapshot, profile, null)!;
+    const estimates = assistEstimatesFromInput(draft);
+
+    expect(finalizeAssistInput(draft, estimates, false).evidence).toMatchObject({
+      income: "user-confirmed",
+      workHours: "estimated",
+      fixedExpenses: "estimated",
+      purchaseAmount: "estimated",
+    });
+    const html = renderToStaticMarkup(<PurchaseWorkbench initialInput={draft} timeZone="Asia/Shanghai" />);
+    expect(html).toContain("辅助整理逐项识别的大概数仍按估算");
   });
 
   it("does not reuse a saved calendar when the current schedule has no working time", () => {

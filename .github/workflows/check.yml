@@ -21,8 +21,19 @@ jobs:
       - name: Set up repository Bun version
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: 1.4.0
+          bun-version-file: package.json
       - name: Install locked dependencies
         run: bun ci
       - name: Run dependency, type, test and build checks
         run: bun run check
+      - name: Set up Python tooling
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.1"
+          python-version: "3.14"
+      - name: Install locked Python dependencies
+        run: uv sync --locked
+      - name: Run Python offline checks
+        run: |
+          uv run --locked --offline python -m unittest discover -s scripts -p 'test_jev_server.py'
+          uv run --locked --offline scripts/jev_conversation_experiment.py --self-check

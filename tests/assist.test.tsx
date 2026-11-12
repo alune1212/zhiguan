@@ -7,6 +7,7 @@ import {
   areNumericValuesEquivalent,
   applyAssistPatch,
   applyQuickAssistAnswer,
+  assistEstimatesFromInput,
   assistContextFor,
   finalizeAssistInput,
   nextAssistQuestion,
@@ -303,5 +304,38 @@ describe("conversation assist flow", () => {
       false,
     );
     expect(formatted.evidence.income).toBe("estimated");
+  });
+
+  it("restores initial estimates, preserves them through confirmation, and accepts a new exact value", () => {
+    const initial: DecisionInput = {
+      ...blankInput,
+      income: "8000",
+      workHours: "160",
+      fixedExpenses: "2000",
+      purchaseAmount: "3000",
+      evidence: {
+        income: "estimated",
+        workHours: "estimated",
+        fixedExpenses: "estimated",
+        purchaseAmount: "estimated",
+      },
+    };
+    const estimates = assistEstimatesFromInput(initial);
+    expect(estimates).toEqual({ income: "8000", workHours: "160", fixedExpenses: "2000", purchaseAmount: "3000" });
+    expect(finalizeAssistInput(initial, estimates, false).evidence).toEqual(initial.evidence);
+    expect(finalizeAssistInput(initial, estimates, true).evidence).toEqual(initial.evidence);
+
+    const formatted = { ...initial, purchaseAmount: "3000.00" };
+    const formattedEstimates = { ...estimates, purchaseAmount: "3000.00" };
+    expect(finalizeAssistInput(formatted, formattedEstimates, false).evidence.purchaseAmount).toBe("estimated");
+
+    const edited: DecisionInput = { ...initial, purchaseAmount: "3200", evidence: { ...initial.evidence, purchaseAmount: "" } };
+    const editedEstimates = { ...estimates, purchaseAmount: null };
+    expect(finalizeAssistInput(edited, editedEstimates, false).evidence.purchaseAmount).toBe("user-confirmed");
+    expect(finalizeAssistInput(edited, editedEstimates, false).evidence).toMatchObject({
+      income: "estimated",
+      workHours: "estimated",
+      fixedExpenses: "estimated",
+    });
   });
 });
