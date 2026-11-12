@@ -17,7 +17,9 @@ import {
   usableText,
 } from "../src/domain/speech-check";
 import {
+  PERSONA_INSTRUCTION,
   PROVIDER_NAME,
+  SYNTHESIS_INSTRUCTION,
   discussionFingerprint,
   discussionIsComplete,
   personaTurnPayload,
@@ -264,6 +266,10 @@ describe("discussion payloads", () => {
     expect(preview).toContain("api.deepseek.com");
     expect(preview).toContain("对方收到后是否保留，本产品不能替对方删除");
     expect(preview).toContain("本轮请求次数：5");
+    expect(preview).toContain("factCard.citations");
+    expect(preview).toContain("不要出现 pushback 字段");
+    expect(preview).toContain("反对意见这次没有可用文本");
+    expect(preview).not.toContain("仅反对角色必填，其他人物不要写");
     expect(preview).not.toContain(secret);
     expect(personaProblems(personas)).toEqual([]);
     expect(DEFAULT_PERSONAS.find((persona) => persona.name === "上司")?.enabled).toBe(false);
@@ -321,6 +327,22 @@ describe("discussion payloads", () => {
     expect(discussionFingerprint(same)).not.toBe(discussionFingerprint({ ...same, calendarStamp: "2026-10|576000|20" }));
     expect(visibleDecision({ fingerprint: "a", decision: "wait", rationale: "再看看" }, "b")).toEqual({ decision: "", rationale: "" });
     expect(visibleDecision({ fingerprint: "a", decision: "wait", rationale: "再看看" }, "a").decision).toBe("wait");
+  });
+
+  it("keeps separate stance schemas and refuses invented dissent", () => {
+    const ordinary = '{"personaId":"<persona.id>","points":["……"]}';
+    const dissenter = '{"personaId":"<persona.id>","points":["……"],"pushback":"……"}';
+    for (const instruction of [PERSONA_INSTRUCTION, SYNTHESIS_INSTRUCTION]) {
+      expect(instruction).toContain("JSON");
+      expect(instruction).toContain("citations");
+      expect(instruction).toContain("\n");
+    }
+    expect(PERSONA_INSTRUCTION).toContain(ordinary);
+    expect(PERSONA_INSTRUCTION).toContain(dissenter);
+    expect(PERSONA_INSTRUCTION).toContain('persona.stance 是 "ordinary"');
+    expect(PERSONA_INSTRUCTION).toContain('persona.stance 是 "pushback"');
+    expect(SYNTHESIS_INSTRUCTION).toContain("反对意见这次没有可用文本");
+    expect(SYNTHESIS_INSTRUCTION).toContain("lean-buy|lean-wait|lean-skip|lean-adjust|unclear");
   });
 });
 
