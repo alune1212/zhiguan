@@ -344,7 +344,84 @@ describe("discussion payloads", () => {
     expect(SYNTHESIS_INSTRUCTION).toContain("反对意见这次没有可用文本");
     expect(SYNTHESIS_INSTRUCTION).toContain("lean-buy|lean-wait|lean-skip|lean-adjust|unclear");
   });
+
+  it("gives concrete json examples that contain no copyable numbers", () => {
+    const ordinary = exampleJson(PERSONA_INSTRUCTION, "普通人物示例：");
+    const dissenter = exampleJson(PERSONA_INSTRUCTION, "反对人物示例：");
+    const synthesis = exampleJson(SYNTHESIS_INSTRUCTION, "示例：");
+    expect(ordinary).toEqual({
+      personaId: "<persona.id>",
+      points: ["旧的已经不好用了", "换掉它能少操心"],
+    });
+    expect(ordinary).not.toHaveProperty("pushback");
+    expect(dissenter).toEqual({
+      personaId: "<persona.id>",
+      points: ["现有的还能用", "余量并不宽裕"],
+      pushback: "可以再等等，等现有的彻底不能用，或者余量更宽裕的时候再看",
+    });
+    expect(synthesis).toEqual({
+      leaning: "lean-wait",
+      reasons: ["现有的还能用，不是立刻需要"],
+      risks: ["会挤占余量"],
+      changeConditions: ["如果现有的彻底不能用，就买"],
+      disagreements: ["有人觉得现在换更省心，反对的人想再等等"],
+    });
+    for (const instruction of [PERSONA_INSTRUCTION, SYNTHESIS_INSTRUCTION]) {
+      expect(instruction).toContain("示例里没有数字");
+      expect(instruction).toContain("数字只能来自 factCard.citations");
+    }
+  });
+
+  it("explains how round two uses ownSpeech and otherSpeeches", () => {
+    expect(PERSONA_INSTRUCTION).toContain("ownSpeech 是你自己第一轮里通过校验的发言");
+    expect(PERSONA_INSTRUCTION).toContain("otherSpeeches 是其他人物通过校验的发言");
+    expect(PERSONA_INSTRUCTION).toContain("用它们回应彼此");
+    expect(PERSONA_INSTRUCTION).toContain("第一轮没有这两个字段");
+    expect(PERSONA_INSTRUCTION).toContain("不要把被挡下的句子写回来");
+  });
+
+  it("shows pushbackAvailable in the synthesis preview", () => {
+    const personas = defaultPersonas();
+    const family = personas[0]!;
+    const future = personas.find((persona) => persona.id === "future-self")!;
+    const base = {
+      card: cardFor(),
+      category: "家电",
+      reason: "旧的坏了",
+      personas,
+      providerHost: "api.deepseek.com",
+    } as const;
+    const withPushback = renderPreview({
+      ...base,
+      round: 2,
+      validatedSpeeches: [{ personaId: future.id, name: future.name, text: "先看工时" }],
+    });
+    const withoutPushback = renderPreview({
+      ...base,
+      round: 2,
+      validatedSpeeches: [{ personaId: family.id, name: family.name, text: "旧的坏了" }],
+    });
+    const round1 = renderPreview({ ...base, round: 1 });
+    expect(withPushback).toContain('"pushbackAvailable": true');
+    expect(withoutPushback).toContain('"pushbackAvailable": false');
+    expect(round1).toContain('"pushbackAvailable":');
+    const sent = synthesisPayload(base.card, "家电", "旧的坏了", personas, [
+      { personaId: future.id, name: future.name, text: "先看工时" },
+    ]);
+    expect(sent.pushbackAvailable).toBe(true);
+    expect(withPushback).toContain(JSON.stringify(sent, null, 2));
+  });
 });
+
+function exampleJson(instruction: string, label: string): unknown {
+  const line = instruction.split("\n").find((item) => item.startsWith(label));
+  expect(line, label).toBeDefined();
+  const json = line?.slice(label.length) ?? "";
+  expect(json).not.toMatch(/\d/u);
+  expect(json).not.toMatch(/[零〇一二两三四五六七八九十百千万亿]/u);
+  expect(json).not.toContain("……");
+  return JSON.parse(json) as unknown;
+}
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();

@@ -1,10 +1,11 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
 import { createApp } from "../server/app";
-import { PERSONA_INSTRUCTION, SYNTHESIS_INSTRUCTION } from "../src/domain/discussion-payload";
+import { PERSONA_INSTRUCTION, SYNTHESIS_INSTRUCTION, personaTurnPayload, renderPreview, synthesisPayload, cardForDiscussion } from "../src/domain/discussion-payload";
 import { buildFactCard } from "../src/domain/fact-card";
 import { defaultProfile } from "../src/domain/income";
 import { defaultPersonas } from "../src/domain/personas";
@@ -48,6 +49,16 @@ function sentChat(raw: string) {
     response_format: { type: string };
     messages: { role: string; content: string }[];
   };
+}
+
+function readTextFiles(dir: string): string {
+  const parts: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) parts.push(readTextFiles(path));
+    else if (entry.isFile()) parts.push(readFileSync(path, "utf8"));
+  }
+  return parts.join("\n");
 }
 
 function request(_path: string, body: unknown, headers?: HeadersInit) {
@@ -264,11 +275,182 @@ describe("discussion server", () => {
     expect(logs.join("")).not.toContain(secret);
   });
 
-  it("does not keep the discontinued deepseek-chat id in the server", () => {
-    const dir = fileURLToPath(new URL("../server/", import.meta.url));
-    const source = readdirSync(dir).map((name) => readFileSync(join(dir, name), "utf8")).join("\n");
-    expect(source).not.toContain("deepseek-chat");
-    expect(source).toContain("deepseek-flash");
+  it("logs output_invalid when the model content is not json", async () => {
+    const logs: string[] = [];
+    const hidden = "格式坏了的正文标记";
+    const steps = [
+      () => new Response(chatCompletion(null, { raw: `{"broken":${hidden}` }), { status: 200, headers: { "content-type": "application/json" } }),
+      () => {
+        throw new Error("network down");
+      },
+    ];
+    const fetchImpl: typeof fetch = async () => {
+      const next = steps.shift();
+      if (!next) throw new Error("missing response");
+      return next();
+    };
+    const app = createApp({ env: { DEEPSEEK_API_KEY: secret }, fetchImpl, log: (category) => logs.push(category) });
+    const invalid = await app.request("http://127.0.0.1:4174/api/parse", request("/api/parse", { text: "想买一台吸尘器" }));
+    const network = await app.request("http://127.0.0.1:4174/api/parse", request("/api/parse", { text: "想买一台吸尘器" }));
+    expect(invalid.status).toBe(502);
+    expect(network.status).toBe(502);
+    expect(await invalid.json()).toEqual({ error: "service_failed" });
+    expect(await network.json()).toEqual({ error: "service_failed" });
+    expect(logs).toEqual(["parse_output_invalid", "parse_service_failed"]);
+    expect(logs.join("")).not.toContain(hidden);
+    expect(logs.join("")).not.toContain(secret);
+  });
+
+  it("accepts a versioned flash name and still rejects chat and pro", async () => {
+    const logs: string[] = [];
+    const models = ["DeepSeek-V4.1-Flash-1017", "deepseek-v4-flash", "deepseek-chat", "DeepSeek-V4-Pro", "deepseek-v4-pro"];
+    const sent: string[] = [];
+    const fetchImpl: typeof fetch = async (_input, init) => {
+      const body = sentChat(String(init?.body ?? ""));
+      sent.push(body.model);
+      expect(body.thinking).toEqual({ type: "disabled" });
+      expect(body.temperature).toBe(0);
+      expect(body.max_tokens).toBe(256);
+      const model = models.shift() ?? "";
+      return new Response(chatCompletion(
+        { item: "吸尘器", price: null, category: null, priceApproximate: false },
+        { model },
+      ), { status: 200, headers: { "content-type": "application/json" } });
+    };
+    const app = createApp({ env: { DEEPSEEK_API_KEY: secret }, fetchImpl, log: (category) => logs.push(category) });
+    const accepted = ["DeepSeek-V4.1-Flash-1017", "deepseek-v4-flash"];
+    for (const model of accepted) {
+      const response = await app.request("http://127.0.0.1:4174/api/parse", request("/api/parse", { text: "想买一台吸尘器" }));
+      expect(response.status, model).toBe(200);
+      expect(await response.json()).toEqual({ item: "吸尘器", price: null, category: null, priceApproximate: false });
+    }
+    for (const model of ["deepseek-chat", "DeepSeek-V4-Pro", "deepseek-v4-pro"]) {
+      const response = await app.request("http://127.0.0.1:4174/api/parse", request("/api/parse", { text: "想买一台吸尘器" }));
+      expect(response.status, model).toBe(502);
+      expect(await response.json()).toEqual({ error: "service_failed" });
+    }
+    expect(logs).toEqual(["model_mismatch", "model_mismatch", "model_mismatch"]);
+    expect(sent).toEqual(["deepseek-flash", "deepseek-flash", "deepseek-flash", "deepseek-flash", "deepseek-flash"]);
+    expect(logs.join("")).not.toContain(secret);
+  });
+
+  it("sends each instruction once and the preview shows those messages", async () => {
+    const personas = defaultPersonas();
+    const enabled = personas.filter((persona) => persona.enabled);
+    const family = enabled[0]!;
+    const speeches = [
+      { personaId: family.id, name: family.name, text: "旧的坏了" },
+      { personaId: "future-self", name: "5 年后的你", text: "先看工时" },
+    ];
+    const sharedCard = cardForDiscussion(card(), enabled);
+    let personaRaw = "";
+    let synthesisRaw = "";
+    const fetchImpl: typeof fetch = async (_input, init) => {
+      const raw = String(init?.body ?? "");
+      const body = sentChat(raw);
+      if (body.max_tokens === 1024) personaRaw = raw;
+      else synthesisRaw = raw;
+      const content = body.max_tokens === 1024
+        ? { personaId: family.id, points: ["先看余量"] }
+        : {
+          leaning: "lean-wait",
+          reasons: ["再看一次"],
+          risks: ["可能用不上"],
+          changeConditions: ["如果现有的彻底不能用，就买"],
+          disagreements: ["还没对齐"],
+        };
+      return new Response(chatCompletion(content), { status: 200, headers: { "content-type": "application/json" } });
+    };
+    const app = createApp({ env: { DEEPSEEK_API_KEY: secret }, fetchImpl, log: () => undefined });
+    const personaResponse = await app.request("http://127.0.0.1:4174/api/discussion/persona", request("/api/discussion/persona", {
+      factCard: sharedCard,
+      category: "家电",
+      reason: "旧的坏了",
+      persona: family,
+      round: 1,
+    }));
+    expect(personaResponse.status).toBe(200);
+    const synthesisInput = synthesisPayload(card(), "家电", "旧的坏了", personas, speeches);
+    const synthesisResponse = await app.request("http://127.0.0.1:4174/api/discussion/synthesis", request("/api/discussion/synthesis", {
+      factCard: synthesisInput.factCard,
+      category: synthesisInput.category,
+      reason: synthesisInput.reason,
+      personas: synthesisInput.personas,
+      speeches: synthesisInput.speeches,
+    }));
+    expect(synthesisResponse.status).toBe(200);
+
+    const personaBody = sentChat(personaRaw);
+    const synthesisBody = sentChat(synthesisRaw);
+    const personaUser = JSON.parse(personaBody.messages[1]?.content ?? "") as Record<string, unknown>;
+    const synthesisUser = JSON.parse(synthesisBody.messages[1]?.content ?? "") as Record<string, unknown>;
+    expect(personaBody.model).toBe("deepseek-flash");
+    expect(personaBody.thinking).toEqual({ type: "disabled" });
+    expect(personaBody.messages).toHaveLength(2);
+    expect(personaBody.messages[0]).toEqual({ role: "system", content: PERSONA_INSTRUCTION });
+    expect(personaBody.messages[1]?.content).not.toContain(PERSONA_INSTRUCTION);
+    expect(personaUser).not.toHaveProperty("instruction");
+    expect(synthesisBody.messages).toHaveLength(2);
+    expect(synthesisBody.messages[0]).toEqual({ role: "system", content: SYNTHESIS_INSTRUCTION });
+    expect(synthesisBody.messages[1]?.content).not.toContain(SYNTHESIS_INSTRUCTION);
+    expect(synthesisUser).not.toHaveProperty("instruction");
+    expect(synthesisUser).toEqual(synthesisInput);
+
+    const round1Turn = personaTurnPayload(card(), "家电", "旧的坏了", family, enabled, 1);
+    expect(personaUser).toEqual(round1Turn);
+    const round1Preview = renderPreview({
+      round: 1,
+      card: card(),
+      category: "家电",
+      reason: "旧的坏了",
+      personas,
+      providerHost: "api.deepseek.com",
+    });
+    expect(round1Preview.split(PERSONA_INSTRUCTION).length - 1).toBe(1);
+    expect(round1Preview.split(SYNTHESIS_INSTRUCTION).length - 1).toBe(1);
+    expect(round1Preview).toContain(JSON.stringify(round1Turn, null, 2));
+
+    const round2Preview = renderPreview({
+      round: 2,
+      card: card(),
+      category: "家电",
+      reason: "旧的坏了",
+      personas,
+      providerHost: "api.deepseek.com",
+      validatedSpeeches: speeches,
+    });
+    expect(round2Preview.split(PERSONA_INSTRUCTION).length - 1).toBe(1);
+    expect(round2Preview.split(SYNTHESIS_INSTRUCTION).length - 1).toBe(1);
+    expect(round2Preview).toContain(JSON.stringify(synthesisInput, null, 2));
+    for (const persona of enabled) {
+      const turn = personaTurnPayload(
+        card(),
+        "家电",
+        "旧的坏了",
+        persona,
+        enabled,
+        2,
+        speeches.find((speech) => speech.personaId === persona.id)?.text ?? "",
+        speeches.filter((speech) => speech.personaId !== persona.id),
+      );
+      expect(turn).not.toHaveProperty("instruction");
+      expect(round2Preview).toContain(JSON.stringify(turn, null, 2));
+    }
+  });
+
+  it("reads server files recursively and does not keep the discontinued deepseek-chat id", () => {
+    const root = mkdtempSync(join(tmpdir(), "zhiguan-server-"));
+    try {
+      mkdirSync(join(root, "nested"));
+      writeFileSync(join(root, "root.ts"), "deepseek-flash\n");
+      writeFileSync(join(root, "nested", "child.ts"), "still flash\n");
+      expect(readTextFiles(root)).toContain("still flash");
+      const source = readTextFiles(fileURLToPath(new URL("../server/", import.meta.url)));
+      expect(source).not.toContain("deepseek-chat");
+      expect(source).toContain("deepseek-flash");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("rejects a declared body larger than the limit", async () => {
