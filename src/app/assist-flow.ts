@@ -43,6 +43,18 @@ export const EMPTY_ASSIST_ESTIMATES: AssistEstimatedValues = {
   purchaseAmount: null,
 };
 
+export function assistEstimatesFromInput(input: DecisionInput): AssistEstimatedValues {
+  const estimate = (field: NumericField) => input.evidence[field] === "estimated" && input[field].trim()
+    ? input[field]
+    : null;
+  return {
+    income: estimate("income"),
+    workHours: estimate("workHours"),
+    fixedExpenses: estimate("fixedExpenses"),
+    purchaseAmount: estimate("purchaseAmount"),
+  };
+}
+
 export function areNumericValuesEquivalent(field: NumericField, left: string, right: string): boolean {
   if (left === right) return true;
   if (field === "workHours") {

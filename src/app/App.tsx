@@ -9,8 +9,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  EMPTY_ASSIST_ESTIMATES,
   areNumericValuesEquivalent,
+  assistEstimatesFromInput,
   finalizeAssistInput,
   type AssistEstimatedValues as AssistEstimateMap,
 } from "./assist-flow";
@@ -499,7 +499,7 @@ export function App({
   const [input, setInput] = useState<DecisionInput>(() => initialInput ?? EMPTY_INPUT);
   const [submittedInput, setSubmittedInput] = useState<DecisionInput | null>(null);
   const [decision, setDecision] = useState<DecisionForm>({ code: "", rationale: "", reviewCondition: "" });
-  const [assistEstimatedValues, setAssistEstimatedValues] = useState<AssistEstimateMap>({ ...EMPTY_ASSIST_ESTIMATES });
+  const [assistEstimatedValues, setAssistEstimatedValues] = useState<AssistEstimateMap>(() => assistEstimatesFromInput(initialInput ?? EMPTY_INPUT));
   const [manualMode, setManualMode] = useState(true);
   const [marginRequested, setMarginRequested] = useState(false);
   const [approximateInput, setApproximateInput] = useState(false);
@@ -521,7 +521,7 @@ export function App({
     setInput(initialInput ?? EMPTY_INPUT);
     setSubmittedInput(null);
     setDecision({ code: "", rationale: "", reviewCondition: "" });
-    setAssistEstimatedValues({ ...EMPTY_ASSIST_ESTIMATES });
+    setAssistEstimatedValues(assistEstimatesFromInput(initialInput ?? EMPTY_INPUT));
     setManualMode(true);
     setMarginRequested(false);
     setApproximateInput(false);

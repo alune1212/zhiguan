@@ -1,4 +1,4 @@
-FROM oven/bun:1.4.0 AS web
+FROM oven/bun:1.4.2 AS web
 WORKDIR /app
 COPY package.json bun.lock bunfig.toml ./
 COPY scripts/check-dependencies.mjs scripts/check-dependencies.mjs
@@ -7,7 +7,7 @@ COPY index.html tsconfig.json vite.config.ts ./
 COPY src src
 RUN bun run build
 
-FROM oven/bun:1.4.0
+FROM oven/bun:1.4.2
 WORKDIR /app
 COPY package.json bun.lock bunfig.toml ./
 COPY scripts/check-dependencies.mjs scripts/check-dependencies.mjs

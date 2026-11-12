@@ -256,6 +256,39 @@ describe("local data and backups", () => {
     }
   });
 
+  it("refuses a favorite that would make the saved document exceed its calendar validation budget", async () => {
+    const now = new Date("2026-09-22T10:00:00.000Z");
+    const calculation = calculateIncome({ ...defaultProfile(now, "UTC"), income: "8000" }, now);
+    if (!calculation.workTimeInput) throw new Error("invalid-calendar-fixture");
+    const calendarInput = { ...input, workHours: "", workTime: calculation.workTimeInput };
+    const calendarSnapshot = createPurchaseSnapshot(calendarInput, calculateDecision(calendarInput), {
+      code: "", rationale: "", reviewCondition: "",
+    }, { comparisonMonth: "2026-09", timeZone: "UTC" }, now);
+    expect(calendarSnapshot.inputs.work_time_basis.mode).toBe("calendar");
+    if (calendarSnapshot.inputs.work_time_basis.mode !== "calendar") return;
+    expect(calendarSnapshot.inputs.work_time_basis.periods).toHaveLength(2);
+    const favorites = Array.from({ length: 170 }, (_, index) => ({
+      id: `calendar-${index}`,
+      savedAt: now.toISOString(),
+      snapshot: calendarSnapshot,
+    }));
+    const originalRaw = writeRaw({ format: LOCAL_DATA_FORMAT, revision: "near-budget", profile: null, favorites });
+
+    expect(readLocalData().status).toBe("ready");
+    const added = await addFavorite(calendarSnapshot, "near-budget", now);
+    expect(added.status).toBe("invalid");
+    if (added.status !== "invalid") return;
+    expect(added.reason).toBe("invalid-document");
+    expect(storage.getItem(LOCAL_DATA_STORAGE_KEY)).toBe(originalRaw);
+
+    const restored = readLocalData();
+    expect(restored.status).toBe("ready");
+    if (restored.status === "ready") {
+      expect(restored.document.favorites).toHaveLength(170);
+      expect(parseLocalBackup(createLocalBackup(restored.document)).status).toBe("valid");
+    }
+  });
+
   it("commits under a revision check and leaves the previous record on conflict or write failure", async () => {
     const first = await commitLocalData(validContent(), null);
     expect(first.status).toBe("saved");

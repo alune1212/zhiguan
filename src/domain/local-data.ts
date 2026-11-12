@@ -246,6 +246,7 @@ function writeDocument(content: LocalDataContent): LocalDataWriteResult {
       profile: content.profile,
       favorites: content.favorites,
     };
+    if (!isLocalDataDocument(document)) return { status: "invalid", reason: "invalid-document" };
     const raw = `${JSON.stringify(document)}\n`;
     if (storageBytes(raw) > MAX_DOCUMENT_STORAGE_BYTES) return { status: "unavailable", reason: "write-failed" };
     globalThis.localStorage.setItem(LOCAL_DATA_STORAGE_KEY, raw);
