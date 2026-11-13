@@ -9,6 +9,7 @@ import type { CitedSpeech } from "../src/domain/discussion-payload";
 const HOSTS = new Set(["127.0.0.1:4173", "localhost:4173", "127.0.0.1:4174", "localhost:4174"]);
 const MAX_BODY = 48_000;
 const MODEL = "deepseek-flash";
+const VERSIONED_FLASH_MODEL = /^deepseek-v\d+(?:\.\d+)*-flash(?:-\d+)?$/iu;
 
 export interface ServerEnv {
   readonly DEEPSEEK_API_KEY?: string;
@@ -149,8 +150,9 @@ async function complete(
 ): Promise<{ readonly value: unknown } | null> {
   if (!provider.base || !provider.key) return null;
   const endpoint = chatUrl(provider.base);
+  let response: Response;
   try {
-    const response = await fetchImpl(endpoint, {
+    response = await fetchImpl(endpoint, {
       method: "POST",
       headers: {
         authorization: `Bearer ${provider.key}`,
@@ -170,33 +172,49 @@ async function complete(
       }),
       signal: AbortSignal.timeout(60_000),
     });
-    if (!response.ok) {
-      log(`${cat}_service_failed`);
-      return null;
-    }
-    const choice = modelChoice(await response.json());
-    if (!choice) {
-      log(`${cat}_service_failed`);
-      return null;
-    }
-    if (choice.finishReason !== "stop") {
-      log(`${cat}_truncated`);
-      return null;
-    }
-    const text = choice.content === null ? "" : completionText(choice.content);
-    if (!text) {
-      log(`${cat}_empty`);
-      return null;
-    }
-    if (choice.model !== MODEL) {
-      log("model_mismatch");
-      return null;
-    }
-    return { value: JSON.parse(text) as unknown };
   } catch {
     log(`${cat}_service_failed`);
     return null;
   }
+  if (!response.ok) {
+    log(`${cat}_service_failed`);
+    return null;
+  }
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    log(`${cat}_service_failed`);
+    return null;
+  }
+  const choice = modelChoice(payload);
+  if (!choice) {
+    log(`${cat}_service_failed`);
+    return null;
+  }
+  if (choice.finishReason !== "stop") {
+    log(`${cat}_truncated`);
+    return null;
+  }
+  const text = choice.content === null ? "" : completionText(choice.content);
+  if (!text) {
+    log(`${cat}_empty`);
+    return null;
+  }
+  if (!isFlashModel(choice.model)) {
+    log("model_mismatch");
+    return null;
+  }
+  try {
+    return { value: JSON.parse(text) as unknown };
+  } catch {
+    log(`${cat}_output_invalid`);
+    return null;
+  }
+}
+
+function isFlashModel(model: string | null): boolean {
+  return model === MODEL || (model !== null && VERSIONED_FLASH_MODEL.test(model));
 }
 
 function chatUrl(base: URL): string {
