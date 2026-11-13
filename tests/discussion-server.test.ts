@@ -301,9 +301,18 @@ describe("discussion server", () => {
     expect(logs.join("")).not.toContain(secret);
   });
 
-  it("accepts a versioned flash name and still rejects chat and pro", async () => {
+  it("accepts a versioned flash name and rejects chat, pro, and lookalikes", async () => {
     const logs: string[] = [];
-    const models = ["DeepSeek-V4.1-Flash-1017", "deepseek-v4-flash", "deepseek-chat", "DeepSeek-V4-Pro", "deepseek-v4-pro"];
+    const models = [
+      "DeepSeek-V4.1-Flash-1017",
+      "deepseek-v4-flash",
+      "deepseek-chat",
+      "DeepSeek-V4-Pro",
+      "deepseek-v4-pro",
+      "deepseek-v4-flash-vision-exp",
+      "deepseek-v4-flashy",
+      "xdeepseek-v4-flash",
+    ];
     const sent: string[] = [];
     const fetchImpl: typeof fetch = async (_input, init) => {
       const body = sentChat(String(init?.body ?? ""));
@@ -324,13 +333,13 @@ describe("discussion server", () => {
       expect(response.status, model).toBe(200);
       expect(await response.json()).toEqual({ item: "吸尘器", price: null, category: null, priceApproximate: false });
     }
-    for (const model of ["deepseek-chat", "DeepSeek-V4-Pro", "deepseek-v4-pro"]) {
+    for (const model of ["deepseek-chat", "DeepSeek-V4-Pro", "deepseek-v4-pro", "deepseek-v4-flash-vision-exp", "deepseek-v4-flashy", "xdeepseek-v4-flash"]) {
       const response = await app.request("http://127.0.0.1:4174/api/parse", request("/api/parse", { text: "想买一台吸尘器" }));
       expect(response.status, model).toBe(502);
       expect(await response.json()).toEqual({ error: "service_failed" });
     }
-    expect(logs).toEqual(["model_mismatch", "model_mismatch", "model_mismatch"]);
-    expect(sent).toEqual(["deepseek-flash", "deepseek-flash", "deepseek-flash", "deepseek-flash", "deepseek-flash"]);
+    expect(logs).toEqual(["model_mismatch", "model_mismatch", "model_mismatch", "model_mismatch", "model_mismatch", "model_mismatch"]);
+    expect(sent).toEqual(["deepseek-flash", "deepseek-flash", "deepseek-flash", "deepseek-flash", "deepseek-flash", "deepseek-flash", "deepseek-flash", "deepseek-flash"]);
     expect(logs.join("")).not.toContain(secret);
   });
 
