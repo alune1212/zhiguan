@@ -345,6 +345,20 @@ describe("discussion payloads", () => {
     expect(SYNTHESIS_INSTRUCTION).toContain("lean-buy|lean-wait|lean-skip|lean-adjust|unclear");
   });
 
+  it("keeps persona and synthesis instructions free of ascii digits", () => {
+    for (const instruction of [PERSONA_INSTRUCTION, SYNTHESIS_INSTRUCTION]) {
+      expect(instruction).not.toMatch(/\d/u);
+      expect(instruction).toContain("不要给没填的金额补任何数字");
+      expect(instruction).not.toContain("两次");
+      expect(instruction).not.toContain("三天");
+    }
+    expect(PERSONA_INSTRUCTION).toContain("两到五条");
+    expect(PERSONA_INSTRUCTION).toContain("六十字");
+    expect(PERSONA_INSTRUCTION).toContain("一百五十字");
+    expect(SYNTHESIS_INSTRUCTION).toContain("一到四条");
+    expect(SYNTHESIS_INSTRUCTION).toContain("八十字");
+  });
+
   it("gives concrete json examples that contain no copyable numbers", () => {
     const ordinary = exampleJson(PERSONA_INSTRUCTION, "普通人物示例：");
     const dissenter = exampleJson(PERSONA_INSTRUCTION, "反对人物示例：");
